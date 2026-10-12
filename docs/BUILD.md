@@ -2,6 +2,8 @@
 
 普通用户只需下载安装包。以下内容供开发者使用。
 
+Mac 构建、完整背景和继续开发步骤见 [Mac 开发交接](MACOS-HANDOFF.md)、[开发背景](DEVELOPMENT-CONTEXT.md)。下面的 WPF/NSIS 命令仅适用于 Windows。
+
 ## 目录
 
 - `workspace/`：WPF 单窗口工作台。

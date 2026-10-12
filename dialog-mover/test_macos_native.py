@@ -48,7 +48,7 @@ class NativeMacImportTests(unittest.TestCase):
                 result = mover._import_document(self.path, self.document, target, details)
                 self.assertEqual(result[0], "ok", result)
                 self.assertNotEqual(details["importedId"], self.document["id"])
-                self.assertTrue(Path(details["location"]).is_relative_to(self.base))
+                self.assertTrue(Path(details["location"]).resolve().is_relative_to(self.base.resolve()))
                 self.assertEqual(self.path.read_bytes(), before)
 
     def test_incompatible_codex_database_is_rejected_before_writing_rollout(self):

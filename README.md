@@ -18,9 +18,13 @@
 
 苹果 M 系列选 `macos-arm64.dmg`，Intel Mac 选 `macos-x86_64.dmg`。打开 DMG，拖到「应用程序」，之后直接打开，不需要源码或开发环境。
 
+![Mac 工作台布局预览](docs/assets/macos-preview.png)
+
+*共享界面的浏览器布局预览，使用合成记录；不是 Mac 真机截图。*
+
 **Mac 按作者要求未签名、未公证，首次打开可能被拦截，不能承诺零额外操作。** [安装说明](docs/MACOS.md)。目标 macOS 13 及以上，首批检查运行在 macOS 15，旧系统待真机验收。
 
-### 推荐：安装版
+### 推荐：Windows 安装版
 
 **[⬇ 下载 Windows 安装包 v0.3.6](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.6/AI-First-Tools-Setup-0.3.6.exe)**
 
@@ -32,7 +36,7 @@
 
 安装包暂未购买代码签名证书，Windows 可能提示「未知发布者」。请核对本仓库、版本与校验文件；不放心请先停止安装，不需要关闭杀毒软件或修改系统安全设置。
 
-### 可选：免安装版
+### 可选：Windows 免安装版
 
 **[⬇ 下载免安装压缩包 v0.3.6](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.6/AI-First-Tools-Portable-0.3.6-win-x64.zip)**
 

@@ -1,4 +1,4 @@
-:root { --workspace-rail: 172px; --workspace-header: 64px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+:root { --workspace-rail: 172px; --workspace-header: 64px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei UI", sans-serif; }
 .workspace-header { height: var(--workspace-header); display: flex; align-items: center; gap: 16px; padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .workspace-logo { width: 80px; height: 44px; object-fit: contain; }
 .workspace-name { font-size: 15px; font-weight: 650; padding-left: 16px; border-left: 1px solid var(--line); }

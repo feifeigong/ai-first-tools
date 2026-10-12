@@ -93,6 +93,14 @@ def smoke_check(window, report: Path) -> None:
         window.destroy()
 
 
+def isolate_profile(scratch: Path) -> None:
+    for name in ("HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "COWORK_SESSIONS_DIR",
+                 "WORKBUDDY_DIR", "WORKBUDDY_AI_DIR", "QWENWORK_DIR", "DOUBAO_WORK_DIR", "CURSOR_DESKTOP_USER_DIR",
+                 "HERMES_HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
+        os.environ[name] = str(scratch / name.lower())
+    Path(os.environ["HOME"]).mkdir()
+
+
 def run() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
@@ -107,13 +115,7 @@ def run() -> int:
         return 0 if self_check(args.report) else 1
     with tempfile.TemporaryDirectory(prefix="ai-first-macos-") as temporary:
         if args.smoke_test:
-            scratch = Path(temporary)
-            for name in ("HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "COWORK_SESSIONS_DIR",
-                         "WORKBUDDY_DIR", "WORKBUDDY_AI_DIR", "QWENWORK_DIR", "DOUBAO_WORK_DIR", "CURSOR_DESKTOP_USER_DIR",
-                         "HERMES_HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
-                path = scratch / name.lower()
-                path.mkdir()
-                os.environ[name] = str(path)
+            isolate_profile(Path(temporary))
         import fcntl
 
         state = appdata() / "AI一手工具工作台"

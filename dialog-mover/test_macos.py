@@ -20,6 +20,16 @@ from updates import REPOSITORY, choose_release, release_key
 
 
 class MacPathsTests(unittest.TestCase):
+    def test_smoke_profile_is_empty_without_initializing_destination_stores(self):
+        from entry import isolate_profile
+        from main import AGENTS
+
+        with tempfile.TemporaryDirectory() as temporary, patch.object(sys, "platform", "darwin"), patch.dict(os.environ, {}, clear=True):
+            isolate_profile(Path(temporary))
+            self.assertTrue(common.home().is_dir())
+            self.assertFalse(Path(os.environ["COWORK_SESSIONS_DIR"]).exists())
+            self.assertFalse(any(sources.installed(agent["id"]) for agent in AGENTS))
+
     def test_application_support_not_windows_appdata(self):
         with patch.object(sys, "platform", "darwin"), patch.dict(os.environ, {"HOME": "/Users/test", "USERPROFILE": "C:/wrong"}, clear=True):
             self.assertEqual(common.home(), Path("/Users/test"))

@@ -37,6 +37,8 @@ def main() -> None:
         subprocess.run(["cargo", "metadata", "--locked", "--format-version", "1", "--manifest-path", str(ROOT / "txcript" / "Cargo.toml")], check=True, stdout=handle)
     subprocess.run([sys.executable, str(ROOT / "scripts" / "collect_rust_licenses.py"), "--metadata", str(metadata),
                     "--package", str(app / "Contents" / "Resources")], check=True)
+    subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app)], check=True)
+    subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     launcher = app / "Contents" / "MacOS" / "AI First Tools"
     for flag in ("--self-test", "--smoke-test"):
         subprocess.run([str(launcher), flag, "--report", str(output / (flag.removeprefix("--") + ".json"))], check=True, timeout=90)
