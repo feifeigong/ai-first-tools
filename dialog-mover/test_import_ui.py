@@ -3,14 +3,20 @@ from __future__ import annotations
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from playwright.sync_api import sync_playwright
 
-from core import imports
+from core import imports, mover, sources
 from main import Api
 
 
 class ImportUiTests(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(patch.object(sources, "installed", return_value=True))
+        self.enterContext(patch.object(sources, "unsupported_found", return_value=[]))
+        self.enterContext(patch.object(mover, "txcript_path", return_value=Path("fixture/txcript.exe")))
+
     def test_real_capabilities_render_and_navigate(self):
         capabilities = Api().agents()
         source = {"groups": [{"title": "测试项目", "kind": "folder", "path": "D:\\vibcoding",
