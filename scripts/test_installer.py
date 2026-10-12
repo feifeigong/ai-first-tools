@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import unittest
 import winreg
+import xml.etree.ElementTree as ElementTree
 
 
 INSTALLER = None
@@ -36,8 +37,10 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(execute(INSTALLER, "/S"), 0)
         executable = INSTALL / "AI一手工具工作台.exe"
         self.assertTrue(executable.is_file())
+        version = ElementTree.parse(ROOT / "workspace" / "AIFirst.Workspace.csproj").findtext("./PropertyGroup/Version")
+        self.assertIsNotNone(version)
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY) as key:
-            self.assertEqual(winreg.QueryValueEx(key, "DisplayVersion")[0], "0.3.5")
+            self.assertEqual(winreg.QueryValueEx(key, "DisplayVersion")[0], version)
             self.assertEqual(Path(winreg.QueryValueEx(key, "InstallLocation")[0]), INSTALL)
         report = ROOT / "artifacts" / "installed-self-test.json"
         environment = os.environ.copy()

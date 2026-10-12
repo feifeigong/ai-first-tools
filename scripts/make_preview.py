@@ -24,7 +24,7 @@ def main():
         page.add_init_script(bootstrap)
         page.goto((root / "dialog-mover" / "ui" / "index.html").as_uri())
         page.locator(".row").first.wait_for()
-        page.wait_for_function("[...document.querySelectorAll('.agent-logo img')].every(image=>image.complete&&image.naturalWidth>0)")
+        page.wait_for_function("[...document.querySelectorAll('.agent-logo img, .brand-mark img')].every(image=>image.complete&&image.naturalWidth>0)")
         page.screenshot(path=str(destination / "dialog-mover.png"))
         browser.close()
 

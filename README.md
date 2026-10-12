@@ -14,7 +14,7 @@
 
 ### 推荐：安装版
 
-**[⬇ 下载 Windows 安装包 v0.3.5](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.5/AI-First-Tools-Setup-0.3.5.exe)**
+**[⬇ 下载 Windows 安装包 v0.3.6](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.6/AI-First-Tools-Setup-0.3.6.exe)**
 
 1. 下载上面的安装包，双击打开。
 2. 点击「安装」，等它完成。
@@ -26,7 +26,7 @@
 
 ### 可选：免安装版
 
-**[⬇ 下载免安装压缩包 v0.3.5](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.5/AI-First-Tools-Portable-0.3.5-win-x64.zip)**
+**[⬇ 下载免安装压缩包 v0.3.6](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.6/AI-First-Tools-Portable-0.3.6-win-x64.zip)**
 
 解压**整个压缩包**，进入文件夹，双击「AI一手工具工作台.exe」。不能只拿走一个 EXE，也不要直接在压缩包里面运行。可以给这个 EXE 创建桌面快捷方式，以后不用再找文件夹。
 

@@ -20,6 +20,13 @@ AGENTS = [
 
 
 class AgentIconTests(unittest.TestCase):
+    def test_tool_brand_matches_workspace_catalog_icon(self):
+        workspace_assets = ROOT.parent / "workspace" / "assets"
+        catalog = json.loads((workspace_assets / "tool-catalog.json").read_text(encoding="utf-8"))
+        tool = next(entry for entry in catalog if entry["id"] == "dialog-mover")
+        workspace_icon = workspace_assets.parent / tool["icon"]
+        self.assertEqual((ROOT / "ui" / "assets" / "dialog-mover.png").read_bytes(), workspace_icon.read_bytes())
+
     def test_chatgpt_uses_black_transparent_light_theme_logo(self):
         manifest = json.loads((ASSETS / "sources.json").read_text(encoding="utf-8"))
         self.assertTrue(manifest["chatgpt"]["source"].endswith("altform-lightunplated.png"))
@@ -58,8 +65,20 @@ class AgentIconTests(unittest.TestCase):
                 page.add_init_script(bootstrap)
                 page.goto((ROOT / "ui" / "index.html").as_uri())
                 page.locator('[data-agent="claude_desktop"]').wait_for()
+                page.wait_for_function("[...document.querySelectorAll('.brand-mark img')].every(image=>image.complete&&image.naturalWidth>0)")
                 for width in (1180, 940):
                     page.set_viewport_size({"width": width, "height": 780})
+                    brand = page.locator(".brand-mark")
+                    brand_image = brand.locator("img")
+                    self.assertEqual(brand_image.get_attribute("src"), "assets/dialog-mover.png")
+                    self.assertEqual(brand.locator("svg").count(), 0)
+                    self.assertTrue(brand_image.evaluate("element=>element.complete&&element.naturalWidth>0"))
+                    self.assertEqual(brand.evaluate("element=>getComputedStyle(element).backgroundColor"), "rgba(0, 0, 0, 0)")
+                    self.assertEqual(brand_image.evaluate("element=>getComputedStyle(element).objectFit"), "contain")
+                    self.assertEqual(brand_image.evaluate("element=>getComputedStyle(element).filter"), "none")
+                    brand_box = brand_image.bounding_box()
+                    self.assertEqual(brand_box["width"], 38)
+                    self.assertEqual(brand_box["height"], 38)
                     for agent in agents:
                         with self.subTest(width=width, agent=agent["id"]):
                             row = page.locator(f'[data-agent="{agent["id"]}"]')

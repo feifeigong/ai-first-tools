@@ -49,5 +49,5 @@ dotnet build workspace\AIFirst.Workspace.csproj -c Release
 
 发布前须检查源码和包中没有真实账户、记录、日志和私人截图，核对源程序/引擎哈希，执行安装、启动、更新保护、卸载保护和关键回归。没有 Windows 全新虚拟机验收时，不能宣称已覆盖全新系统。
 
-v0.3.5 使用既有已测试引擎，SHA-256：`799b80dff7ba44cb05f1a92ed5f64a4969ffefc5ad7b3566600ed88adaaaacd2`。
+v0.3.5 / v0.3.6 使用相同的既有已测试引擎，SHA-256：`799b80dff7ba44cb05f1a92ed5f64a4969ffefc5ad7b3566600ed88adaaaacd2`。
 
