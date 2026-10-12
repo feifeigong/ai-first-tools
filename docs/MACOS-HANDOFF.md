@@ -84,6 +84,7 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 ## 发布维护
 
 - macos/version.json 首版 0.4.0-macos-preview.1。
+- 首批两架构包构建源码为 `2b49c7f`，Mac/Windows CI 均通过；构建链接、SHA-256 和未验收项见 MACOS-QA.md。后续只整理交接文档，不能把文档提交说成重做了安装包。
 - 两架构 DMG 名称 `AI-First-Tools-<release>-macos-<architecture>.dmg`，附 SHA-256。
 - CI/报告通过才发布下载包；源码提交不等于已发布应用。
 - 更新拒绝草稿/旧版本/错误域名/不匹配架构。

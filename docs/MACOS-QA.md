@@ -1,6 +1,10 @@
 # Mac 移植验证记录
 
-版本 0.4.0-macos-preview.1；首次构建验证中，发布前更新记录，不把等待任务标完成。
+版本 0.4.0-macos-preview.1；2026-10-12 两种架构原生构建、隔离检查和 DMG 校验通过。仍是预览版，不表示所有第三方软件已经真机验收。
+
+构建源码：`2b49c7f49a6acab31abcbd1518415ba8b9188230`。发布前的后续提交仅整理文档，未改动运行代码或包内资源。
+
+[通过的 Mac 构建与报告](https://github.com/feifeigong/ai-first-tools/actions/runs/38246950148) · [通过的 Windows 回归检查](https://github.com/feifeigong/ai-first-tools/actions/runs/38246950152)
 
 ## Windows 已通过
 
@@ -11,15 +15,35 @@
 - Windows 工作台自检：62 项通过，构建零错误/零警告。
 - 不表示在 Windows 运行过 Mac 二进制。
 
-## Mac 待验证
+## Mac 已通过
 
-macOS 15 的 Apple Silicon/Intel runner 分别编译本项目引擎、运行隔离导入/回读、冻结包资源/引擎自检、真实 Cocoa 窗口/桥/侧栏检查、DMG 验证。以对应 Actions 结果为准，失败产物不可作下载包。
+| 检查层次 | Apple Silicon / arm64 | Intel / x86_64 |
+| --- | --- | --- |
+| macOS 15 本机编译修改后的 txcript | 通过 | 通过 |
+| 共享安全、Mac 路径、隔离目标导入测试 | 40 项通过 | 40 项通过 |
+| 冻结 APP 的 7 项资源/引擎检查 | 全部通过 | 全部通过 |
+| 真实 Cocoa 窗口、WebKit/Python 桥、侧栏状态/完全隐藏、空账户 | 5 项全部通过 | 5 项全部通过 |
+| 加入许可证后的 ad-hoc 资源封印严格验证 | 通过 | 通过 |
+| DMG 格式校验和下载后 SHA-256 核对 | 通过 | 通过 |
+
+40 项测试中包含 12 个文件型目标的合成记录导入/回读，以及不兼容 ChatGPT 数据库拒绝写入；不是 40 种客户端人工测试，也不是全部来源×目标组合。
+
+隔离目标：Cursor 桌面、WorkBuddy、WorkBuddy AI、千问办公、Claude Code、本机 Cowork、Antigravity 桌面/CLI、Cursor CLI、Grok、ChatGPT 本机 Codex/Work。测试核对新编号、写入位置、原始输入不变；没有启动这些第三方客户端或发送模型消息。
+
+Actions 的 `macos-arm64`、`macos-x86_64` 产物各包含 DMG、`self-test.json`、`smoke-test.json`、校验文件。首次失败包未发布，中间被新版替代的构建也不作为下载包。
+
+### 发布文件核对
+
+| 文件后缀 | 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| `macos-arm64.dmg` | 22365154 | `21f1dc9ee8a55cff1b130c82c199a57aac8ca638bc79a10a9d45a1f1e03c4f76` |
+| `macos-x86_64.dmg` | 23859487 | `bb77c443250171277fcd2dd936b4fc5571d0279e00c6769026f3f770737d2428` |
 
 ## 首轮构建发现与修复
 
 - 首轮 ARM 引擎、隔离目标导入和冻结包自检通过；真实 Cocoa 窗口、Python 桥、侧栏检查通过，但空账户断言失败，因此没有发布 DMG。
 - 原因是测试准备了空的 `COWORK_SESSIONS_DIR` 目录，按已有规则被识别为已初始化来源。改为只设置隔离路径、不创建目标目录，保留原识别规则，并增加空账户回归测试；不是放宽断言。
-- 首轮 Intel 在 Cocoa/Python 桥就绪前调用页面检查，触发框架的 20 秒启动超时。增加显式等待页面加载及超时回归测试，保留失败退出，并记录窗口/页面状态；以重跑结果确认，不把修改本身标为通过。
+- 首轮 Intel 出现启动阶段 `WebViewException`；直接调用页面检查使用框架的 20 秒就绪等待。增加显式等待页面加载及超时回归测试，保留失败退出，并记录窗口/页面状态；修复后的同架构完整重跑已通过。
 - 许可证收集发生在冻结应用生成之后，须重新封装 ad-hoc 资源校验并严格验证，避免资源封印与新增许可证不一致。这不是 Developer ID 签名或苹果公证。
 - 临时路径核对解析真实路径，兼容 Mac 的 `/var` 与 `/private/var` 符号链接，不放宽测试目录边界。
 
