@@ -3,9 +3,11 @@ from __future__ import annotations
 import copy
 import json
 import ntpath
+import posixpath
 import re
 import sqlite3
 import threading
+import sys
 import time
 from pathlib import Path
 from urllib.parse import urlencode
@@ -75,6 +77,8 @@ def _json(path: Path) -> dict:
 
 
 def _norm(path: str) -> str:
+    if sys.platform != "win32" and not re.match(r"^[A-Za-z]:[\\/]", str(path or "")) and not str(path or "").startswith("\\"):
+        return (posixpath.normpath(path).rstrip("/") or "/") if path else ""
     text = str(path or "").replace("/", "\\")
     extended = bool(re.match(r"^\\+\?\\+", text))
     if extended:

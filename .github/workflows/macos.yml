@@ -1,0 +1,82 @@
+name: macOS preview
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'macos/**'
+      - 'dialog-mover/**'
+      - 'txcript/**'
+      - 'scripts/*macos*.py'
+      - 'docs/MACOS.md'
+      - '.github/workflows/macos.yml'
+  pull_request:
+    paths:
+      - 'macos/**'
+      - 'dialog-mover/**'
+      - 'txcript/**'
+      - 'scripts/*macos*.py'
+      - '.github/workflows/macos.yml'
+permissions:
+  contents: read
+concurrency:
+  group: macos-preview-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install native Python dependencies
+        run: python -m pip install -r macos/requirements.txt
+      - name: Install Rust toolchain
+        run: rustup toolchain install 1.96.0 --profile minimal && rustup default 1.96.0
+      - uses: actions/cache/restore@v4
+        id: cargo-cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            txcript/target
+          key: macos-${{ matrix.architecture }}-rust196-${{ hashFiles('txcript/Cargo.lock') }}
+      - name: Build the project's own migration engine
+        run: |
+          cargo build --release --locked --manifest-path txcript/Cargo.toml
+          mkdir -p dialog-mover/bin
+          cp txcript/target/release/txcript dialog-mover/bin/txcript
+      - name: Shared safety, Mac paths and isolated native imports
+        working-directory: dialog-mover
+        run: |
+          python -m unittest test_chatgpt test_close_safety test_macos test_macos_native -v
+      - name: Package and test actual Cocoa app and DMG
+        run: python scripts/package_macos.py --architecture '${{ matrix.architecture }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-${{ matrix.architecture }}
+          if-no-files-found: warn
+          path: |
+            artifacts/macos/${{ matrix.architecture }}/*.dmg
+            artifacts/macos/${{ matrix.architecture }}/SHA256SUMS-*.txt
+            artifacts/macos/${{ matrix.architecture }}/*test.json
+      - uses: actions/cache/save@v4
+        if: always() && steps.cargo-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            txcript/target
+          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}

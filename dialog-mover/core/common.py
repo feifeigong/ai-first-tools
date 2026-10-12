@@ -4,25 +4,35 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import subprocess
+import sys
 import time
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 
 def home() -> Path:
+    if sys.platform != "win32":
+        return Path(os.environ.get("HOME") or Path.home())
     return Path(os.environ.get("USERPROFILE") or Path.home())
 
 
 def appdata() -> Path:
+    if sys.platform == "darwin":
+        return Path(os.environ.get("APPDATA") or home() / "Library" / "Application Support")
     return Path(os.environ.get("APPDATA") or home() / "AppData" / "Roaming")
 
 
 def localappdata() -> Path:
+    if sys.platform == "darwin":
+        return Path(os.environ.get("LOCALAPPDATA") or appdata())
     return Path(os.environ.get("LOCALAPPDATA") or home() / "AppData" / "Local")
 
 
 def _registry_env(name: str) -> str:
     """User and machine environment values, for apps started from the desktop."""
+    if sys.platform != "win32":
+        return ""
     try:
         import winreg
 
@@ -72,7 +82,7 @@ def proxy_env() -> dict:
 
 def read_db(path: Path) -> sqlite3.Connection:
     """Open a database strictly read-only; never create, never write."""
-    uri = f"file:{path.resolve().as_posix()}?mode=ro"
+    uri = path.resolve().as_uri() + "?mode=ro"
     return sqlite3.connect(uri, uri=True, timeout=5)
 
 
@@ -146,10 +156,21 @@ def uri_to_path(uri: str) -> str:
         text = decoded
     if text.startswith("file:"):
         text = urlparse(text).path
+    if sys.platform != "win32":
+        return text
     text = text.replace("/", "\\")
     if len(text) > 3 and text[0] == "\\" and text[2] == ":":
         text = text[1:]
     return text
+
+
+def open_external(value: str) -> None:
+    if sys.platform == "win32":
+        os.startfile(value)
+    elif sys.platform == "darwin":
+        subprocess.run(["/usr/bin/open", "--", value], check=True, timeout=15)
+    else:
+        subprocess.run(["xdg-open", value], check=True, timeout=15)
 
 
 def make_session(

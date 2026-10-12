@@ -31,10 +31,28 @@ public partial class MainWindow : Window
     private bool released;
     private bool closing;
     private bool allowClose;
+    private readonly UpdateClient updates;
+    private readonly string updateSettings;
+    private readonly string? updateConfiguration;
+    private readonly string? updateTool;
+    private readonly DispatcherTimer updateTimer = new() { Interval = TimeSpan.FromHours(6) };
+    private CancellationTokenSource? downloading;
+    private UpdateRelease? availableUpdate;
+    private string? preparedUpdate;
+    private string? preparedVersion;
+    private bool checkingUpdates;
+    private bool restartingForUpdate;
 
-    public MainWindow(string configuration, string? toolOverride, string? report = null, bool developmentTools = false)
+    public MainWindow(string configuration, string? toolOverride, string? report = null, bool developmentTools = false) : this(configuration, toolOverride, report, developmentTools, new UpdateClient()) { }
+
+    internal MainWindow(string configuration, string? toolOverride, string? report, bool developmentTools, UpdateClient updateClient)
     {
+        updates = updateClient;
+        updateSettings = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(configuration))!, "updates");
+        updateConfiguration = developmentTools ? configuration : null;
+        updateTool = toolOverride;
         InitializeComponent();
+        VersionText.Text = "v" + UpdateClient.CurrentVersion;
         Icon = BrandAssets.LoadWindowIcon();
         StateChanged += (_, _) => UpdateCaption();
         UpdateCaption();
@@ -64,8 +82,12 @@ public partial class MainWindow : Window
             HostSlot.Children.Add(host);
             Dispatcher.BeginInvoke(() => ToolsList.SelectedIndex = 0, DispatcherPriority.Loaded);
             monitor.Start();
+            ReadUpdateReceipt();
+            _ = CheckAfterOpeningAsync();
+            updateTimer.Start();
         };
         monitor.Tick += MonitorSessions;
+        updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
     }
 
     private void ShowLogo(ImageSource? image)
@@ -274,6 +296,9 @@ public partial class MainWindow : Window
         released = true;
         lifetime.Cancel();
         monitor.Stop();
+        updateTimer.Stop();
+        downloading?.Cancel();
+        updates.Dispose();
         host?.Use(null);
         foreach (var session in sessions.Values)
         {
@@ -290,7 +315,7 @@ public partial class MainWindow : Window
         if (closing) return;
         closing = true;
         ToolsList.IsEnabled = SidebarToggle.IsEnabled = false;
-        ShowStatus("正在关闭，请稍等…");
+        ShowStatus(restartingForUpdate ? "正在保存并关闭工具，随后自动更新…" : "正在关闭，请稍等…");
         try
         {
             await Dispatcher.Yield(DispatcherPriority.Background);
@@ -307,23 +332,190 @@ public partial class MainWindow : Window
                 {
                     Present(selected, session);
                     ShowStatus(selected.Name + "还有事情没结束，完成后再点 × 关闭。");
+                    if (restartingForUpdate) ShowUpdateOffer("请先完成工具里的任务，再点更新并重启。不会强制停止搬运。");
                     return;
                 }
                 ForgetSession(entry.Key, session);
             }
+            if (restartingForUpdate && preparedUpdate is not null) await UpdateRunner.StartAsync(preparedUpdate);
             allowClose = true;
             Close();
         }
-        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException or IOException or TimeoutException)
         {
             App.Log(exception);
             ShowStatus("暂时没关好。先处理工具里的提示，再点 ×。");
+            if (restartingForUpdate) ShowUpdateOffer("没有启动更新，当前版本可以继续使用。稍后再试一次。");
         }
         finally
         {
             closing = false;
+            restartingForUpdate = false;
             if (!released) ToolsList.IsEnabled = SidebarToggle.IsEnabled = true;
         }
+    }
+
+    private async Task CheckAfterOpeningAsync()
+    {
+        try { await Task.Delay(3000, lifetime.Token); await Task.Run(UpdateRunner.CleanupCompletedJobs, lifetime.Token); await CheckUpdatesAsync(false); }
+        catch (OperationCanceledException) { }
+    }
+
+    private async void CheckUpdateClick(object sender, RoutedEventArgs args)
+    {
+        if (availableUpdate is not null) ShowUpdateOffer();
+        else await CheckUpdatesAsync(true);
+    }
+
+    private async Task CheckUpdatesAsync(bool manual)
+    {
+        if (released || closing || checkingUpdates || downloading is not null) return;
+        var timestamp = Path.Combine(updateSettings, "checked-at.txt");
+        if (!manual)
+        {
+            try
+            {
+                if (File.Exists(timestamp) && DateTimeOffset.TryParse(File.ReadAllText(timestamp), out var checkedAt) && checkedAt <= DateTimeOffset.UtcNow && DateTimeOffset.UtcNow - checkedAt < TimeSpan.FromHours(6))
+                {
+                    var cachedPath = Path.Combine(updateSettings, "latest-release.json");
+                    if (File.Exists(cachedPath))
+                    {
+                        var cached = System.Text.Json.JsonSerializer.Deserialize<UpdateRelease>(File.ReadAllText(cachedPath), UpdatePackage.Json);
+                        if (cached is not null && UpdateClient.ParseVersion(cached.Version) > UpdateClient.ParseVersion(UpdateClient.CurrentVersion))
+                        {
+                            UpdateClient.ValidateAsset(cached.Installer, cached.Version, "AI-First-Tools-Setup-" + cached.Version + ".exe");
+                            UpdateClient.ValidateAsset(cached.Portable, cached.Version, "AI-First-Tools-Portable-" + cached.Version + "-win-x64.zip");
+                            UpdateClient.ValidateAsset(cached.Checksums, cached.Version, "SHA256SUMS.txt");
+                            availableUpdate = cached;
+                            ShowUpdateOffer();
+                            CheckUpdateButton.Content = "有新版本";
+                        }
+                    }
+                    return;
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or ArgumentException or NullReferenceException) { App.Log(exception); }
+        }
+        checkingUpdates = true;
+        CheckUpdateButton.IsEnabled = false;
+        CheckUpdateButton.Content = "检查中…";
+        try
+        {
+            availableUpdate = await updates.CheckAsync(lifetime.Token);
+            if (availableUpdate?.Version != preparedVersion) preparedUpdate = null;
+            if (released || closing) return;
+            if (availableUpdate is not null) ShowUpdateOffer();
+            else if (manual) ShowUpdateMessage("已是最新版本 · v" + UpdateClient.CurrentVersion, "以后发布新工具或新版本，这里会提醒您。", "知道了");
+            try
+            {
+                Directory.CreateDirectory(updateSettings);
+                File.WriteAllText(Path.Combine(updateSettings, "latest-release.json"), System.Text.Json.JsonSerializer.Serialize(availableUpdate, UpdatePackage.Json));
+                File.WriteAllText(timestamp, DateTimeOffset.UtcNow.ToString("O"));
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { App.Log(exception); }
+        }
+        catch (Exception exception)
+        {
+            if (!released && manual) ShowUpdateMessage("暂时连不上更新服务", "可以继续使用。请检查网络，稍后点击右上角再试。", "知道了");
+            if (!released && exception is not OperationCanceledException) App.Log(exception);
+        }
+        finally
+        {
+            checkingUpdates = false;
+            if (!released)
+            {
+                CheckUpdateButton.IsEnabled = true;
+                CheckUpdateButton.Content = availableUpdate is null ? "检查更新" : "有新版本";
+            }
+        }
+    }
+
+    internal void ShowUpdateOffer(string? explanation = null)
+    {
+        if (availableUpdate is null) return;
+        UpdateTitle.Text = "发现新版本 v" + availableUpdate.Version;
+        UpdateDescription.Text = explanation ?? "点一下即可更新全部工具，完成后自动重新打开。原来的对话与设置保留。";
+        InstallUpdateButton.Content = "更新并重启";
+        InstallUpdateButton.Visibility = Visibility.Visible;
+        InstallUpdateButton.IsEnabled = true;
+        DismissUpdateButton.Content = "稍后";
+        DismissUpdateButton.IsEnabled = true;
+        UpdateProgress.Visibility = Visibility.Collapsed;
+        UpdateBanner.Visibility = Visibility.Visible;
+    }
+
+    private void ShowUpdateMessage(string title, string description, string dismiss)
+    {
+        UpdateTitle.Text = title;
+        UpdateDescription.Text = description;
+        InstallUpdateButton.Visibility = Visibility.Collapsed;
+        UpdateProgress.Visibility = Visibility.Collapsed;
+        DismissUpdateButton.Content = dismiss;
+        UpdateBanner.Visibility = Visibility.Visible;
+    }
+
+    private void DismissUpdateClick(object sender, RoutedEventArgs args)
+    {
+        if (downloading is not null) { downloading.Cancel(); return; }
+        UpdateBanner.Visibility = Visibility.Collapsed;
+    }
+
+    private async void InstallUpdateClick(object sender, RoutedEventArgs args)
+    {
+        if (availableUpdate is null || downloading is not null || closing || released) return;
+        if (preparedUpdate is not null) { restartingForUpdate = true; Close(); return; }
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        downloading = cancellation;
+        CheckUpdateButton.IsEnabled = InstallUpdateButton.IsEnabled = false;
+        UpdateTitle.Text = "正在下载 v" + availableUpdate.Version;
+        UpdateDescription.Text = "下载时可以继续使用。更新前会等待工具安全关闭。";
+        DismissUpdateButton.Content = "取消下载";
+        UpdateProgress.Visibility = Visibility.Visible;
+        UpdateProgress.IsIndeterminate = false;
+        UpdateProgress.Value = 0;
+        try
+        {
+            var progress = new Progress<double>(value =>
+            {
+                if (released || cancellation.IsCancellationRequested || downloading != cancellation) return;
+                UpdateProgress.IsIndeterminate = value < 0;
+                if (value < 0) { UpdateTitle.Text = "正在校验并准备更新…"; DismissUpdateButton.Content = "取消"; }
+                else { UpdateProgress.Value = value; UpdateTitle.Text = "正在下载 · " + Math.Floor(value) + "%"; }
+            });
+            preparedUpdate = await UpdateRunner.PrepareAsync(updates, availableUpdate, progress, cancellation.Token, updateConfiguration, updateTool);
+            preparedVersion = availableUpdate.Version;
+            if (released) return;
+            if (closing) { ShowUpdateOffer(); return; }
+            cancellation.Token.ThrowIfCancellationRequested();
+            DismissUpdateButton.IsEnabled = false;
+            restartingForUpdate = true;
+            Close();
+        }
+        catch (OperationCanceledException) { if (!released) ShowUpdateOffer("已取消下载，当前版本可以继续使用。"); }
+        catch (Exception exception)
+        {
+            App.Log(exception);
+            if (!released) ShowUpdateOffer(exception is InvalidDataException ? exception.Message + " 当前版本可以继续使用。" : "更新准备没有完成，请检查网络、磁盘空间和文件权限后重试。当前版本仍可使用。");
+        }
+        finally
+        {
+            downloading = null;
+            if (!released) CheckUpdateButton.IsEnabled = true;
+        }
+    }
+
+    private void ReadUpdateReceipt()
+    {
+        var path = UpdateRunner.ReceiptPath(AppContext.BaseDirectory);
+        if (!File.Exists(path)) return;
+        try
+        {
+            using var receipt = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+            if (receipt.RootElement.GetProperty("success").GetBoolean() && receipt.RootElement.GetProperty("version").GetString() == UpdateClient.CurrentVersion)
+                ShowUpdateMessage("已更新到 v" + UpdateClient.CurrentVersion, "全部工具已就绪，原来的对话与设置保留。", "知道了");
+            File.Delete(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or KeyNotFoundException or InvalidOperationException) { App.Log(exception); }
     }
 
     private void UpdateCaption()

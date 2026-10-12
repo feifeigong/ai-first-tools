@@ -40,6 +40,8 @@ def collect_python(toc: Path, destination: Path):
     (destination / "python-components.json").write_text(json.dumps(notices, ensure_ascii=False, indent=2), encoding="utf-8")
     python_license = Path(sys.base_prefix) / "LICENSE.txt"
     if not python_license.is_file():
+        python_license = Path(__file__).resolve().parent.parent / "licenses" / "Python-LICENSE.txt"
+    if not python_license.is_file():
         raise RuntimeError("Python license file is required")
     shutil.copy2(python_license, destination / "Python-LICENSE.txt")
 

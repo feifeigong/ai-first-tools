@@ -29,6 +29,8 @@
           </Button>
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+          <TextBlock x:Name="VersionText" Foreground="#687686" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+          <Button x:Name="CheckUpdateButton" Content="检查更新" Click="CheckUpdateClick" FontSize="12" Padding="12,5" Margin="0,7,12,7" ToolTip="从 AI一手的 GitHub 发布页检查新版本" AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" />
           <Button Style="{StaticResource CaptionButton}" ToolTip="最小化" AutomationProperties.Name="最小化" Click="MinimizeClick"><Path Data="M1,7 L13,7" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" /></Button>
           <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" ToolTip="最大化" AutomationProperties.Name="最大化" Click="MaximizeClick"><Path x:Name="MaximizeGlyph" Data="M1,1 H13 V13 H1 Z" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" /></Button>
           <Button Style="{StaticResource CloseCaptionButton}" ToolTip="关闭工作台" AutomationProperties.Name="关闭工作台" Click="WindowCloseClick"><Path Data="M1,1 L13,13 M13,1 L1,13" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" /></Button>
@@ -56,7 +58,7 @@
           </ListBox>
         </Grid>
       </Border>
-      <Grid Grid.Column="1" Margin="10"><Grid.RowDefinitions><RowDefinition /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+      <Grid Grid.Column="1" Margin="10"><Grid.RowDefinitions><RowDefinition /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
         <Border Background="White" BorderBrush="#E4E8ED" BorderThickness="1" CornerRadius="10">
           <Grid><Grid x:Name="HostSlot" Visibility="Collapsed" />
             <Grid x:Name="LoadingView" AutomationProperties.Name="正在准备工具页面" IsHitTestVisible="False" Background="#F6F8FB">
@@ -81,6 +83,19 @@
           </StackPanel></Grid>
         </Border>
         <Border x:Name="StatusBanner" Grid.Row="1" Background="#FFF6E8" BorderBrush="#EFDDBF" BorderThickness="1" CornerRadius="8" Padding="12,9" Margin="0,8,0,0" Visibility="Collapsed"><TextBlock x:Name="FooterStatus" Foreground="#836337" FontSize="12" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" /></Border>
+        <Border x:Name="UpdateBanner" Grid.Row="2" Background="#F0F6FF" BorderBrush="#D8E7FB" BorderThickness="1" CornerRadius="9" Padding="16,12" Margin="0,8,0,0" Visibility="Collapsed">
+          <Grid><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+              <TextBlock x:Name="UpdateTitle" Text="发现新版本" FontSize="14" FontWeight="SemiBold" Foreground="#145C9C" AutomationProperties.LiveSetting="Polite" />
+              <TextBlock x:Name="UpdateDescription" Text="新工具会一起更新，不用重新添加。" FontSize="12" Foreground="#536579" Margin="0,4,0,0" TextWrapping="Wrap" />
+              <ProgressBar x:Name="UpdateProgress" Visibility="Collapsed" Height="4" Margin="0,10,0,0" Foreground="#0073E6" Background="#D8E7FB" AutomationProperties.Name="更新下载进度" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+              <Button x:Name="DismissUpdateButton" Content="稍后" Click="DismissUpdateClick" MinHeight="40" Padding="16,8" Background="Transparent" BorderThickness="0" Margin="0,0,8,0" />
+              <Button x:Name="InstallUpdateButton" Content="更新并重启" Click="InstallUpdateClick" MinHeight="40" Padding="18,8" Background="#0073E6" Foreground="White" BorderThickness="0" />
+            </StackPanel>
+          </Grid>
+        </Border>
       </Grid>
     </Grid>
   </Grid>

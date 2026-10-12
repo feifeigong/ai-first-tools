@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.3.6',
+    [string]$Version = '0.3.7',
     [string]$Python = 'python',
     [string]$MoverPackage,
     [string]$AnalysisToc,
@@ -49,6 +49,8 @@ if ($LASTEXITCODE) { throw 'Rust license collection failed.' }
 Copy-Item -LiteralPath (Join-Path $root 'licenses\Microsoft-WebView2-SDK-LICENSE.txt') -Destination (Join-Path $package 'THIRD-PARTY-LICENSES') -Force
 Copy-Item -LiteralPath (Join-Path $root 'licenses\Microsoft-WebView2-SDK-NOTICE.txt') -Destination (Join-Path $package 'THIRD-PARTY-LICENSES') -Force
 Copy-Item -LiteralPath (Join-Path $root 'licenses\Microsoft-VC-Redist.txt') -Destination (Join-Path $package 'THIRD-PARTY-LICENSES') -Force
+& $Python (Join-Path $PSScriptRoot 'update_manifest.py') --package $package --version $Version
+if ($LASTEXITCODE) { throw 'Update manifest generation failed.' }
 & $Python (Join-Path $PSScriptRoot 'check_release.py') --package $package
 if ($LASTEXITCODE) { throw 'Release package checks failed.' }
 $manifest = Join-Path $artifacts 'uninstall-files.nsh'

@@ -200,6 +200,7 @@ internal static class SelfTests
                 Require(rejected && before.SequenceEqual(File.ReadAllBytes(preferencesPath)));
             }
         });
+        UpdateSelfTests.Run(Check, Require, root);
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(report))!);
         File.WriteAllText(report, JsonSerializer.Serialize(new { passed = results.Count - failures, failed = failures, tests = results }, new JsonSerializerOptions { WriteIndented = true }));
         return failures == 0 ? 0 : 1;

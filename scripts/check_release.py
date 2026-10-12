@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -21,6 +22,24 @@ def check(package: Path):
     runtime = json.loads((package / "AI一手工具工作台.runtimeconfig.json").read_text(encoding="utf-8"))["runtimeOptions"]
     if "frameworks" in runtime or "framework" in runtime or not runtime.get("includedFrameworks"):
         errors.append("Workspace must include the .NET runtime")
+    manifest_path = package / "update-manifest.json"
+    if not manifest_path.is_file():
+        errors.append("Missing update manifest")
+    else:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        recorded = {entry["path"] for entry in manifest["files"]}
+        actual = {path.relative_to(package).as_posix() for path in package.rglob("*") if path.is_file() and path != manifest_path}
+        if recorded != actual or len(recorded) != len(manifest["files"]):
+            errors.append("Update manifest must list every publisher file exactly once")
+        for entry in manifest["files"]:
+            path = package / entry["path"]
+            if not path.resolve().is_relative_to(package.resolve()) or not path.is_file():
+                errors.append("Unsafe or missing update file: " + entry["path"])
+                continue
+            with path.open("rb") as stream:
+                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            if path.stat().st_size != entry["size"] or digest != entry["sha256"]:
+                errors.append("Update manifest hash mismatch: " + entry["path"])
     engine = package / "tools" / "dialog-mover-v0.3" / "_internal" / "bin"
     for name in ("txcript.exe", "MSVCP140.dll", "VCRUNTIME140.dll", "VCRUNTIME140_1.dll"):
         if not (engine / name).is_file():
@@ -40,7 +59,7 @@ def check(package: Path):
             errors.append(f"Missing document: {name}")
     if errors:
         raise RuntimeError("\n".join(errors))
-    print("Self-contained runtime, engine dependencies, shared tool logo, notices and private-data exclusions: OK")
+    print("Self-contained runtime, update manifest, engine dependencies, shared tool logo, notices and private-data exclusions: OK")
 
 
 if __name__ == "__main__":

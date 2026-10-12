@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -11,6 +12,7 @@ from pathlib import Path
 import webview
 
 from core import chatgpt, imports, mover, sources
+from core.common import open_external
 from embedded_startup import EmbeddedStartup
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -154,7 +156,10 @@ class Api:
         location = Path(items[index].get("location", ""))
         if not (location.is_file() or location.is_dir() and str(location) != "."):
             return {"error": "此目标保存在数据库中，请使用续聊命令。"}
-        os.startfile(str(location if location.is_dir() else location.parent))
+        try:
+            open_external(str(location if location.is_dir() else location.parent))
+        except (OSError, subprocess.SubprocessError):
+            return {"error": "无法打开记录位置，请在文件管理器中查看下方路径。"}
         return {"ok": True}
 
     def open_in_app(self, index: int) -> dict:
@@ -169,8 +174,8 @@ class Api:
         if not imported or url != f"codex://threads/{imported}" or not mover.SAFE_ID.match(imported):
             return {"error": "这个目标不支持直接打开。"}
         try:
-            os.startfile(url)
-        except OSError as error:
+            open_external(url)
+        except (OSError, subprocess.SubprocessError) as error:
             mover.log(f"open_in_app {url}: {error!r}")
             return {"error": "没有找到可以打开它的软件，请先安装并启动 ChatGPT。"}
         return {"ok": True}

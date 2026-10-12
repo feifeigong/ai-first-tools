@@ -15,6 +15,24 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs args)
     {
         base.OnStartup(args);
+        if (args.Args.Contains("--update-handoff-test"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var fixtureDirectory = Option(args.Args, "--update-fixture");
+            var report = Option(args.Args, "--report");
+            var config = Option(args.Args, "--config");
+            if (fixtureDirectory is null || report is null || config is null) { Shutdown(2); return; }
+            try { await UpdateSelfTests.HandoffAsync(fixtureDirectory, config, report); Shutdown(); }
+            catch (Exception exception) { Log(exception); File.WriteAllText(report, exception.ToString()); Shutdown(1); }
+            return;
+        }
+        if (args.Args.Contains("--apply-update"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var plan = Option(args.Args, "--apply-update");
+            Shutdown(plan is null ? 2 : await UpdateRunner.RunAsync(plan));
+            return;
+        }
         if (args.Args.Contains("--native-self-test"))
         {
             var report = Option(args.Args, "--report") ?? Path.Combine(AppContext.BaseDirectory, "native-test.json");
@@ -30,6 +48,12 @@ public partial class App : Application
             Shutdown(code);
             return;
         }
+        if (UpdateRunner.IsUpdating(AppContext.BaseDirectory))
+        {
+            MessageBox.Show("正在更新，完成后会自动打开，请稍等。", "AI一手", MessageBoxButton.OK, MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
         var configuration = Option(args.Args, "--config") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AI一手工具工作台", "tools.json");
         var key = ToolRepository.ConfigurationKey(configuration);
         instance = new Mutex(true, "Local\\AI_FIRST_TOOL_WORKSPACE_" + key, out var isNew);
@@ -40,7 +64,14 @@ public partial class App : Application
             return;
         }
         installationGuard = new Mutex(false, "Local\\AI_FIRST_TOOLS_RUNNING");
-        var window = new MainWindow(configuration, Option(args.Args, "--tool"), Option(args.Args, "--health-report"), Option(args.Args, "--config") is not null);
+        MainWindow window;
+        var updateFixture = Option(args.Args, "--update-fixture");
+        if (updateFixture is not null)
+        {
+            if (Option(args.Args, "--config") is null || UpdateRunner.IsInstalled(AppContext.BaseDirectory)) { Shutdown(2); return; }
+            window = new MainWindow(configuration, Option(args.Args, "--tool"), Option(args.Args, "--health-report"), true, UpdateSelfTests.FixtureClient(updateFixture));
+        }
+        else window = new MainWindow(configuration, Option(args.Args, "--tool"), Option(args.Args, "--health-report"), Option(args.Args, "--config") is not null);
         MainWindow = window;
         activation = new InstanceActivation(key, () => Dispatcher.BeginInvoke(() =>
         {

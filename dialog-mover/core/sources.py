@@ -85,7 +85,7 @@ def installed(agent_id: str) -> bool:
         return bool(found and (found / "sessions").is_dir())
     if agent_id == "chatgpt":
         found = codex_home()
-        return bool(found and (found / "auth.json").is_file())
+        return bool(found and ((found / "auth.json").is_file() or (found / "state_5.sqlite").is_file() or any((found / "sessions").rglob("*.jsonl"))))
     if agent_id == "claude_code":
         return (home() / ".claude" / "projects").is_dir()
     if agent_id == "claude_desktop":
@@ -253,7 +253,7 @@ def workbuddy_groups(root: Path, product_dir: Path) -> list[dict]:
             if file is None or not _has_dialog(file):
                 continue
             cwd = cwd or ""
-            session = make_session(sid, title, as_millis(updated), cwd.replace("/", "\\"))
+            session = make_session(sid, title, as_millis(updated), cwd.replace("/", "\\") if sys.platform == "win32" else cwd)
             if playground:
                 session["folder"] = ""
                 tasks.append(session)
@@ -892,6 +892,8 @@ def small_harness_groups(agent_id: str) -> list[dict]:
 # ----------------------------------------------------------- Claude desktop
 
 def _claude_root() -> Path:
+    if sys.platform != "win32":
+        return appdata() / "Claude"
     packages = localappdata() / "Packages"
     if packages.is_dir():
         for entry in sorted(packages.iterdir(), key=lambda path: path.name):

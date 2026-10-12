@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -16,7 +17,7 @@ from pathlib import Path
 from .common import appdata, codex_home, localappdata, norm, proxy_env, user_env
 from . import codex_import, imports
 
-CREATE_NO_WINDOW = 0x08000000
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 SAFE_ID = re.compile(r"^[0-9A-Za-z_-]{6,80}$")
 
 TARGETS = imports.TARGETS
@@ -62,13 +63,14 @@ def log(text: str) -> None:
 
 
 def txcript_path() -> Path | None:
-    bundled = app_dir() / "bin" / "txcript.exe"
+    filename = "txcript.exe" if sys.platform == "win32" else "txcript"
+    bundled = app_dir() / "bin" / filename
     if bundled.is_file():
         return bundled
     found = shutil.which("txcript")
     if found:
         return Path(found)
-    local = localappdata() / "txcript" / "txcript.exe"
+    local = localappdata() / "txcript" / filename
     return local if local.is_file() else None
 
 
@@ -77,6 +79,9 @@ TEST_ENV: dict = {}  # only the self-checks set this, to aim writes at scratch c
 
 def _env(extra: dict | None = None) -> dict:
     env = os.environ.copy()
+    if sys.platform == "darwin":
+        env.setdefault("APPDATA", str(appdata()))
+        env.setdefault("LOCALAPPDATA", str(localappdata()))
     for key in (
         "WORKBUDDY_DIR",
         "WORKBUDDY_AI_DIR",
@@ -217,7 +222,8 @@ def _import_document(path: Path, document: dict, target: str, details: dict | No
     resume = report.get("resume") or {}
     command = ""
     if TARGETS[target]["mode"] == "cli":
-        command = subprocess.list2cmdline([str(resume.get("binary", "")), *map(str, resume.get("args", []))])
+        arguments = [str(resume.get("binary", "")), *map(str, resume.get("args", []))]
+        command = subprocess.list2cmdline(arguments) if sys.platform == "win32" else shlex.join(arguments)
     if details is not None:
         details.update({"importedId": imported_id, "location": location, "resumeCommand": command,
                         "notice": TARGETS[target].get("notice", ""), "mode": TARGETS[target]["mode"]})
