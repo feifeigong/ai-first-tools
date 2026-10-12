@@ -78,6 +78,8 @@ def self_check(report: Path) -> bool:
 def smoke_check(window, report: Path) -> None:
     result = {"passed": False, "error": "UI bridge did not become ready"}
     try:
+        if not window.events.loaded.wait(45):
+            raise TimeoutError("Cocoa page did not finish loading")
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
             value = window.evaluate_js("JSON.stringify(window.__AI_FIRST_SMOKE__ || null)")
@@ -86,7 +88,8 @@ def smoke_check(window, report: Path) -> None:
                 break
             time.sleep(0.25)
     except Exception as error:
-        result = {"passed": False, "error": type(error).__name__}
+        result = {"passed": False, "error": type(error).__name__,
+                  "checks": {"windowShown": window.events.shown.is_set(), "pageLoaded": window.events.loaded.is_set()}}
     finally:
         report.parent.mkdir(parents=True, exist_ok=True)
         report.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

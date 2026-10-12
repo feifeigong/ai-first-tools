@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from core import chatgpt, common, mover, sources
 
@@ -114,6 +114,35 @@ class MacUpdatesTests(unittest.TestCase):
 
 
 class MacResourceTests(unittest.TestCase):
+    def test_cocoa_smoke_waits_for_loaded_event_before_evaluating_bridge(self):
+        from entry import smoke_check
+
+        window = Mock()
+        window.events.loaded.wait.return_value = True
+        window.evaluate_js.return_value = json.dumps({"passed": True})
+        with tempfile.TemporaryDirectory() as temporary:
+            report = Path(temporary) / "smoke.json"
+            smoke_check(window, report)
+            self.assertTrue(json.loads(report.read_text())["passed"])
+        self.assertEqual(window.mock_calls[0], unittest.mock.call.events.loaded.wait(45))
+        window.destroy.assert_called_once()
+
+    def test_unloaded_cocoa_window_fails_without_evaluating_javascript(self):
+        from entry import smoke_check
+
+        window = Mock()
+        window.events.loaded.wait.return_value = False
+        window.events.loaded.is_set.return_value = False
+        window.events.shown.is_set.return_value = True
+        with tempfile.TemporaryDirectory() as temporary:
+            report = Path(temporary) / "smoke.json"
+            smoke_check(window, report)
+            result = json.loads(report.read_text())
+            self.assertFalse(result["passed"])
+            self.assertFalse(result["checks"]["pageLoaded"])
+        window.evaluate_js.assert_not_called()
+        window.destroy.assert_called_once()
+
     def test_workspace_wraps_shared_ui_without_iframes_or_child_processes(self):
         with tempfile.TemporaryDirectory() as temporary:
             prepared = prepare(Path(temporary))

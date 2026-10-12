@@ -41,7 +41,7 @@ def main() -> None:
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     launcher = app / "Contents" / "MacOS" / "AI First Tools"
     for flag in ("--self-test", "--smoke-test"):
-        subprocess.run([str(launcher), flag, "--report", str(output / (flag.removeprefix("--") + ".json"))], check=True, timeout=90)
+        subprocess.run([str(launcher), flag, "--report", str(output / (flag.removeprefix("--") + ".json"))], check=True, timeout=120)
     version = json.loads((ROOT / "macos" / "version.json").read_text(encoding="utf-8"))["release"]
     staging = output / "dmg-content"
     staging.mkdir(exist_ok=True)
