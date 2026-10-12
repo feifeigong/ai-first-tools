@@ -1,0 +1,22 @@
+AI一手工具工作台
+
+The workspace shell and dialog-mover application are distributed under Apache-2.0.
+
+The txcript directory contains a modified version of skillsynchq/txcript:
+https://github.com/skillsynchq/txcript
+Upstream baseline: 8cd3b0e63f797b1531a14197f41a0e9eeedec8c6
+Upstream license: Apache-2.0 (preserved in txcript/LICENSE).
+Local changes include WorkBuddy, Qwen Work and Doubao Work readers/adapters,
+structured listing/import reports, Windows Cowork paths, local ChatGPT
+Work/Codex metadata registration, title preservation and related tests.
+Doubao local file conversion is not advertised as native conversation import.
+The bundled txcript release binary is version 0.14.4 with these local changes.
+
+ccl_chromium_reader is included under its original MIT license, preserved in
+dialog-mover/vendor/ccl_chromium_reader/LICENSE and licenses/.
+
+Third-party runtime license texts are included in release packages under
+THIRD-PARTY-LICENSES. NSIS licenses accompany the installer notice.
+Microsoft runtime components remain subject to their respective licenses.
+Brand names and logos belong to their respective owners and are not licensed
+under this project's code license. No endorsement is implied.

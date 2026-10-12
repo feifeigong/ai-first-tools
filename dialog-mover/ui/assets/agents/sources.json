@@ -1,0 +1,142 @@
+{
+  "cursor": {
+    "source": "D:\\cursor\\Cursor.exe",
+    "size": [
+      512,
+      512
+    ],
+    "sha256": "cd628bbb1655347a6b0936dd7c7fd49fae3bfe704c2d07431aa10ad787170409",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "workbuddy": {
+    "source": "C:\\Program Files\\WorkBuddy\\WorkBuddy.exe",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "afd3dfee74a93d0834533a768cdc6144a45639f86a8daf6cf09ca13defa7dfd6",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "workbuddy-ai": {
+    "source": "C:\\Program Files\\WorkBuddyAI\\WorkBuddyAI.exe",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "afd3dfee74a93d0834533a768cdc6144a45639f86a8daf6cf09ca13defa7dfd6",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "qwen": {
+    "source": "C:\\Program Files\\QwenWorkCN\\1.2.5-26092902\\resources\\window-icon.ico",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "d36a959c58daf1ef922b61553593276727315c6b39d6ae8d64309856f2301998",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "doubao": {
+    "source": "%LOCALAPPDATA%\\DoubaoWork\\Application\\icon.ico",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "f7b1a47ee17eebad4a8ff29f6d79ce8cff73b2cba8facad7c8b953f3ac2721e9",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "grok": {
+    "source": "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\Web Applications\\_crx_ggjocahimgaohmigbfhghnlfcnjemagj\\Grok.ico",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "218e7b64e2f496e67df251fea382d6a8670207fb3f65d72c4cae09477f71d77e",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "grok-bot": {
+    "source": "D:\\vibcoding\\txcript\\docs\\assets\\grok-bot-icon.png",
+    "size": [
+      128,
+      128
+    ],
+    "sha256": "0eb8325c5d2af1e5e17faa013682a7274e979b4d7b32bdac00b0c7c01b3512c4",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "antigravity": {
+    "source": "%LOCALAPPDATA%\\Programs\\antigravity\\Antigravity.exe",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "5a0a2070690feec337e011b42c92fe7656c0d0b4175f9a0eb01d7c339a23c9c3",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "opencode": {
+    "source": "%LOCALAPPDATA%\\Programs\\@opencode-aidesktop\\OpenCode.exe",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "3e703c8df961ad54d59e841d76a603c6454d6f9886198a85d21988fb71e2f2df",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "codebuddy": {
+    "source": "%LOCALAPPDATA%\\Programs\\CodeBuddy CN\\CodeBuddy CN.exe",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "68bf4a5b440d1b95f7045d5d7940d4202e45cfd60bbbb5615a35b9d5592b7f61",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "kimi": {
+    "source": "%LOCALAPPDATA%\\Programs\\kimi-desktop\\Kimi.exe",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "8b3c2696cb2d354b7b3ee9d83dd672e90a0c54a822c8d969f7a8f37d11955c88",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "deepseek": {
+    "source": "%LOCALAPPDATA%\\Programs\\DeepSeek Harness\\DeepSeek Harness.exe",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "883570663a9ff76cf99565cfa115a2f40979952638f29224c7d5fd88669f3c70",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "perplexity": {
+    "source": "%LOCALAPPDATA%\\Programs\\Perplexity\\Perplexity.exe",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "3ba4289b632a2eb904444321a27ae4c9ddd7190187fe9d279d21da23d5711c01",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "chatgpt": {
+    "source": "C:\\Program Files\\WindowsApps\\OpenAI.Codex_26.1007.2314.0_x64__2p2nqsd0c76g0\\assets\\Square44x44Logo.targetsize-256_altform-lightunplated.png",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "b45359d98553406d60c45e699cbe80de6fe733d51661a317ca37b41632b58823",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "claude": {
+    "source": "C:\\Program Files\\WindowsApps\\Claude_2.31226.1.0_x64__pzs8sxrjxfjjc\\app\\Claude.exe",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "01fe0d76a9fbca476ecf45f093194d9e6a65f9c384126b00822ff8b3ff1e1a88",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "hermes": {
+    "source": "https://raw.githubusercontent.com/NousResearch/hermes-agent/main/apps/bootstrap-installer/src-tauri/icons/icon.ico",
+    "status": "unavailable",
+    "origin": "generic software fallback; never a fabricated brand mark"
+  }
+}

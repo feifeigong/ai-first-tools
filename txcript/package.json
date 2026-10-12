@@ -1,0 +1,31 @@
+{
+  "name": "txcript",
+  "version": "0.14.4",
+  "description": "Convert coding-agent session transcripts between harness formats.",
+  "keywords": [
+    "transcript",
+    "claude",
+    "codex",
+    "agent",
+    "wasm"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/skillsynchq/txcript#readme",
+  "bugs": {
+    "url": "https://github.com/skillsynchq/txcript/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skillsynchq/txcript.git"
+  },
+  "main": "pkg/txcript.js",
+  "types": "pkg/txcript.d.ts",
+  "files": [
+    "pkg"
+  ],
+  "scripts": {
+    "setup": "rustup target add wasm32-unknown-unknown && cargo install wasm-bindgen-cli --version 0.2.126 --locked",
+    "build": "cargo build -p txcript --lib --release --target wasm32-unknown-unknown --no-default-features --features wasm,search && wasm-bindgen target/wasm32-unknown-unknown/release/txcript.wasm --out-dir pkg --target nodejs",
+    "prepare": "bun run build"
+  }
+}

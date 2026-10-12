@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# Pre-push gate mirroring .github/workflows/. Install once per clone:
+#
+#     git config core.hooksPath .githooks
+#
+# Branch pushes run the ci.yml checks (fmt, clippy, tests, wasm32, MSRV).
+# Tag pushes (v*) run the publish-crates / publish-npm guards and dry runs.
+# Bypass with `git push --no-verify`.
+#
+# Builds use CARGO_TARGET_DIR=target/pre-push so the `-D warnings` RUSTFLAGS
+# CI sets don't invalidate the dev cache in target/ on every run.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# ci.yml builds with -D warnings; the publish workflows don't, and
+# package.json's build script reads the wasm artifact from target/, so the
+# release gate restores the caller's environment (see release_gate).
+orig_rustflags="${RUSTFLAGS-}"
+orig_target_dir="${CARGO_TARGET_DIR-}"
+export RUSTFLAGS="-D warnings"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target/pre-push}"
+
+zero='0000000000000000000000000000000000000000'
+run_sanity=0
+tags=()
+
+while read -r _local_ref local_sha remote_ref _remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue   # deletion
+  case "$remote_ref" in
+    refs/tags/v*) tags+=("${remote_ref#refs/tags/}:$local_sha") ;;
+    *)            run_sanity=1 ;;
+  esac
+done
+
+[ "$run_sanity" = 1 ] || [ "${#tags[@]}" -gt 0 ] || exit 0
+
+step() {
+  local name="$1"; shift
+  local t0=$SECONDS
+  printf '\033[1m▶ %s\033[0m\n' "$name"
+  if "$@"; then
+    printf '\033[32m✓ %s\033[0m (%ss)\n' "$name" "$((SECONDS - t0))"
+  else
+    printf '\033[31m✗ %s\033[0m — push aborted\n' "$name" >&2
+    exit 1
+  fi
+}
+
+# --- ci.yml ----------------------------------------------------------------
+
+sanity() {
+  step "cargo fmt --all --check" cargo fmt --all --check
+  step "clippy (workspace, all targets, all features)" \
+    cargo clippy --workspace --all-targets --all-features
+  step "clippy (lib, no default features)" \
+    cargo clippy -p txcript --lib --no-default-features
+  step "cargo test --workspace --all-features" \
+    cargo test --workspace --all-features
+  step "wasm32 check (wasm)" \
+    cargo check -p txcript --lib --target wasm32-unknown-unknown --no-default-features --features wasm
+  step "wasm32 check (wasm,search)" \
+    cargo check -p txcript --lib --target wasm32-unknown-unknown --no-default-features --features wasm,search
+  msrv_check
+}
+
+msrv_check() {
+  local msrv stable
+  msrv="$(cargo metadata --no-deps --format-version 1 \
+    | jq -r '.packages[] | select(.name == "txcript") | .rust_version')"
+  stable="$(rustc --version | awk '{print $2}')"
+  if rustup run "$msrv" cargo --version >/dev/null 2>&1; then
+    step "MSRV ($msrv) cargo check --workspace --all-features" \
+      rustup run "$msrv" cargo check --workspace --all-features
+  elif [[ "$stable" == "$msrv".* ]]; then
+    echo "· MSRV ($msrv): covered by the stable run above (rustc $stable)"
+  else
+    printf '\033[33m! MSRV (%s) toolchain not installed; skipping (rustup toolchain install %s)\033[0m\n' "$msrv" "$msrv"
+  fi
+}
+
+# --- publish-crates.yml / publish-npm.yml ----------------------------------
+
+tag_matches_manifests() {
+  local tag="$1" cargo_ver npm_ver
+  cargo_ver="$(cargo metadata --no-deps --format-version 1 \
+    | jq -r '.packages[] | select(.name == "txcript") | .version')"
+  npm_ver="$(node -p "require('./package.json').version")"
+  echo "tag=$tag Cargo.toml=$cargo_ver package.json=$npm_ver"
+  [ "$tag" = "$cargo_ver" ] || { echo "tag $tag != Cargo.toml version $cargo_ver" >&2; return 1; }
+  [ "$tag" = "$npm_ver" ]   || { echo "tag $tag != package.json version $npm_ver" >&2; return 1; }
+}
+
+tag_at_head() {
+  local sha="$1" commit head
+  commit="$(git rev-parse "$sha^{commit}")"
+  head="$(git rev-parse HEAD)"
+  [ "$commit" = "$head" ] || {
+    echo "tag points at ${commit:0:12} but HEAD is ${head:0:12}; check out the tagged commit so the dry runs test what CI will publish" >&2
+    return 1
+  }
+}
+
+release_gate() {
+  local tag="$1" sha="$2"
+  if [ -n "$orig_rustflags" ]; then export RUSTFLAGS="$orig_rustflags"; else unset RUSTFLAGS; fi
+  if [ -n "$orig_target_dir" ]; then export CARGO_TARGET_DIR="$orig_target_dir"; else unset CARGO_TARGET_DIR; fi
+  step "tag $tag is at HEAD" tag_at_head "$sha"
+  step "tag $tag matches Cargo.toml and package.json" tag_matches_manifests "${tag#v}"
+  step "cargo publish --dry-run --locked -p txcript" \
+    cargo publish --dry-run --locked -p txcript
+  step "bun run build (wasm32 + wasm-bindgen)" bun run build
+  step "npm publish --dry-run" npm publish --dry-run --access public --ignore-scripts
+}
+
+[ "$run_sanity" = 1 ] && sanity
+for entry in ${tags[@]+"${tags[@]}"}; do
+  release_gate "${entry%%:*}" "${entry#*:}"
+done
+exit 0

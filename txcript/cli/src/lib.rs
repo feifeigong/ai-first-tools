@@ -1,0 +1,3378 @@
+//! CLI over the `txcript` crate: list, search, and continue local AI coding
+//! sessions across supported harnesses.
+//!
+//! ```text
+//! txcript list                          # all local sessions, every harness
+//!     [--from <harness>]                    #   only this harness's sessions
+//!     [--cwd <dir>]                         #   only sessions recorded under <dir>
+//!     [-n <N>]                              #   at most N sessions
+//!     [--since <when>] [--until <when>]     #   bound the session start time
+//! txcript continue <id>[#range]         # continue <id>, then launch the harness
+//!     [--with <harness>]                    #   ...continuing in <harness> instead
+//!     [--from <harness>]                    #   scope the id lookup to one harness
+//!     [--out <dir>]                         #   write under <dir>; implies --no-resume
+//!     [--no-resume]                         #   write the session but don't launch
+//!     [--metadata <spec>]                   #   harness mint options (repeatable;
+//!                                           #   key=value or JSON object; grok_bot
+//!                                           #   uses name/description)
+//! txcript continue <file|->[#range]     # continue a Simple document (file, or stdin
+//!     --with <harness> [...]                #   for `-`) into <harness>; see
+//!                                           #   docs/formats/simple.md
+//!                                           #   --with grok_bot never launches a CLI
+//! txcript crop <id>[#range]             # interactively cut messages and save a copy
+//!     [--with <harness>]                    #   optionally convert the cropped copy
+//!     [--from <harness>]                    #   scope the source lookup
+//! txcript view <id>[#range]             # view a session; compact text when piped
+//!     [--from <harness>]                    #   scope the id lookup to one harness
+//!     [--no-pager]                          #   print the terminal view directly
+//! txcript query '<pattern>'             # one-shot literal search, ranked hits
+//! txcript query                         # interactive picker; Enter continues
+//!     [--from <harness>]                    #   search only <harness> (default: all)
+//!     [--with <harness>]                    #   continue the pick in <harness>
+//!     [--cwd <dir>]                         #   only sessions recorded in <dir>
+//! txcript mcp                           # serve MCP over stdio
+//! txcript completion <shell>            # print a completion script
+//! ```
+//!
+//! By default `continue` launches the harness from the recorded working
+//! directory when it still exists. Resume commands are overridable per harness
+//! via `TRANSCRIPT_<HARNESS>_RESUME_CMD` (a `{id}` template).
+//!
+//! `#range` is a 1-based, inclusive message range (`#7`, `#5-12`, `#5-`,
+//! `#-10`); `view` prints the matching ordinals, so what you see is what you
+//! reference. See `fragment.rs`.
+//!
+//! Anywhere a session id is accepted, any unambiguous prefix of it works too;
+//! an ambiguous prefix errors with the candidates. Exact ids and titles win
+//! over prefix interpretation.
+//!
+//! Session discovery/conversion lives in [`txcript::local`]; ranking lives in
+//! [`txcript::search`].
+
+use std::io::IsTerminal as _;
+use std::path::PathBuf;
+use std::process::ExitCode;
+
+use clap::{CommandFactory, Parser, Subcommand};
+use txcript::harness::{amp, chatgpt, claude_chat, cowork_remote, simple};
+use txcript::{Codec, Common, HarnessId, Store, TextCodec, Transcript, local};
+
+pub mod cache;
+mod draft;
+mod editpane;
+mod export;
+pub mod fragment;
+mod graphics;
+#[cfg(feature = "mcp")]
+pub mod mcp;
+mod pager;
+mod view;
+
+pub const HARNESSES: &str = "harnesses: claude_code, claude_chat, chatgpt, codex, opencode, pi, campfire, cursor, cursor_desktop, grok, fx, hermes, \
+     amp, antigravity, simple, cowork, cowork_remote, workbuddy, workbuddy_ai, qwen_work, doubao_work";
+
+/// The `txcript` binary's command line.
+#[derive(Parser)]
+#[command(
+    name = "txcript",
+    version,
+    about = "List, search, and continue local AI coding sessions in any harness",
+    after_help = HARNESSES
+)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Command,
+    /// Keep a persistent search cache at this path, so `query` (and the MCP
+    /// search tool) re-read only the sessions that changed since the last
+    /// run. Without it every run parses every session afresh.
+    #[arg(
+        long,
+        global = true,
+        env = "TXCRIPT_CACHE",
+        value_name = "PATH",
+        value_hint = clap::ValueHint::FilePath
+    )]
+    pub cache: Option<PathBuf>,
+}
+
+/// Every `txcript` subcommand: the session commands plus the binary's own.
+#[derive(Subcommand)]
+pub enum Command {
+    #[command(flatten)]
+    Session(SessionCommand),
+    /// Serve the Model Context Protocol over stdin/stdout
+    #[cfg(feature = "mcp")]
+    Mcp,
+    /// Print a completion script for a shell (add it to your shell config)
+    Completion {
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
+}
+
+/// The session commands — `list`, `continue`, `view`, `export`, `query` — as one clap
+/// [`Subcommand`]. Usable on its own, or flattened into a larger command
+/// enum with `#[command(flatten)]` and dispatched through [`run_session`].
+#[derive(Subcommand)]
+pub enum SessionCommand {
+    /// List local sessions across every harness, newest first
+    List {
+        /// List only this harness's sessions
+        #[arg(long, value_name = "HARNESS", value_parser = HarnessParser)]
+        from: Option<HarnessId>,
+        /// Only sessions recorded in or under this working directory
+        #[arg(long, value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
+        cwd: Option<PathBuf>,
+        /// Show at most this many sessions
+        #[arg(long, short = 'n', value_name = "N")]
+        limit: Option<usize>,
+        /// Only sessions started at or after this time (RFC3339 or
+        /// YYYY-MM-DD, a bare date meaning that local midnight)
+        #[arg(long, value_name = "WHEN", value_parser = parse_since)]
+        since: Option<chrono::DateTime<chrono::Utc>>,
+        /// Only sessions started at or before this time (RFC3339 or
+        /// YYYY-MM-DD, a bare date meaning the end of that local day)
+        #[arg(long, value_name = "WHEN", value_parser = parse_until)]
+        until: Option<chrono::DateTime<chrono::Utc>>,
+    },
+    /// Continue a session, then launch its harness
+    ///
+    /// Same-harness continues resume the original in place; --with
+    /// re-synthesizes into another harness's native, resumable format first.
+    /// A `#range` suffix continues just those messages (as a new session);
+    /// ranges that cut a tool call away from its result are refused.
+    ///
+    /// The argument may also be a Simple interchange document — a file
+    /// path, or `-` for stdin — instead of a local session: any agent's
+    /// transcript in the format of docs/formats/simple.md continues into
+    /// the harness named by --with (required for documents).
+    ///
+    /// `--with grok_bot` is write/mint only: it never launches a CLI resume
+    /// (`--no-resume` is implied). Use `--metadata` for mint options such as
+    /// `name` / `description`.
+    ///
+    /// Anything that writes a copy writes a *new* session, with its own id and
+    /// today's timestamp — the source is never modified. The printed resume
+    /// command carries the new id.
+    #[command(alias = "resume")]
+    Continue {
+        /// Session id (any unambiguous prefix) or its exact title; or a
+        /// Simple document (a file path, `-` for stdin). Takes an optional
+        /// `#range` of 1-based inclusive message numbers (`abc#5-12`, `#7`,
+        /// `#5-`, `#-10`)
+        // Other: without a hint, generated completions fall back to filenames.
+        #[arg(value_hint = clap::ValueHint::Other)]
+        id: String,
+        /// Continue in this harness instead of the session's own
+        #[arg(long, value_name = "HARNESS", value_parser = HarnessParser)]
+        with: Option<HarnessId>,
+        /// Only look for the session in this harness
+        #[arg(long, value_name = "HARNESS", value_parser = HarnessParser)]
+        from: Option<HarnessId>,
+        /// Write under this directory instead of the harness's live root
+        /// (implies --no-resume: the harness wouldn't see the copy). Exports
+        /// keep the source's id and timestamp; copies into a live store get
+        /// their own.
+        #[arg(long, value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
+        out: Option<PathBuf>,
+        /// Write the session but don't launch the harness
+        #[arg(long)]
+        no_resume: bool,
+        /// Harness-specific mint / import options (repeatable). Each value is
+        /// either `key=value` or a JSON object. Merged left-to-right; unknown
+        /// keys are ignored by harnesses that do not consume them. `grok_bot`
+        /// recognizes `name` and `description` for the minted agent profile.
+        #[arg(long, value_name = "SPEC")]
+        metadata: Vec<String>,
+    },
+    /// Interactively crop a session into a new, resumable session
+    ///
+    /// Every message starts out kept; remove the ones you don't want from
+    /// anywhere in the session and press Enter to save the rest as a copy.
+    /// The optional `#range` uses the same 1-based message numbers as `view`
+    /// and opens the editor with only that range kept.
+    /// The source is never modified. By default the cropped copy is written
+    /// to the source harness; --with converts it to another harness instead.
+    Crop {
+        /// Session id (any unambiguous prefix) or exact title, optionally with
+        /// an initial message range (`abc#5-12`, `abc#7`, `abc#5-`, `abc#-10`)
+        #[arg(value_hint = clap::ValueHint::Other)]
+        source: String,
+        /// Write the cropped copy in this harness instead of the source harness
+        #[arg(long, value_name = "HARNESS", value_parser = HarnessParser)]
+        with: Option<HarnessId>,
+        /// Only look for the source session in this harness
+        #[arg(long, value_name = "HARNESS", value_parser = HarnessParser)]
+        from: Option<HarnessId>,
+    },
+    /// View a session in the terminal or print compact text to a pipe
+    ///
+    /// A terminal gets a readable, colored presentation in a pager with
+    /// controls: `u`, `a`, `t`, `r` hide or show user messages, assistant
+    /// messages, tool calls, and reasoning; `]` and `[` jump between
+    /// messages; `/` searches what is shown. Set `TXCRIPT_PAGER` to use an
+    /// external pager command instead. A pipe or redirect gets the same
+    /// compact, colorless text projection the MCP server serves. Both
+    /// number messages so a printed ordinal can be fed straight back as a
+    /// `#range`.
+    View {
+        /// Session id (any unambiguous prefix) or its exact title, with an
+        /// optional `#range` of 1-based inclusive message numbers
+        /// (`abc#5-12`, `#7`, `#5-`, `#-10`)
+        // Other: without a hint, generated completions fall back to filenames.
+        #[arg(value_hint = clap::ValueHint::Other)]
+        source: String,
+        /// Only look for the session in this harness
+        #[arg(long, value_name = "HARNESS", value_parser = HarnessParser)]
+        from: Option<HarnessId>,
+        /// Print the human-facing view directly instead of opening a pager
+        #[arg(long)]
+        no_pager: bool,
+    },
+    /// Write a session as a Simple interchange document
+    ///
+    /// The document is the full-fidelity Simple rendering of the canonical
+    /// model (docs/formats/simple.md), detached from any harness's store.
+    /// Move it to another machine and `continue <file> --with <harness>`
+    /// picks the session up there; a `#range` exports just those messages.
+    Export {
+        /// Session id (any unambiguous prefix) or its exact title, with an
+        /// optional `#range` of 1-based inclusive message numbers
+        /// (`abc#5-12`, `#7`, `#5-`, `#-10`)
+        #[arg(value_hint = clap::ValueHint::Other)]
+        source: String,
+        /// Only look for the session in this harness
+        #[arg(long, value_name = "HARNESS", value_parser = HarnessParser)]
+        from: Option<HarnessId>,
+        /// Write the document to this file instead of stdout
+        #[arg(long, value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
+        out: Option<PathBuf>,
+    },
+    /// Search session content; without a pattern, open an interactive picker
+    ///
+    /// Matching is literal and case-insensitive: the pattern must appear in a
+    /// line exactly as typed, spaces included. A pattern prints ranked hits,
+    /// labeled by what matched (user text, assistant text, thinking, tool use,
+    /// session metadata). The picker filters per keystroke; Enter continues the
+    /// selection, Esc cancels.
+    Query {
+        /// Text to find, matched literally; omit to pick interactively
+        // Other: without a hint, generated completions fall back to filenames.
+        #[arg(value_hint = clap::ValueHint::Other)]
+        pattern: Option<String>,
+        /// Continue the picked session in this harness
+        #[arg(long, value_name = "HARNESS", value_parser = HarnessParser)]
+        with: Option<HarnessId>,
+        /// Search only this harness
+        #[arg(long, value_name = "HARNESS", value_parser = HarnessParser)]
+        from: Option<HarnessId>,
+        /// Only sessions recorded in or under this working directory
+        #[arg(long, value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
+        cwd: Option<PathBuf>,
+        /// Only sessions on this git branch (exact match)
+        #[arg(long, value_name = "BRANCH")]
+        git_branch: Option<String>,
+        /// Only sessions that used this model (case-insensitive substring)
+        #[arg(long, value_name = "MODEL")]
+        model: Option<String>,
+        /// Only sessions started at or after this time (RFC3339 or
+        /// YYYY-MM-DD, a bare date meaning that local midnight)
+        #[arg(long, value_name = "WHEN", value_parser = parse_since)]
+        since: Option<chrono::DateTime<chrono::Utc>>,
+        /// Only sessions started at or before this time (RFC3339 or
+        /// YYYY-MM-DD, a bare date meaning the end of that local day)
+        #[arg(long, value_name = "WHEN", value_parser = parse_until)]
+        until: Option<chrono::DateTime<chrono::Utc>>,
+    },
+}
+
+/// Settings for [`run_session`]. `Default` is the `txcript` binary's own
+/// behavior: hints name `txcript`, and nothing is cached between runs.
+#[derive(Debug, Clone, Default)]
+pub struct Options {
+    /// The program name used in hints, as in "try `<program> list`".
+    pub program: Option<String>,
+    /// A persistent search cache (see [`cache`]). `None` keeps `query`
+    /// stateless: every run parses every session.
+    pub cache: Option<PathBuf>,
+}
+
+static PROGRAM: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// The program name for hints — whatever [`run_session`] was told, else
+/// `txcript`.
+pub(crate) fn program() -> &'static str {
+    PROGRAM.get().map_or("txcript", String::as_str)
+}
+
+fn harness(s: &str) -> Result<HarnessId, txcript::Error> {
+    s.parse()
+}
+
+/// [`harness`] as a clap parser that also advertises the canonical names, so
+/// help and shell completion offer them. Parsing stays [`harness`]'s (its
+/// friendly aliases included): `possible_values` informs, it doesn't restrict.
+#[derive(Clone)]
+struct HarnessParser;
+
+impl clap::builder::TypedValueParser for HarnessParser {
+    type Value = HarnessId;
+
+    fn parse_ref(
+        &self,
+        cmd: &clap::Command,
+        arg: Option<&clap::Arg>,
+        value: &std::ffi::OsStr,
+    ) -> Result<HarnessId, clap::Error> {
+        (harness as fn(&str) -> Result<HarnessId, txcript::Error>).parse_ref(cmd, arg, value)
+    }
+
+    fn possible_values(
+        &self,
+    ) -> Option<Box<dyn Iterator<Item = clap::builder::PossibleValue> + '_>> {
+        Some(Box::new(
+            HarnessId::ALL
+                .into_iter()
+                .map(|h| clap::builder::PossibleValue::new(h.as_str())),
+        ))
+    }
+}
+
+/// Run a parsed `txcript` command line to completion, reporting errors on
+/// stderr. This is the whole of the `txcript` binary.
+#[must_use]
+pub fn run(cli: Cli) -> ExitCode {
+    let options = Options {
+        program: None,
+        cache: cli.cache,
+    };
+    let result = match cli.command {
+        Command::Session(command) => run_session(command, &options),
+        #[cfg(feature = "mcp")]
+        Command::Mcp => tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| format!("starting the async runtime: {e}"))
+            .and_then(|runtime| runtime.block_on(mcp::serve(options.cache))),
+        Command::Completion { shell } => {
+            // Render to a buffer first: a failed stdout write means the
+            // reader is gone (`… | head`), which should end quietly, not
+            // panic inside clap_complete.
+            let mut script = Vec::new();
+            clap_complete::generate(shell, &mut Cli::command(), "txcript", &mut script);
+            let _ = std::io::Write::write_all(&mut std::io::stdout(), &script);
+            Ok(ExitCode::SUCCESS)
+        }
+    };
+    result.unwrap_or_else(|e| {
+        eprintln!("error: {e}");
+        ExitCode::FAILURE
+    })
+}
+
+/// Run one session command. `continue` and the `query` picker hand the
+/// terminal to the launched harness and do not return on Unix; everything
+/// else returns the exit code to finish with.
+///
+/// # Errors
+/// A message for the user when the command fails: no such session, an
+/// ambiguous prefix, a harness that can't be written or launched.
+pub fn run_session(command: SessionCommand, options: &Options) -> Result<ExitCode, String> {
+    if let Some(program) = &options.program {
+        // First caller wins; the name can't meaningfully change mid-process.
+        let _ = PROGRAM.set(program.clone());
+    }
+    let cache = options.cache.as_deref();
+    match command {
+        SessionCommand::List {
+            from,
+            cwd,
+            limit,
+            since,
+            until,
+        } => {
+            cmd_list(from, cwd.as_deref(), limit, since, until)?;
+            Ok(ExitCode::SUCCESS)
+        }
+        SessionCommand::Continue {
+            id,
+            with,
+            from,
+            out,
+            no_resume,
+            metadata,
+        } => cmd_continue(&id, with, from, out.as_ref(), no_resume, &metadata),
+        SessionCommand::Crop { source, with, from } => cmd_crop(&source, with, from),
+        SessionCommand::View {
+            source,
+            from,
+            no_pager,
+        } => view::cmd_view(&source, from, no_pager),
+        SessionCommand::Export { source, from, out } => {
+            export::cmd_export(&source, from, out.as_deref())
+        }
+        SessionCommand::Query {
+            pattern,
+            with,
+            from,
+            cwd,
+            git_branch,
+            model,
+            since,
+            until,
+        } => query::cmd_query(
+            pattern,
+            with,
+            from,
+            cwd.as_deref(),
+            git_branch.as_deref(),
+            model.as_deref(),
+            since,
+            until,
+            cache,
+        ),
+    }
+}
+
+/// Strip the Windows verbatim-device prefix (`\\?\`, including `\\?\UNC\`)
+/// that `canonicalize` adds, so vanished paths still match canonicalized
+/// parents. Wide-char math keeps non-UTF8 paths intact.
+#[cfg(windows)]
+const VERBATIM_PREFIX: &[u16] = &[0x5C, 0x5C, 0x3F, 0x5C]; // `\\?\`
+#[cfg(windows)]
+const UNC_PREFIX: &[u16] = &[0x5C, 0x5C, 0x3F, 0x5C, 0x55, 0x4E, 0x43, 0x5C]; // `\\?\UNC\`
+
+#[cfg(windows)]
+fn strip_verbatim_prefix(path: &std::path::Path) -> std::path::PathBuf {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    let wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+    if let Some(rest) = wide.strip_prefix(UNC_PREFIX) {
+        // `\\?\UNC\server\share` ⟺ `\\server\share`.
+        let mut full = vec![0x5C, 0x5C];
+        full.extend_from_slice(rest);
+        std::ffi::OsString::from_wide(&full).into()
+    } else if let Some(rest) = wide.strip_prefix(VERBATIM_PREFIX) {
+        std::ffi::OsString::from_wide(rest).into()
+    } else {
+        path.to_path_buf()
+    }
+}
+
+#[cfg(not(windows))]
+fn strip_verbatim_prefix(path: &std::path::Path) -> std::path::PathBuf {
+    path.to_path_buf()
+}
+
+/// Component-wise `starts_with` that folds case on Windows, where `C:\Users`
+/// and `c:\users` are the same directory. Non-Windows keeps the exact
+/// `Path::starts_with`.
+fn path_starts_with(child: &std::path::Path, parent: &std::path::Path) -> bool {
+    #[cfg(windows)]
+    {
+        let mut child_comps = child.components();
+        let mut parent_comps = parent.components();
+        loop {
+            match (parent_comps.next(), child_comps.next()) {
+                (None, _) => return true,
+                (Some(_), None) => return false,
+                (Some(p), Some(c)) => {
+                    // Unicode lowercase approximates the filesystem's own
+                    // case folding; ASCII-only would miss e.g. `é` vs `É`.
+                    if p.as_os_str().to_string_lossy().to_lowercase()
+                        != c.as_os_str().to_string_lossy().to_lowercase()
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        child.starts_with(parent)
+    }
+}
+
+/// Canonicalize the longest existing prefix of `path`, re-appending the
+/// vanished tail verbatim, so the parent still resolves symlinks, junctions,
+/// or 8.3 short names the raw spelling would mismatch.
+fn canonicalize_lenient(path: &std::path::Path) -> std::path::PathBuf {
+    use std::path::Component;
+    let mut tail: Vec<std::ffi::OsString> = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(base) = current.canonicalize() {
+            let mut out = strip_verbatim_prefix(&base);
+            for component in tail.iter().rev() {
+                out.push(component);
+            }
+            return out;
+        }
+        let mut components = current.components();
+        match components.next_back() {
+            // Empty path, or only a prefix/root remains: nothing resolvable.
+            None | Some(Component::Prefix(_) | Component::RootDir) => {
+                return strip_verbatim_prefix(path);
+            }
+            Some(last) => {
+                tail.push(last.as_os_str().to_os_string());
+                current = components.as_path();
+            }
+        }
+    }
+}
+
+/// True when a session's recorded `cwd` is `dir` or anywhere under it, so a
+/// monorepo session started in `repo/packages/foo` shows up when listing
+/// `repo`. The check is component-wise (`/foo/barbaz` is not under
+/// `/foo/bar`). Both sides are canonicalized so different spellings of one
+/// directory still match (`/tmp` vs `/private/tmp`, `$PWD` through a
+/// symlink); a path that no longer exists keeps its raw spelling, so
+/// vanished directories compare as plain components.
+#[must_use]
+pub fn under_dir(session_cwd: &str, dir: &std::path::Path) -> bool {
+    path_starts_with(
+        &canonicalize_lenient(std::path::Path::new(session_cwd)),
+        &canonicalize_lenient(dir),
+    )
+}
+
+/// The `--from`/`--cwd` session filters shared by `list` and `query`.
+/// A `--cwd` filter excludes sessions with no recorded cwd — they don't
+/// pertain to any folder.
+fn selected(
+    session: &local::Session,
+    from: Option<HarnessId>,
+    cwd: Option<&std::path::Path>,
+) -> bool {
+    matches_filters(session.harness, session.meta.cwd.as_deref(), from, cwd)
+}
+
+fn matches_filters(
+    session_harness: HarnessId,
+    session_cwd: Option<&str>,
+    from: Option<HarnessId>,
+    cwd: Option<&std::path::Path>,
+) -> bool {
+    from.is_none_or(|harness| session_harness == harness)
+        && cwd.is_none_or(|dir| session_cwd.is_some_and(|recorded| under_dir(recorded, dir)))
+}
+
+/// The first session matching `needle` exactly — by id or title — scoped to
+/// `from` when given. Discovery order is newest-first, so copies sharing an
+/// id resolve to the newest.
+#[must_use]
+pub fn find_exact<'a>(
+    sessions: &'a [local::Session],
+    from: Option<HarnessId>,
+    needle: &str,
+) -> Option<&'a local::Session> {
+    sessions.iter().find(|s| {
+        from.is_none_or(|h| s.harness == h)
+            && (s.meta.id == needle || s.meta.title.as_deref() == Some(needle))
+    })
+}
+
+/// Resolve `needle` to a session: exact id or exact title first, then an
+/// unambiguous id prefix. `Ok(None)` when nothing matches.
+///
+/// # Errors
+/// When several distinct ids share the prefix; the message lists them.
+pub fn find_session<'a>(
+    sessions: &'a [local::Session],
+    from: Option<HarnessId>,
+    needle: &str,
+) -> Result<Option<&'a local::Session>, String> {
+    if let Some(found) = find_exact(sessions, from, needle) {
+        return Ok(Some(found));
+    }
+    if needle.is_empty() {
+        return Ok(None);
+    }
+    let scoped: Vec<&local::Session> = sessions
+        .iter()
+        .filter(|s| from.is_none_or(|h| s.harness == h))
+        .collect();
+    let hits = distinct_prefix_matches(scoped.iter().map(|s| s.meta.id.as_str()), needle);
+    match hits.as_slice() {
+        [] => Ok(None),
+        [one] => Ok(Some(scoped[*one])),
+        many => {
+            let candidates: Vec<&local::Session> = many.iter().map(|&i| scoped[i]).collect();
+            Err(ambiguous_message(needle, &candidates))
+        }
+    }
+}
+
+type LoadedSession = Result<(Transcript<Common>, Option<fragment::SpanReq>), String>;
+
+/// An exact Claude Chat UUID can be loaded from Claude Desktop's active
+/// organization without enumerating conversations first. Titles and id
+/// prefixes still require discovery and therefore fall through to the normal
+/// resolver.
+pub(crate) fn load_direct_claude_chat(
+    source: &str,
+    from: Option<HarnessId>,
+) -> Option<LoadedSession> {
+    if from != Some(HarnessId::ClaudeChat) {
+        return None;
+    }
+    #[cfg(not(feature = "claude_chat"))]
+    {
+        let _ = source;
+        return None;
+    }
+    #[cfg(feature = "claude_chat")]
+    {
+        let (id, request) = fragment::parse_ref(source);
+        let conversation_uuid = uuid::Uuid::parse_str(id).ok()?.to_string();
+        Some((|| {
+            let store = claude_chat::ClaudeChatStore::from_desktop().map_err(|e| e.to_string())?;
+            let reference = store
+                .conversation_ref(conversation_uuid, None)
+                .map_err(|e| e.to_string())?;
+            let native = store.load(&reference).map_err(|e| e.to_string())?;
+            let common = claude_chat::ClaudeChat::to_common(&native).map_err(|e| e.to_string())?;
+            Ok((common, request))
+        })())
+    }
+}
+
+/// An exact `ChatGPT` conversation UUID can be loaded without enumerating the
+/// account. Titles and id prefixes still require explicit live discovery.
+pub(crate) fn load_direct_chatgpt(source: &str, from: Option<HarnessId>) -> Option<LoadedSession> {
+    if from != Some(HarnessId::ChatGpt) {
+        return None;
+    }
+    #[cfg(not(feature = "chatgpt"))]
+    {
+        let _ = source;
+        return None;
+    }
+    #[cfg(feature = "chatgpt")]
+    {
+        let (id, request) = fragment::parse_ref(source);
+        let conversation_id = uuid::Uuid::parse_str(id).ok()?.to_string();
+        Some((|| {
+            let store = chatgpt::ChatGptStore::from_codex().map_err(|error| error.to_string())?;
+            let reference = store
+                .conversation_ref(conversation_id)
+                .map_err(|error| error.to_string())?;
+            let native = store.load(&reference).map_err(|error| error.to_string())?;
+            let common = chatgpt::ChatGpt::to_common(&native).map_err(|error| error.to_string())?;
+            Ok((common, request))
+        })())
+    }
+}
+
+/// A full cloud Cowork id bypasses listing, like Claude Chat UUID reads.
+pub(crate) fn load_direct_cowork_remote(
+    source: &str,
+    from: Option<HarnessId>,
+) -> Option<LoadedSession> {
+    if from != Some(HarnessId::CoworkRemote) {
+        return None;
+    }
+    #[cfg(not(feature = "cowork_remote"))]
+    {
+        let _ = source;
+        return None;
+    }
+    #[cfg(feature = "cowork_remote")]
+    {
+    let (id, request) = fragment::parse_ref(source);
+    let normalized = cowork_remote::normalize_id(id);
+    // A mistyped link/id must not turn into an account-wide title search.
+    if normalized.is_err()
+        && !id.contains("://")
+        && !id.starts_with("cse_")
+        && !id.starts_with("session_")
+        && uuid::Uuid::parse_str(id).is_err()
+    {
+        return None;
+    }
+    Some((|| {
+        let id = normalized.map_err(|error| error.to_string())?;
+        let store =
+            cowork_remote::CoworkRemoteStore::from_desktop().map_err(|error| error.to_string())?;
+        let reference = store
+            .session_ref(&id, None)
+            .map_err(|error| error.to_string())?;
+        let native = store.load(&reference).map_err(|error| error.to_string())?;
+        let common =
+            cowork_remote::CoworkRemote::to_common(&native).map_err(|error| error.to_string())?;
+        Ok((common, request))
+    })())
+    }
+}
+
+/// Dispatch only an explicitly selected live source with a full provider id.
+pub(crate) fn load_direct_remote(
+    source: &str,
+    from: Option<HarnessId>,
+) -> Option<(HarnessId, LoadedSession)> {
+    let harness = from?;
+    let loaded = match harness {
+        HarnessId::ClaudeChat => load_direct_claude_chat(source, from),
+        HarnessId::ChatGpt => load_direct_chatgpt(source, from),
+        HarnessId::CoworkRemote => load_direct_cowork_remote(source, from),
+        _ => return None,
+    }?;
+    Some((harness, loaded))
+}
+
+/// Positions of the first occurrence of each distinct id starting with
+/// `prefix`. Claude Code writes a session resumed from another cwd under the
+/// same id in a second store; those copies collapse to the first (newest —
+/// discovery order) rather than reading as an ambiguity.
+fn distinct_prefix_matches<'a>(ids: impl Iterator<Item = &'a str>, prefix: &str) -> Vec<usize> {
+    let mut seen: Vec<&str> = Vec::new();
+    let mut hits = Vec::new();
+    for (i, id) in ids.enumerate() {
+        if id.starts_with(prefix) && !seen.contains(&id) {
+            seen.push(id);
+            hits.push(i);
+        }
+    }
+    hits
+}
+
+fn ambiguous_message(needle: &str, candidates: &[&local::Session]) -> String {
+    use std::fmt::Write as _;
+    let mut msg = format!(
+        "`{needle}` prefixes {} session ids — add characters:",
+        candidates.len()
+    );
+    for s in candidates.iter().take(10) {
+        let title = s.meta.title.as_deref().unwrap_or("");
+        let _ = write!(
+            msg,
+            "\n  {:<12}  {}  {}",
+            s.harness,
+            style::scrub(&s.meta.id),
+            style::scrub(title)
+        );
+    }
+    if candidates.len() > 10 {
+        let _ = write!(msg, "\n  …and {} more", candidates.len() - 10);
+    }
+    msg
+}
+
+/// `--since`: a bare `YYYY-MM-DD` means that local midnight.
+///
+/// # Errors
+/// When `s` is neither RFC3339 nor a bare date.
+pub fn parse_since(s: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
+    parse_when(s, false)
+}
+
+/// `--until`: a bare `YYYY-MM-DD` means the end of that local day.
+///
+/// # Errors
+/// When `s` is neither RFC3339 nor a bare date.
+pub fn parse_until(s: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
+    parse_when(s, true)
+}
+
+fn parse_when(s: &str, end_of_day: bool) -> Result<chrono::DateTime<chrono::Utc>, String> {
+    use chrono::TimeZone as _;
+    if let Ok(t) = chrono::DateTime::parse_from_rfc3339(s) {
+        return Ok(t.with_timezone(&chrono::Utc));
+    }
+    let date = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| {
+        format!("`{s}` is neither RFC3339 (2026-08-18T10:00:00Z) nor a date (2026-08-18)")
+    })?;
+    let time = if end_of_day {
+        chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap_or(chrono::NaiveTime::MIN)
+    } else {
+        chrono::NaiveTime::MIN
+    };
+    // Bare dates read as the user's local calendar. A time made ambiguous or
+    // skipped by a DST edge takes the earlier mapping; UTC is the fallback.
+    Ok(
+        match chrono::Local.from_local_datetime(&date.and_time(time)) {
+            chrono::LocalResult::Single(t) | chrono::LocalResult::Ambiguous(t, _) => {
+                t.with_timezone(&chrono::Utc)
+            }
+            chrono::LocalResult::None => chrono::Utc.from_utc_datetime(&date.and_time(time)),
+        },
+    )
+}
+
+/// Compact age for the listing's WHEN column: relative inside a week, the
+/// local date past it. Widths stay within 10 characters.
+fn format_when(ts: chrono::DateTime<chrono::Utc>) -> String {
+    format_when_at(ts, chrono::Utc::now())
+}
+
+fn format_when_at(ts: chrono::DateTime<chrono::Utc>, now: chrono::DateTime<chrono::Utc>) -> String {
+    let delta = now.signed_duration_since(ts);
+    // Small clock skew (a session stamped just ahead of us) reads as now.
+    match delta {
+        d if d.num_seconds() < 60 => "just now".to_string(),
+        d if d.num_minutes() < 60 => format!("{}m ago", d.num_minutes()),
+        d if d.num_hours() < 24 => format!("{}h ago", d.num_hours()),
+        d if d.num_days() < 7 => format!("{}d ago", d.num_days()),
+        _ => ts
+            .with_timezone(&chrono::Local)
+            .format("%Y-%m-%d")
+            .to_string(),
+    }
+}
+
+#[cfg(test)]
+mod filter_tests {
+    use super::*;
+
+    #[test]
+    fn omitted_filters_include_every_harness_and_missing_cwd() {
+        assert!(matches_filters(HarnessId::Codex, None, None, None));
+        assert!(matches_filters(
+            HarnessId::ClaudeCode,
+            Some("/some/project"),
+            None,
+            None
+        ));
+    }
+
+    #[test]
+    fn supplied_filters_require_matching_harness_and_recorded_cwd() {
+        let cwd = std::path::Path::new("/some/project");
+        assert!(matches_filters(
+            HarnessId::Codex,
+            Some("/some/project"),
+            Some(HarnessId::Codex),
+            Some(cwd)
+        ));
+        assert!(!matches_filters(
+            HarnessId::ClaudeCode,
+            Some("/some/project"),
+            Some(HarnessId::Codex),
+            Some(cwd)
+        ));
+        assert!(!matches_filters(
+            HarnessId::Codex,
+            None,
+            Some(HarnessId::Codex),
+            Some(cwd)
+        ));
+    }
+
+    #[test]
+    fn cwd_filter_admits_subdirectories_on_component_boundaries() {
+        let repo = std::path::Path::new("/some/repo");
+        assert!(matches_filters(
+            HarnessId::Codex,
+            Some("/some/repo/packages/foo"),
+            None,
+            Some(repo)
+        ));
+        // A sibling sharing the prefix as a string is not under the filter.
+        assert!(!matches_filters(
+            HarnessId::Codex,
+            Some("/some/repo2"),
+            None,
+            Some(repo)
+        ));
+        // The subtree runs downward only: a parent isn't "under" its child.
+        assert!(!matches_filters(
+            HarnessId::Codex,
+            Some("/some"),
+            None,
+            Some(repo)
+        ));
+    }
+
+    #[test]
+    fn strip_verbatim_prefix_leaves_plain_paths_alone() {
+        let p = std::path::Path::new("some/relative/dir");
+        assert_eq!(super::strip_verbatim_prefix(p), p.to_path_buf());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn strip_verbatim_prefix_strips_device_and_unc_forms() {
+        assert_eq!(
+            super::strip_verbatim_prefix(std::path::Path::new(r"\\?\C:\some\repo")),
+            std::path::PathBuf::from(r"C:\some\repo")
+        );
+        assert_eq!(
+            super::strip_verbatim_prefix(std::path::Path::new(r"\\?\UNC\server\share")),
+            std::path::PathBuf::from(r"\\server\share")
+        );
+    }
+
+    // Drive-letter paths only parse where `\` separates components.
+    // The tempdir case is the reported scenario: live `dir`, vanished child.
+    #[cfg(windows)]
+    #[test]
+    fn cwd_filter_matches_vanished_child_of_live_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("packages").join("foo");
+        assert!(super::under_dir(gone.to_str().unwrap(), dir.path()));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cwd_filter_handles_windows_verbatim_prefixes_and_casing() {
+        let dir = std::path::Path::new(r"C:\some\repo");
+        assert!(super::under_dir(r"C:\some\repo\packages\foo", dir));
+        assert!(super::under_dir(r"c:\Some\Repo\packages\foo", dir));
+        assert!(super::under_dir(r"C:/some/repo/packages/foo", dir));
+        assert!(!super::under_dir(r"C:\some\repo2", dir));
+        assert!(!super::under_dir(r"C:\other\repo", dir));
+    }
+}
+
+#[cfg(test)]
+mod resolve_tests {
+
+    #[test]
+    fn cowork_urls_require_explicit_source_and_invalid_urls_never_become_searches() {
+        let valid = "https://claude.ai/chat/00000000-0000-8000-8000-000000000002";
+        assert!(super::load_direct_remote(valid, None).is_none());
+        for source in [
+            "https://evil.test/cowork/cse_one",
+            "cse_../bad",
+            "https://claude.ai/chat/00000000-0000-4000-8000-000000000002",
+        ] {
+            assert!(matches!(
+                super::load_direct_remote(source, Some(txcript::HarnessId::CoworkRemote)),
+                Some((txcript::HarnessId::CoworkRemote, Err(_)))
+            ));
+        }
+    }
+    use super::distinct_prefix_matches;
+
+    #[test]
+    fn prefixes_match_first_copy_of_each_distinct_id() {
+        let ids = ["abc123", "abcdef", "abc123", "zzz"];
+        // Two distinct ids share `abc`; the duplicate collapses to its first
+        // (newest) copy.
+        assert_eq!(distinct_prefix_matches(ids.into_iter(), "abc"), [0, 1]);
+        assert_eq!(distinct_prefix_matches(ids.into_iter(), "abc1"), [0]);
+        assert_eq!(
+            distinct_prefix_matches(ids.into_iter(), "nope"),
+            [] as [usize; 0]
+        );
+    }
+}
+
+#[cfg(test)]
+mod when_tests {
+    use super::{format_when_at, parse_since, parse_until};
+
+    #[test]
+    fn ages_stay_within_the_ten_char_column() {
+        let now: chrono::DateTime<chrono::Utc> = "2026-08-18T12:00:00Z".parse().unwrap();
+        let at = |s: &str| format_when_at(s.parse().unwrap(), now);
+        assert_eq!(at("2026-08-18T11:59:30Z"), "just now");
+        assert_eq!(at("2026-08-18T11:15:00Z"), "45m ago");
+        assert_eq!(at("2026-08-18T02:00:00Z"), "10h ago");
+        assert_eq!(at("2026-08-15T12:00:00Z"), "3d ago");
+        // Past a week: an absolute local date, exactly 10 chars.
+        assert_eq!(at("2026-01-01T00:00:00Z").len(), 10);
+        // A session stamped slightly ahead of our clock reads as now.
+        assert_eq!(at("2026-08-18T12:00:20Z"), "just now");
+    }
+
+    #[test]
+    fn bounds_accept_rfc3339_and_bare_dates() {
+        let expected: chrono::DateTime<chrono::Utc> = "2026-08-18T10:00:00Z".parse().unwrap();
+        assert_eq!(parse_since("2026-08-18T10:00:00Z").unwrap(), expected);
+        // A bare date spans its whole local day: until lands after since.
+        let since = parse_since("2026-08-18").unwrap();
+        let until = parse_until("2026-08-18").unwrap();
+        assert!(until > since);
+        assert_eq!((until - since).num_seconds(), 24 * 3600 - 1);
+        assert!(parse_since("yesterday").is_err());
+    }
+}
+
+#[cfg(test)]
+mod stamp_tests {
+    use super::{HarnessId, stamp_live_cwd};
+
+    #[test]
+    fn unavailable_cwds_rehome_to_the_current_directory_except_for_exports() {
+        let current = std::env::current_dir().unwrap();
+
+        // Claude Chat and other remote/document sources have no local cwd.
+        // A live Claude Code import must still land under a project shard,
+        // rather than directly in `~/.claude/projects`, where `--resume`
+        // cannot find it.
+        for cwd in [None, Some(String::new())] {
+            let mut copy = super::identity_tests::transcript();
+            copy.meta.cwd = cwd;
+            stamp_live_cwd(&mut copy, None);
+            assert_eq!(copy.meta.cwd.as_deref(), current.to_str());
+
+            // Exercise the actual Claude Code writer: the session must be a
+            // child of an encoded project directory, never a JSONL file at
+            // the projects root like the broken live import was.
+            let root = tempfile::tempdir().unwrap();
+            let written =
+                txcript::local::write(HarnessId::ClaudeCode, &copy, Some(root.path())).unwrap();
+            let reference = std::path::PathBuf::from(written.location.trim_matches('"'));
+            assert_ne!(reference.parent(), Some(root.path()));
+            assert_eq!(
+                reference.parent().and_then(std::path::Path::parent),
+                Some(root.path())
+            );
+        }
+
+        let mut copy = super::identity_tests::transcript();
+        copy.meta.cwd = Some("/no/such/dir/txcript-test".into());
+        stamp_live_cwd(&mut copy, None);
+        assert_eq!(copy.meta.cwd.as_deref(), current.to_str());
+
+        // A cwd that still exists is kept.
+        let mut copy = super::identity_tests::transcript();
+        copy.meta.cwd = current.to_str().map(String::from);
+        stamp_live_cwd(&mut copy, None);
+        assert_eq!(copy.meta.cwd.as_deref(), current.to_str());
+
+        // `--out` exports stay faithful to the source, dead cwd or not.
+        let mut copy = super::identity_tests::transcript();
+        copy.meta.cwd = Some("/no/such/dir/txcript-test".into());
+        stamp_live_cwd(&mut copy, Some(std::path::Path::new("/tmp/x")));
+        assert_eq!(copy.meta.cwd.as_deref(), Some("/no/such/dir/txcript-test"));
+
+        let mut copy = super::identity_tests::transcript();
+        copy.meta.cwd = None;
+        stamp_live_cwd(&mut copy, Some(std::path::Path::new("/tmp/x")));
+        assert_eq!(copy.meta.cwd, None);
+    }
+}
+
+#[cfg(test)]
+mod scrub_tests {
+    use super::style::scrub;
+
+    #[test]
+    fn control_characters_become_spaces_one_for_one() {
+        // ANSI SGR, an OSC-52 clipboard write, a forged row via newline, and
+        // a bell: all neutralized, and the char count is unchanged so column
+        // math and highlight spans stay aligned.
+        let hostile = "a\x1b[31mred\x1b]52;c;evil\x07b\nrow\ttab";
+        let cleaned = scrub(hostile);
+        assert!(!cleaned.chars().any(char::is_control));
+        assert_eq!(cleaned.chars().count(), hostile.chars().count());
+        assert_eq!(scrub("plain text stays"), "plain text stays");
+    }
+}
+
+#[cfg(test)]
+mod crop_command_tests {
+    use super::*;
+
+    #[test]
+    fn crop_parses_a_required_range_and_optional_harnesses() {
+        let cli = Cli::try_parse_from([
+            "txcript",
+            "crop",
+            "session-123#2-4",
+            "--from",
+            "claude_code",
+            "--with",
+            "codex",
+        ])
+        .unwrap();
+
+        let Command::Session(SessionCommand::Crop { source, from, with }) = cli.command else {
+            panic!("expected crop command");
+        };
+        assert_eq!(source, "session-123#2-4");
+        assert_eq!(from, Some(HarnessId::ClaudeCode));
+        assert_eq!(with, Some(HarnessId::Codex));
+    }
+
+    #[test]
+    fn crop_accepts_a_plain_session_and_uses_a_range_as_initial_selection() {
+        let (plain, request) = crop_ref("session-123");
+        assert_eq!(plain, "session-123");
+        assert!(request.is_none());
+
+        let (ranged, request) = crop_ref("session-123#2-4");
+        assert_eq!(ranged, "session-123");
+        assert!(request.is_some());
+    }
+
+    #[test]
+    fn crop_rejects_read_only_destinations_before_opening_the_editor() {
+        for target in [
+            HarnessId::ClaudeChat,
+            HarnessId::ChatGpt,
+            HarnessId::Hermes,
+            HarnessId::Amp,
+            HarnessId::Simple,
+        ] {
+            let error = ensure_crop_target(target).unwrap_err();
+            assert!(error.contains("cannot store cropped sessions"));
+            assert!(error.contains("--with"));
+        }
+        assert!(ensure_crop_target(HarnessId::ClaudeCode).is_ok());
+        assert!(ensure_crop_target(HarnessId::Codex).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::{Common, HarnessId, Transcript, ensure_resumable_source, fresh_identity};
+    use txcript::common::Meta;
+
+    pub(crate) fn transcript() -> Transcript<Common> {
+        Transcript::new(
+            Meta {
+                id: "bb3c5476-0d25-46d0-803a-0ed9de155e6b".into(),
+                timestamp: "2026-07-30T20:33:48Z".parse().unwrap_or_default(),
+                cwd: Some("/work/aristotle".into()),
+                git_branch: None,
+                title: None,
+                cli_version: None,
+                model: None,
+                lineage: None,
+            },
+            Vec::new(),
+        )
+    }
+
+    #[test]
+    fn a_copy_into_a_live_store_becomes_its_own_session() {
+        let mut copy = transcript();
+        let (id, ts) = (copy.meta.id.clone(), copy.meta.timestamp);
+        fresh_identity(&mut copy, HarnessId::ClaudeCode, None);
+        // Writing under the source id would land on the source's own file.
+        assert_ne!(copy.meta.id, id);
+        assert!(copy.meta.timestamp > ts, "the copy is filed under today");
+        // v4 for everything but codex: version nibble, then the variant bits.
+        assert_eq!(&copy.meta.id[14..15], "4");
+        assert!(matches!(&copy.meta.id[19..20], "8" | "9" | "a" | "b"));
+    }
+
+    #[test]
+    fn codex_copies_get_the_v7_shape_codex_mints_itself() {
+        let mut copy = transcript();
+        fresh_identity(&mut copy, HarnessId::Codex, None);
+        assert_eq!(&copy.meta.id[14..15], "7");
+    }
+
+    #[test]
+    fn an_out_export_keeps_the_source_identity() {
+        let mut copy = transcript();
+        let (id, ts) = (copy.meta.id.clone(), copy.meta.timestamp);
+        fresh_identity(
+            &mut copy,
+            HarnessId::Codex,
+            Some(std::path::Path::new("/tmp/x")),
+        );
+        assert_eq!(copy.meta.id, id);
+        assert_eq!(copy.meta.timestamp, ts);
+    }
+
+    #[test]
+    fn cowork_remote_is_refused_even_for_an_in_place_continue() {
+        let error =
+            ensure_resumable_source(HarnessId::CoworkRemote, HarnessId::CoworkRemote).unwrap_err();
+        assert!(error.contains("pull-only"));
+    }
+
+    #[test]
+    fn claude_chat_is_refused_even_for_an_in_place_continue() {
+        let error =
+            ensure_resumable_source(HarnessId::ClaudeChat, HarnessId::ClaudeChat).unwrap_err();
+        assert!(error.contains("pull-only"));
+    }
+
+    #[test]
+    fn claude_chat_as_a_target_uses_the_normal_write_boundary() {
+        assert!(ensure_resumable_source(HarnessId::Codex, HarnessId::ClaudeChat).is_ok());
+    }
+
+    #[test]
+    fn chatgpt_is_refused_even_for_an_in_place_continue() {
+        let error = ensure_resumable_source(HarnessId::ChatGpt, HarnessId::ChatGpt).unwrap_err();
+        assert!(error.contains("pull-only"));
+    }
+
+    #[test]
+    fn resume_alias_is_accepted_for_continue_command() {
+        use clap::Parser;
+        let cli = crate::Cli::try_parse_from(["txcript", "resume", "session-123"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            crate::Command::Session(crate::SessionCommand::Continue { ref id, .. }) if id == "session-123"
+        ));
+    }
+}
+
+fn cmd_list(
+    from: Option<HarnessId>,
+    cwd: Option<&std::path::Path>,
+    limit: Option<usize>,
+    since: Option<chrono::DateTime<chrono::Utc>>,
+    until: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<(), String> {
+    let sessions = discover_with_spinner(from)?;
+    let listed: Vec<_> = sessions
+        .iter()
+        .filter(|s| {
+            selected(s, from, cwd)
+                && since.is_none_or(|t| s.meta.timestamp >= t)
+                && until.is_none_or(|t| s.meta.timestamp <= t)
+        })
+        .take(limit.unwrap_or(usize::MAX))
+        .collect();
+    if std::env::var("TXCRIPT_LIST_REPORT").as_deref() == Ok("1") {
+        use std::io::Write;
+        let records: Vec<_> = listed
+            .iter()
+            .map(|session| {
+                serde_json::json!({
+                    "harness": session.harness.as_str(),
+                    "id": session.meta.id,
+                    "title": session.meta.title.as_deref().or(session.meta.cwd.as_deref()).unwrap_or_default(),
+                    "timestamp": session.meta.timestamp,
+                })
+            })
+            .collect();
+        let mut output = std::io::stdout().lock();
+        let _ = writeln!(output, "TXCRIPT_LIST_REPORT {}", serde_json::to_string(&records).map_err(|error| error.to_string())?);
+        return Ok(());
+    }
+    if listed.is_empty() {
+        let scope = cwd.map_or(String::new(), |d| format!(" for {}", d.display()));
+        let when = match (since, until) {
+            (None, None) => String::new(),
+            _ => " in that time range".to_string(),
+        };
+        match from {
+            Some(HarnessId::CoworkRemote) => {
+                println!("no cloud Cowork sessions found{scope}{when}");
+            }
+            Some(HarnessId::ClaudeChat) => {
+                println!("no Claude Chat sessions found{scope}{when}");
+            }
+            Some(HarnessId::ChatGpt) => {
+                println!("no ChatGPT sessions found{scope}{when}");
+            }
+            Some(h) => println!("no local {h} sessions found{scope}{when}"),
+            None => println!("no local sessions found{scope}{when}"),
+        }
+    } else {
+        use std::io::Write;
+        let color = style::enabled();
+        // A failed write means the reader is gone (`txcript list | head`):
+        // stop quietly instead of panicking the way `println!` would.
+        let mut out = std::io::stdout().lock();
+        let header = format!(
+            "{:<12}  {:<10}  {:<38}  TITLE / FIRST MESSAGE",
+            "HARNESS", "WHEN", "ID"
+        );
+        if writeln!(out, "{}", style::dim(&header, color)).is_err() {
+            return Ok(());
+        }
+        for s in listed {
+            let label = s
+                .meta
+                .title
+                .clone()
+                .unwrap_or_else(|| s.meta.cwd.clone().unwrap_or_default());
+            let row = format!(
+                "{}  {}  {}  {}",
+                style::harness(s.harness, 12, color),
+                style::dim(&format!("{:<10}", format_when(s.meta.timestamp)), color),
+                style::dim(
+                    &format!("{:<38}", truncate(&style::scrub(&s.meta.id), 38)),
+                    color
+                ),
+                truncate(&style::scrub(&label), 60)
+            );
+            if writeln!(out, "{row}").is_err() {
+                return Ok(());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// ANSI styling for the printing commands: colors reach a terminal, plain
+/// text reaches a pipe or redirect (and everywhere when `NO_COLOR` is set).
+/// Padding happens before coloring — escape bytes would otherwise count
+/// against the column width.
+mod style {
+    use std::io::IsTerminal;
+
+    use txcript::HarnessId;
+
+    pub fn enabled() -> bool {
+        std::env::var_os("NO_COLOR").is_none() && std::io::stdout().is_terminal()
+    }
+
+    /// [`enabled`], but for output on stderr (the status lines).
+    pub fn enabled_err() -> bool {
+        std::env::var_os("NO_COLOR").is_none() && std::io::stderr().is_terminal()
+    }
+
+    pub fn dim(s: &str, on: bool) -> String {
+        if on {
+            format!("\x1b[2m{s}\x1b[0m")
+        } else {
+            s.to_string()
+        }
+    }
+
+    /// Neutralize control characters in transcript-derived text (ids, titles,
+    /// matched lines, recorded paths) before it reaches the terminal: a
+    /// session file could otherwise drive the terminal itself — ANSI/OSC
+    /// state, clipboard writes, forged rows. One space per control character
+    /// keeps char counts, and with them column padding and highlight spans,
+    /// unchanged.
+    pub fn scrub(s: &str) -> String {
+        s.chars()
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .collect()
+    }
+
+    /// The harness name padded to `pad`, in its color when `on`. Each harness
+    /// keeps a stable color so a mixed listing reads at a glance.
+    pub fn harness(h: HarnessId, pad: usize, on: bool) -> String {
+        let name = format!("{:<pad$}", h.as_str());
+        if on {
+            format!("{}{name}\x1b[0m", color(h))
+        } else {
+            name
+        }
+    }
+
+    const fn color(h: HarnessId) -> &'static str {
+        match h {
+            HarnessId::ClaudeCode => "\x1b[33m", // yellow
+            HarnessId::CoworkRemote | HarnessId::ClaudeChat => "\x1b[38;5;214m", // amber
+            HarnessId::ChatGpt => "\x1b[38;5;71m", // OpenAI green
+            HarnessId::Codex => "\x1b[36m",      // cyan
+            HarnessId::OpenCode => "\x1b[32m",   // green
+            HarnessId::Pi => "\x1b[35m",         // magenta
+            HarnessId::Campfire => "\x1b[91m",   // bright red
+            HarnessId::Cursor => "\x1b[34m",     // blue
+            HarnessId::CursorDesktop => "\x1b[96m", // bright cyan
+            HarnessId::Grok => "\x1b[37m",       // white
+            HarnessId::GrokBot => "\x1b[97m",    // bright white
+            HarnessId::Fx => "\x1b[38;5;39m",    // azure
+            HarnessId::Hermes => "\x1b[93m",     // bright yellow
+            HarnessId::Amp => "\x1b[95m",        // bright magenta
+            HarnessId::Antigravity => "\x1b[94m", // bright blue
+            HarnessId::Simple => "\x1b[92m",     // bright green
+            HarnessId::Cowork => "\x1b[38;5;208m", // orange
+            HarnessId::WorkBuddy => "\x1b[38;5;202m",
+            HarnessId::WorkBuddyAi => "\x1b[38;5;43m",
+            HarnessId::QwenWork => "\x1b[38;5;141m",
+            HarnessId::DoubaoWork => "\x1b[38;5;45m",
+        }
+    }
+}
+
+fn crop_ref(source: &str) -> (&str, Option<fragment::SpanReq>) {
+    fragment::parse_ref(source)
+}
+
+fn cmd_crop(
+    source: &str,
+    with: Option<HarnessId>,
+    from: Option<HarnessId>,
+) -> Result<ExitCode, String> {
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        return Err("crop is interactive and requires a terminal".to_string());
+    }
+    if let Some(target) = with {
+        ensure_crop_target(target)?;
+    }
+
+    if with.is_none()
+        && let Some(source) = from
+    {
+        ensure_crop_target(source)?;
+    }
+    if let Some((source_harness, loaded)) = load_direct_remote(source, from) {
+        let target = with.unwrap_or(source_harness);
+        ensure_crop_target(target)?;
+        let (common, request) = loaded?;
+        return crop_loaded(&common, source_harness, target, request.as_ref());
+    }
+    let sessions = discover_with_spinner(from)?;
+    let (id, request) = match crop_ref(source) {
+        (_, Some(_)) if find_exact(&sessions, from, source).is_some() => (source, None),
+        parsed => parsed,
+    };
+    match find_session(&sessions, from, id)? {
+        Some(found) => {
+            let target = with.unwrap_or(found.harness);
+            ensure_crop_target(target)?;
+            let common = found.read().map_err(|error| error.to_string())?;
+            crop_loaded(&common, found.harness, target, request.as_ref())
+        }
+        None if matches!(from, None | Some(HarnessId::Amp)) && is_amp_thread_id(id) => {
+            let target = with.unwrap_or(HarnessId::Amp);
+            ensure_crop_target(target)?;
+            let common = load_amp_server_thread(id)?;
+            crop_loaded(&common, HarnessId::Amp, target, request.as_ref())
+        }
+        None => Err(match from {
+            Some(harness) => format!(
+                "no {harness} session matches `{id}` (try `{} list`)",
+                program()
+            ),
+            None => format!("no local session matches `{id}` (try `{} list`)", program()),
+        }),
+    }
+}
+
+fn crop_loaded(
+    common: &Transcript<Common>,
+    source: HarnessId,
+    target: HarnessId,
+    request: Option<&fragment::SpanReq>,
+) -> Result<ExitCode, String> {
+    ensure_crop_target(target)?;
+    let total = common.body.len();
+    let initial = request.map(|req| req.resolve(total)).transpose()?;
+    let (columns, _) = terminal_size::terminal_size().map_or((80, 24), |(width, height)| {
+        (usize::from(width.0), usize::from(height.0))
+    });
+    let editor_width = pager::crop_render_width(columns);
+    let color = std::env::var_os("NO_COLOR").is_none();
+    let mut document = view::Document::new(common.clone(), txcript::Span(0..total), color, None);
+    let rendered = document
+        .render(editor_width, view::Filters::crop())
+        .ok_or_else(|| format!("cannot render a session with {total} messages"))?;
+    let Some(outcome) = pager::crop(document, rendered, editor_width, initial)? else {
+        return Ok(ExitCode::SUCCESS);
+    };
+    let mut cropped = outcome
+        .common
+        .crop_to(&outcome.spans)
+        .map_err(|error| error.to_string())?;
+    fresh_identity(&mut cropped, target, None);
+    stamp_live_cwd(&mut cropped, None);
+    let cropped_id = write_and_report(source, target, &cropped, None, None)?;
+    let edited = match outcome.edited {
+        0 => String::new(),
+        1 => " (1 message edited)".to_string(),
+        count => format!(" ({count} messages edited)"),
+    };
+    println!(
+        "  cropped {}{edited} as {}",
+        fragment::format_spans(&outcome.spans),
+        style::scrub(&cropped_id)
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+fn cmd_continue(
+    id: &str,
+    with: Option<HarnessId>,
+    from: Option<HarnessId>,
+    out: Option<&PathBuf>,
+    no_resume: bool,
+    metadata_specs: &[String],
+) -> Result<ExitCode, String> {
+    let metadata = parse_metadata_specs(metadata_specs)?;
+    let metadata =
+        (!metadata.as_object().is_some_and(serde_json::Map::is_empty)).then_some(metadata);
+    let metadata = metadata.as_ref();
+
+    // A Simple interchange document (stdin, or an existing file) rather than
+    // a local session id. Checked before discovery: the document names its
+    // input directly, so no session can shadow it.
+    if let Some((input, request)) = document_source(id) {
+        if from.is_some() {
+            return Err(
+                "--from scopes the search for a local session; a Simple document \
+                 is its own input and takes --with only"
+                    .to_string(),
+            );
+        }
+        let target = with.ok_or_else(|| {
+            "a Simple document has no harness of its own to resume; \
+             pass --with <harness> (e.g. --with claude_code)"
+                .to_string()
+        })?;
+        let resume = wants_resume(target, out.is_some(), no_resume);
+        return continue_document(
+            &input,
+            request.as_ref(),
+            Some(target),
+            out.map(PathBuf::as_path),
+            resume,
+            metadata,
+        );
+    }
+
+    if let Some(source) = from {
+        ensure_resumable_source(source, with.unwrap_or(source))?;
+    }
+    if let Some((source_harness, loaded)) = load_direct_remote(id, from) {
+        let target = with.unwrap_or(source_harness);
+        ensure_resumable_source(source_harness, target)?;
+        let (common, request) = loaded?;
+        return continue_loaded_remote(
+            common,
+            source_harness,
+            target,
+            request.as_ref(),
+            out.map(PathBuf::as_path),
+            wants_resume(target, out.is_some(), no_resume),
+            metadata,
+        );
+    }
+    let sessions = discover_with_spinner(from)?;
+    // A whole-input match (a title that itself contains `#12`) beats the
+    // fragment interpretation.
+    let (src, request) = match fragment::parse_ref(id) {
+        (_, Some(_)) if find_exact(&sessions, from, id).is_some() => (id, None),
+        parsed => parsed,
+    };
+    let found = find_session(&sessions, from, src)?;
+
+    // Resuming an `--out` copy can't work — the harness reads its live root, not
+    // our redirect — so a redirect implies "write only". `grok_bot` never
+    // launches a CLI either.
+    match found {
+        Some(found) => {
+            let target = with.unwrap_or(found.harness);
+            continue_session(
+                found,
+                with,
+                request.as_ref(),
+                out.map(PathBuf::as_path),
+                wants_resume(target, out.is_some(), no_resume),
+                metadata,
+            )
+        }
+        // Modern Amp CLIs are server-authoritative and write no local thread
+        // files; an Amp-shaped id that isn't on disk may still exist on
+        // ampcode.com, reachable through Amp's own exporter.
+        None if matches!(from, None | Some(HarnessId::Amp)) && is_amp_thread_id(src) => {
+            let target = with.unwrap_or(HarnessId::Amp);
+            continue_amp_server_thread(
+                src,
+                with,
+                request.as_ref(),
+                out.map(PathBuf::as_path),
+                wants_resume(target, out.is_some(), no_resume),
+                metadata,
+            )
+        }
+        None => Err(match from {
+            Some(h) => format!("no {h} session matches `{src}` (try `{} list`)", program()),
+            // A path-looking argument that named no file falls through to the
+            // session lookup; say so, or the "no session" alone misleads.
+            None if src.contains(['/', '\\']) => format!(
+                "no local session matches `{src}`, and no such file exists \
+                 (a Simple document must be an existing file, or `-` for stdin)"
+            ),
+            None => format!(
+                "no local session matches `{src}` (try `{} list`)",
+                program()
+            ),
+        }),
+    }
+}
+
+/// Whether continue should exec a harness resume after writing.
+///
+/// `grok_bot` is always write/mint only — there is no CLI to launch.
+fn wants_resume(target: HarnessId, has_out: bool, no_resume: bool) -> bool {
+    target != HarnessId::GrokBot && !has_out && !no_resume
+}
+
+/// Merge `--metadata` specs into one JSON object.
+///
+/// Each spec is either `key=value` or a JSON object. Objects are shallow-merged
+/// left-to-right; later keys win. Non-object JSON is refused.
+fn parse_metadata_specs(specs: &[String]) -> Result<serde_json::Value, String> {
+    let mut map = serde_json::Map::new();
+    for spec in specs {
+        let trimmed = spec.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.starts_with('{') {
+            let value: serde_json::Value =
+                serde_json::from_str(trimmed).map_err(|e| format!("--metadata JSON: {e}"))?;
+            let Some(obj) = value.as_object() else {
+                return Err("--metadata JSON must be an object".to_string());
+            };
+            for (k, v) in obj {
+                map.insert(k.clone(), v.clone());
+            }
+        } else if let Some((key, value)) = trimmed.split_once('=') {
+            let key = key.trim();
+            if key.is_empty() {
+                return Err(format!(
+                    "--metadata expects key=value or a JSON object, got `{spec}`"
+                ));
+            }
+            map.insert(
+                key.to_string(),
+                serde_json::Value::String(value.to_string()),
+            );
+        } else {
+            return Err(format!(
+                "--metadata expects key=value or a JSON object, got `{spec}`"
+            ));
+        }
+    }
+    Ok(serde_json::Value::Object(map))
+}
+
+/// What `continue` received when it wasn't a session id: a Simple document
+/// on stdin or in a file.
+enum DocInput {
+    Stdin,
+    File(PathBuf),
+}
+
+/// Recognize a document argument. `-` is stdin; an argument (or its part
+/// before a `#range` suffix) naming an existing readable path is that
+/// document. A whole argument that names one wins over the range
+/// interpretation, so a filename containing `#` still opens. Everything
+/// else is a session reference for the discovery path.
+fn document_source(input: &str) -> Option<(DocInput, Option<fragment::SpanReq>)> {
+    if input == "-" {
+        return Some((DocInput::Stdin, None));
+    }
+    if readable_document(input) {
+        return Some((DocInput::File(PathBuf::from(input)), None));
+    }
+    let (src, request) = fragment::parse_ref(input);
+    if src == "-" {
+        return Some((DocInput::Stdin, request));
+    }
+    if readable_document(src) {
+        return Some((DocInput::File(PathBuf::from(src)), request));
+    }
+    None
+}
+
+/// Anything openable that isn't a directory: regular files, and the pipes
+/// behind process substitution (`<(my-agent --dump)` arrives as
+/// `/dev/fd/N`, a FIFO — `is_file()` alone would refuse it).
+fn readable_document(path: &str) -> bool {
+    std::fs::metadata(path).is_ok_and(|m| !m.is_dir())
+}
+
+/// Continue a Simple document into `--with`: parse, convert, write into the
+/// target's store, launch. The document is read once and never modified;
+/// from here on the conversation lives in the target harness.
+fn continue_document(
+    input: &DocInput,
+    span_req: Option<&fragment::SpanReq>,
+    with: Option<HarnessId>,
+    out: Option<&std::path::Path>,
+    resume: bool,
+    metadata: Option<&serde_json::Value>,
+) -> Result<ExitCode, String> {
+    let target = with.ok_or_else(|| {
+        "a Simple document has no harness of its own to resume; \
+         pass --with <harness> (e.g. --with claude_code)"
+            .to_string()
+    })?;
+    let text = match input {
+        DocInput::Stdin => {
+            let mut buffer = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut buffer)
+                .map_err(|e| format!("reading stdin: {e}"))?;
+            buffer
+        }
+        DocInput::File(path) => {
+            std::fs::read_to_string(path).map_err(|e| format!("reading {}: {e}", path.display()))?
+        }
+    };
+    // Only a real file's stem is a meaningful identity; a process
+    // substitution's `/dev/fd/N` would leak "N" as the session id.
+    let origin = match input {
+        DocInput::Stdin => None,
+        DocInput::File(path) => Some(path.as_path()).filter(|p| p.is_file()),
+    };
+    let common = document_to_common(&text, origin)?;
+
+    let mut copy = match span_req {
+        Some(req) => fragment::sliced(&common, req)?,
+        None => common,
+    };
+    fresh_identity(&mut copy, target, out);
+    if copy.meta.id.is_empty() {
+        // An `--out` export keeps the source identity — which stdin may not
+        // carry at all. The target store still needs a file name.
+        copy.meta.id = uuid::Uuid::new_v4().to_string();
+    }
+    // A document without a usable recorded cwd continues *here*: the target
+    // stores shard by cwd, and "the directory the user ran txcript in" is the
+    // only sensible home for a transcript that never had one.
+    stamp_live_cwd(&mut copy, out);
+    let resume_id = write_and_report(HarnessId::Simple, target, &copy, out, metadata)?;
+    // Stdin was consumed by the document; hand the launched harness the
+    // terminal instead, or an interactive resume would read EOF.
+    let stdin_tty = matches!(input, DocInput::Stdin);
+    launch_via(
+        target,
+        &resume_id,
+        copy.meta.cwd.as_deref(),
+        resume,
+        stdin_tty,
+    )
+}
+
+/// Parse a Simple document into the canonical model, backfilling an empty id
+/// from the file stem (the same fallback the file-backed stores use).
+fn document_to_common(
+    text: &str,
+    origin: Option<&std::path::Path>,
+) -> Result<Transcript<Common>, String> {
+    let native = simple::Simple::from_text(text).map_err(|e| e.to_string())?;
+    let mut common = simple::Simple::to_common(&native).map_err(|e| e.to_string())?;
+    if common.meta.id.is_empty()
+        && let Some(stem) = origin.and_then(|p| p.file_stem())
+    {
+        common.meta.id = stem.to_string_lossy().into_owned();
+    }
+    Ok(common)
+}
+
+#[cfg(test)]
+mod document_tests {
+    use super::{DocInput, document_source, document_to_common};
+
+    #[test]
+    fn dash_is_stdin_and_session_references_are_not_documents() {
+        assert!(matches!(
+            document_source("-"),
+            Some((DocInput::Stdin, None))
+        ));
+        assert!(matches!(
+            document_source("-#1-3"),
+            Some((DocInput::Stdin, Some(_)))
+        ));
+        assert!(document_source("a57bc87d").is_none());
+        assert!(document_source("Fix the parser").is_none());
+        // A path spelling that names no file is not a document either; the
+        // session lookup owns the error message.
+        assert!(document_source("./no/such/file.json").is_none());
+    }
+
+    #[test]
+    fn an_existing_file_wins_over_the_range_interpretation() {
+        let dir = tempfile::tempdir().unwrap();
+        let hashed = dir.path().join("notes#5.json");
+        std::fs::write(&hashed, "{}").unwrap();
+        // The whole argument names a real file: no range is split off.
+        assert!(matches!(
+            document_source(hashed.to_str().unwrap()),
+            Some((DocInput::File(p), None)) if p == hashed
+        ));
+
+        let plain = dir.path().join("run.json");
+        std::fs::write(&plain, "{}").unwrap();
+        let ranged = format!("{}#1-2", plain.display());
+        assert!(matches!(
+            document_source(&ranged),
+            Some((DocInput::File(p), Some(_))) if p == plain
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_named_pipe_is_a_document_like_process_substitution_provides() {
+        let dir = tempfile::tempdir().unwrap();
+        let fifo = dir.path().join("fd-like");
+        let made = std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        assert!(matches!(
+            document_source(fifo.to_str().unwrap()),
+            Some((DocInput::File(p), None)) if p == fifo
+        ));
+        // A directory is never a document.
+        assert!(document_source(dir.path().to_str().unwrap()).is_none());
+    }
+
+    #[test]
+    fn an_empty_document_id_falls_back_to_the_file_stem() {
+        let text = r#"{"messages": [{"role": "user", "content": "hi"}]}"#;
+        let from_file = document_to_common(
+            text,
+            Some(std::path::Path::new("/anywhere/dropped-here.json")),
+        )
+        .unwrap();
+        assert_eq!(from_file.meta.id, "dropped-here");
+        // Stdin has no name to borrow; the id stays empty for the caller.
+        assert_eq!(document_to_common(text, None).unwrap().meta.id, "");
+    }
+}
+
+/// The id shape Amp mints and validates: `T-` then 8+ `[A-Za-z0-9-]`.
+fn is_amp_thread_id(id: &str) -> bool {
+    id.strip_prefix("T-").is_some_and(|rest| {
+        rest.len() >= 8 && rest.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    })
+}
+
+fn load_amp_server_thread(id: &str) -> Result<Transcript<Common>, String> {
+    eprintln!(
+        "not on disk; fetching: {}",
+        style::dim(&format!("amp threads export {id}"), style::enabled_err())
+    );
+    let output = std::process::Command::new("amp")
+        .args(["threads", "export", id])
+        .output()
+        .map_err(|e| format!("running `amp threads export {id}`: {e} (is amp on PATH?)"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "`amp threads export {id}` failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let native = amp::Amp::from_text(&text).map_err(|e| e.to_string())?;
+    amp::Amp::to_common(&native).map_err(|e| e.to_string())
+}
+
+/// Fetch a server-side Amp thread via `amp threads export` and continue it:
+/// same-harness resumes by id (the thread already lives where Amp reads it);
+/// any other target gets the usual convert-and-write.
+fn continue_amp_server_thread(
+    id: &str,
+    with: Option<HarnessId>,
+    span_req: Option<&fragment::SpanReq>,
+    out: Option<&std::path::Path>,
+    resume: bool,
+    metadata: Option<&serde_json::Value>,
+) -> Result<ExitCode, String> {
+    let common = load_amp_server_thread(id)?;
+
+    let target = with.unwrap_or(HarnessId::Amp);
+    let resume_id = match (span_req, target == HarnessId::Amp && out.is_none()) {
+        // The thread already lives server-side, exactly where Amp resumes from.
+        (None, true) => id.to_string(),
+        (None, false) => {
+            let mut copy = common.clone();
+            fresh_identity(&mut copy, target, out);
+            stamp_live_cwd(&mut copy, out);
+            write_and_report(HarnessId::Amp, target, &copy, out, metadata)?
+        }
+        // A sliced continue always rewrites — the server thread can't resume
+        // a subset of itself in place.
+        (Some(req), _) => {
+            let mut copy = fragment::sliced(&common, req)?;
+            fresh_identity(&mut copy, target, out);
+            stamp_live_cwd(&mut copy, out);
+            write_and_report(HarnessId::Amp, target, &copy, out, metadata)?
+        }
+    };
+    launch(target, &resume_id, common.meta.cwd.as_deref(), resume)
+}
+
+/// Continue `found` in `with` (default: its own harness): same-harness resumes
+/// in place, cross-harness re-synthesizes; then exec the harness if `resume`.
+/// A `span_req` restricts the continue to that message range (always as a
+/// rewritten copy — the original can't resume a subset of itself in place).
+fn continue_session(
+    found: &local::Session,
+    with: Option<HarnessId>,
+    span_req: Option<&fragment::SpanReq>,
+    out: Option<&std::path::Path>,
+    resume: bool,
+    metadata: Option<&serde_json::Value>,
+) -> Result<ExitCode, String> {
+    let target = with.unwrap_or(found.harness);
+    ensure_resumable_source(found.harness, target)?;
+    let in_place = span_req.is_none() && target == found.harness && out.is_none();
+
+    let resume_id = match (span_req, in_place) {
+        // Same-harness live sessions can resume by id without rewriting.
+        (None, true) => found.meta.id.clone(),
+        (None, false) => {
+            let mut common = found.read().map_err(|e| e.to_string())?;
+            fresh_identity(&mut common, target, out);
+            stamp_live_cwd(&mut common, out);
+            write_and_report(found.harness, target, &common, out, metadata)?
+        }
+        (Some(req), _) => {
+            let common = found.read().map_err(|e| e.to_string())?;
+            let mut copy = fragment::sliced(&common, req)?;
+            fresh_identity(&mut copy, target, out);
+            stamp_live_cwd(&mut copy, out);
+            write_and_report(found.harness, target, &copy, out, metadata)?
+        }
+    };
+
+    launch(target, &resume_id, found.meta.cwd.as_deref(), resume)
+}
+
+fn continue_loaded_remote(
+    common: Transcript<Common>,
+    source: HarnessId,
+    target: HarnessId,
+    span_req: Option<&fragment::SpanReq>,
+    out: Option<&std::path::Path>,
+    resume: bool,
+    metadata: Option<&serde_json::Value>,
+) -> Result<ExitCode, String> {
+    let cwd = common.meta.cwd.clone();
+    let mut copy = match span_req {
+        Some(request) => fragment::sliced(&common, request)?,
+        None => common,
+    };
+    fresh_identity(&mut copy, target, out);
+    stamp_live_cwd(&mut copy, out);
+    let resume_id = write_and_report(source, target, &copy, out, metadata)?;
+    launch(target, &resume_id, cwd.as_deref(), resume)
+}
+
+fn ensure_crop_target(target: HarnessId) -> Result<(), String> {
+    if matches!(
+        target,
+        HarnessId::CoworkRemote
+            | HarnessId::ClaudeChat
+            | HarnessId::ChatGpt
+            | HarnessId::Hermes
+            | HarnessId::Amp
+            | HarnessId::Simple
+    ) {
+        Err(format!(
+            "{target} cannot store cropped sessions; pass --with <writable harness>"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn ensure_resumable_source(source: HarnessId, target: HarnessId) -> Result<(), String> {
+    if source == HarnessId::CoworkRemote && target == HarnessId::CoworkRemote {
+        Err("cloud Cowork is pull-only; choose another --with harness".into())
+    } else if source == HarnessId::ClaudeChat && target == HarnessId::ClaudeChat {
+        Err(
+            "Claude Chat is pull-only: choose another --with harness; txcript never continues conversations in Claude"
+                .to_string(),
+        )
+    } else if source == HarnessId::ChatGpt && target == HarnessId::ChatGpt {
+        Err(
+            "ChatGPT is pull-only: choose another --with harness; txcript never continues conversations in ChatGPT"
+                .to_string(),
+        )
+    } else {
+        Ok(())
+    }
+}
+
+/// Give a to-be-written copy its own identity.
+///
+/// The stores key their files by `meta.id` and date-shard by `meta.timestamp`,
+/// so a copy written under the source's identity lands exactly where the
+/// source lives: a `#range` continue would overwrite the very session it
+/// sliced, silently discarding every message outside the range, and a
+/// cross-harness copy would be filed under the original's date instead of
+/// today's.
+///
+/// `--out` is exempt: it redirects to a scratch root rather than a live store,
+/// where preserving the source identity makes the write a faithful export.
+fn fresh_identity(
+    common: &mut Transcript<Common>,
+    target: HarnessId,
+    out: Option<&std::path::Path>,
+) {
+    if out.is_some() {
+        return;
+    }
+    // Codex stamps its rollouts with v7 UUIDs; matching the shape keeps the
+    // copy out of any version-aware code path. v4 everywhere else. Harnesses
+    // that need a different spelling (opencode's `ses_` prefix) re-shape this
+    // themselves in `from_common`.
+    common.meta.id = match target {
+        HarnessId::Codex => uuid::Uuid::now_v7().to_string(),
+        _ => uuid::Uuid::new_v4().to_string(),
+    };
+    common.meta.timestamp = chrono::Utc::now();
+}
+
+/// Give a live-store copy a usable cwd, re-homing one that is missing, empty,
+/// or no longer exists. The stores shard by `meta.cwd`, so a copy filed under
+/// the store root or a dead directory would be invisible to a harness launched
+/// from the current project. `--out` exports keep the recorded cwd — they're
+/// faithful exports, and no harness reads them in place.
+fn stamp_live_cwd(common: &mut Transcript<Common>, out: Option<&std::path::Path>) {
+    if out.is_some() {
+        return;
+    }
+    let unavailable = common
+        .meta
+        .cwd
+        .as_deref()
+        .is_none_or(|c| c.is_empty() || !std::path::Path::new(c).is_dir());
+    if unavailable && let Ok(current) = std::env::current_dir() {
+        common.meta.cwd = Some(current.to_string_lossy().into_owned());
+    }
+}
+
+/// Write `common` as `target`'s native format, print the conversion line,
+/// and return the id to resume with.
+fn write_and_report(
+    source: HarnessId,
+    target: HarnessId,
+    common: &Transcript<Common>,
+    out: Option<&std::path::Path>,
+    metadata: Option<&serde_json::Value>,
+) -> Result<String, String> {
+    let written = local::write_with(
+        target,
+        common,
+        local::WriteOpts {
+            root: out,
+            metadata,
+        },
+    )
+    .map_err(|e| e.to_string())?;
+    let on = style::enabled();
+    println!(
+        "{} → {}  {}",
+        style::harness(source, 0, on),
+        style::harness(target, 0, on),
+        // `location` is Debug-rendered by the lib (its Ref is generic);
+        // shed the quotes it puts around paths.
+        style::dim(written.location.trim_matches('"'), on)
+    );
+    if std::env::var("TXCRIPT_IMPORT_REPORT").as_deref() == Ok("1") {
+        let (binary, args) = local::resume_command(target, &written.id);
+        println!(
+            "TXCRIPT_IMPORT_REPORT {}",
+            serde_json::json!({
+                "id": written.id,
+                "location": written.location,
+                "resume": {"binary": binary, "args": args},
+            })
+        );
+    }
+    Ok(written.id)
+}
+
+/// Exec (or print) the harness resume command for `resume_id`.
+fn launch(
+    target: HarnessId,
+    resume_id: &str,
+    cwd: Option<&str>,
+    resume: bool,
+) -> Result<ExitCode, String> {
+    launch_via(target, resume_id, cwd, resume, false)
+}
+
+/// [`launch`], optionally reattaching the controlling terminal as the
+/// harness's stdin — needed when the session document was itself read from
+/// stdin, which an interactive resume would otherwise find at EOF.
+fn launch_via(
+    target: HarnessId,
+    resume_id: &str,
+    cwd: Option<&str>,
+    resume: bool,
+    stdin_tty: bool,
+) -> Result<ExitCode, String> {
+    // Grok Bot has no CLI resume: mint/openAgent already surfaced the agent.
+    if target == HarnessId::GrokBot {
+        let _ = txcript::harness::grok_bot::open_in_ui(resume_id);
+        return Ok(ExitCode::SUCCESS);
+    }
+    let (bin, args) = local::resume_command(target, resume_id);
+    if !resume {
+        return print_resume_command(&bin, &args);
+    }
+    // The session document consumed stdin; the harness needs the controlling
+    // terminal instead — the same reclaim less and fzf do at the end of a
+    // pipeline. Without one (truly headless), exec'ing an interactive
+    // harness onto the spent pipe would just hang it: print the command.
+    let stdin = if stdin_tty {
+        let Some(tty) = tty_stdin() else {
+            eprintln!("stdin carried the session document and no terminal is available");
+            return print_resume_command(&bin, &args);
+        };
+        Some(tty)
+    } else if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        // Shell widgets run the picker with `< /dev/tty`, and that alias is
+        // dead input for kqueue-based TUIs on macOS (see [`tty_stdin`]).
+        // Re-point stdin at the real device; inherit when it can't be found.
+        real_tty()
+    } else {
+        None
+    };
+    // Hand the terminal to the harness — replaces this process on Unix.
+    let workdir = resume_workdir(cwd);
+    // The id inside the command came from a session file; scrub it for
+    // display (the exec below still gets the exact argv).
+    let shown = style::scrub(
+        &std::iter::once(&bin)
+            .chain(&args)
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
+    match &workdir {
+        Some(dir) => eprintln!(
+            "resuming: {shown} {}",
+            style::dim(&format!("(in {})", dir.display()), style::enabled_err())
+        ),
+        None => eprintln!("resuming: {shown}"),
+    }
+    // Brief pause so users can read or cancel before exec.
+    if std::io::IsTerminal::is_terminal(&std::io::stderr()) {
+        std::thread::sleep(std::time::Duration::from_millis(600));
+    }
+    handoff(&bin, &args, workdir.as_deref(), stdin)
+}
+
+// Result-shaped to slot into `launch_via`'s return paths.
+#[allow(clippy::unnecessary_wraps)]
+fn print_resume_command(bin: &str, args: &[String]) -> Result<ExitCode, String> {
+    println!(
+        "  resume with: {}",
+        style::scrub(&format!("{} {}", bin, args.join(" ")))
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Return the recorded cwd if it exists; otherwise warn and use the current
+/// directory.
+fn resume_workdir(cwd: Option<&str>) -> Option<PathBuf> {
+    cwd.filter(|c| !c.is_empty()).and_then(|c| {
+        let dir = PathBuf::from(c);
+        if dir.is_dir() {
+            Some(dir)
+        } else {
+            eprintln!(
+                "warning: session cwd `{}` no longer exists; resuming from the current directory",
+                style::scrub(c)
+            );
+            None
+        }
+    })
+}
+
+fn discover_with_spinner(from: Option<HarnessId>) -> Result<Vec<local::Session>, String> {
+    let spinner = spin::Spinner::start("searching local sessions…");
+    let sessions = if matches!(
+        from,
+        Some(HarnessId::ClaudeChat | HarnessId::CoworkRemote | HarnessId::ChatGpt)
+    ) {
+        let harness = from.unwrap_or(HarnessId::ClaudeChat);
+        spinner.set(format!("reading {harness}…"));
+        local::discover_harness(harness).map_err(|error| error.to_string())?
+    } else {
+        local::discover_with(|harness, count| {
+            spinner.set(format!("scanning {harness}… ({count} found)"));
+        })
+    };
+    spinner.finish();
+    Ok(sessions)
+}
+
+/// Replace this process with the harness from `workdir` when given. On
+/// non-Unix, spawn and wait, then report the child's code.
+#[cfg(unix)]
+fn handoff(
+    bin: &str,
+    args: &[String],
+    workdir: Option<&std::path::Path>,
+    stdin: Option<std::fs::File>,
+) -> Result<ExitCode, String> {
+    use std::os::unix::process::CommandExt;
+    let mut cmd = std::process::Command::new(bin);
+    cmd.args(args);
+    if let Some(dir) = workdir {
+        cmd.current_dir(dir);
+    }
+    if let Some(stdin) = stdin {
+        cmd.stdin(stdin);
+    }
+    // `exec` only returns if it failed to launch.
+    let e = cmd.exec();
+    Err(format!("failed to launch `{bin}`: {e} (is it on PATH?)"))
+}
+
+/// The controlling terminal, opened the way a shell hands it to an
+/// interactive program: read *and* write, and — crucially — by its *real*
+/// device path, not the `/dev/tty` alias. On macOS, kqueue cannot monitor
+/// the alias device: a TUI handed `/dev/tty` as stdin renders but never
+/// receives keys (Node's libuv has a `select()` workaround; Bun-compiled
+/// TUIs like Claude Code do not). The real device is found the way fzf's
+/// `ttyname()` does: stderr usually still points at the terminal in a
+/// pipeline, so match its device id against `/dev`. `None` when the
+/// process has no controlling terminal.
+#[cfg(unix)]
+fn tty_stdin() -> Option<std::fs::File> {
+    real_tty().or_else(|| open_tty_rw(std::path::Path::new("/dev/tty")))
+}
+
+/// The controlling terminal by its real device path (see [`tty_stdin`]),
+/// or `None` when it can't be resolved — callers that already hold some
+/// terminal on stdin keep it in that case.
+#[cfg(unix)]
+fn real_tty() -> Option<std::fs::File> {
+    resolved_tty_path().as_deref().and_then(open_tty_rw)
+}
+
+#[cfg(unix)]
+fn open_tty_rw(path: &std::path::Path) -> Option<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .ok()
+}
+
+#[cfg(windows)]
+fn tty_stdin() -> Option<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("CONIN$")
+        .ok()
+}
+
+/// Windows consoles have no alias-device problem; inherit stdin as is.
+#[cfg(windows)]
+fn real_tty() -> Option<std::fs::File> {
+    None
+}
+
+/// The real device path of the terminal on stderr (or stdout): fstat the
+/// stream, then scan `/dev/pts/` (Linux) and `/dev/` for the character
+/// device with the same device id. `None` when neither stream is a
+/// terminal or nothing in `/dev` matches.
+#[cfg(unix)]
+fn resolved_tty_path() -> Option<PathBuf> {
+    use std::io::IsTerminal;
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+
+    let stream_rdev = |fd: i32, terminal: bool| {
+        terminal
+            .then(|| std::fs::metadata(format!("/dev/fd/{fd}")).ok())
+            .flatten()
+            .map(|m| m.rdev())
+    };
+    let rdev = stream_rdev(2, std::io::stderr().is_terminal())
+        .or_else(|| stream_rdev(1, std::io::stdout().is_terminal()))?;
+
+    for dir in ["/dev/pts", "/dev"] {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata()
+                && meta.file_type().is_char_device()
+                && meta.rdev() == rdev
+                && entry.path() != std::path::Path::new("/dev/tty")
+            {
+                return Some(entry.path());
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(unix))]
+fn handoff(
+    bin: &str,
+    args: &[String],
+    workdir: Option<&std::path::Path>,
+    stdin: Option<std::fs::File>,
+) -> Result<ExitCode, String> {
+    // The `.cmd` retry below needs its own handle; take it before the first
+    // spawn consumes `stdin`.
+    let retry_stdin = stdin.as_ref().and_then(|f| f.try_clone().ok());
+    let spawn = |program: &str, stdin: Option<std::fs::File>| {
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(args);
+        if let Some(dir) = workdir {
+            cmd.current_dir(dir);
+        }
+        if let Some(stdin) = stdin {
+            cmd.stdin(stdin);
+        }
+        cmd.status()
+    };
+    let status = match spawn(bin, stdin) {
+        Ok(status) => status,
+        // npm-installed harnesses are `.cmd` shims on Windows, which
+        // CreateProcess won't resolve from the bare name; the explicit
+        // extension makes std route the launch through cmd.exe.
+        Err(e) if cfg!(windows) && e.kind() == std::io::ErrorKind::NotFound => {
+            spawn(&format!("{bin}.cmd"), retry_stdin)
+                .map_err(|_| format!("failed to launch `{bin}`: {e} (is it on PATH?)"))?
+        }
+        Err(e) => return Err(format!("failed to launch `{bin}`: {e} (is it on PATH?)")),
+    };
+    Ok(match status.code() {
+        // `ExitCode` is u8-wide; a child code outside 0..=255 still reports
+        // failure, just not the exact value.
+        Some(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
+        // No code (killed by a signal-equivalent): treated as success, as the
+        // previous `exit(code.unwrap_or(0))` did.
+        None => ExitCode::SUCCESS,
+    })
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut t: String = s.chars().take(max.saturating_sub(1)).collect();
+        t.push('…');
+        t
+    }
+}
+
+/// A tiny background spinner on stderr, so a slow scan shows it's alive.
+/// No-op when stderr isn't a terminal (piped or redirected output stays clean).
+mod spin {
+    use std::io::{IsTerminal, Write};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+    use std::thread::{self, JoinHandle};
+    use std::time::Duration;
+
+    pub struct Spinner {
+        running: Arc<AtomicBool>,
+        label: Arc<Mutex<String>>,
+        handle: Option<JoinHandle<()>>,
+        active: bool,
+    }
+
+    impl Spinner {
+        pub fn start(initial: &str) -> Self {
+            let active = std::io::stderr().is_terminal();
+            let running = Arc::new(AtomicBool::new(true));
+            let label = Arc::new(Mutex::new(initial.to_string()));
+            let handle = active.then(|| {
+                let (running, label) = (running.clone(), label.clone());
+                thread::spawn(move || {
+                    const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+                    let mut err = std::io::stderr();
+                    let mut i = 0;
+                    while running.load(Ordering::Relaxed) {
+                        let text = label.lock().map(|g| g.clone()).unwrap_or_default();
+                        let _ = write!(err, "\r\x1b[2K{} {text}", FRAMES[i % FRAMES.len()]);
+                        let _ = err.flush();
+                        i += 1;
+                        thread::sleep(Duration::from_millis(80));
+                    }
+                })
+            });
+            Self {
+                running,
+                label,
+                handle,
+                active,
+            }
+        }
+
+        pub fn set(&self, text: String) {
+            if self.active
+                && let Ok(mut g) = self.label.lock()
+            {
+                *g = text;
+            }
+        }
+
+        /// Stop the spinner and clear its line.
+        pub fn finish(self) {
+            self.running.store(false, Ordering::Relaxed);
+            if let Some(h) = self.handle {
+                let _ = h.join();
+            }
+            if self.active {
+                let mut err = std::io::stderr();
+                let _ = write!(err, "\r\x1b[2K");
+                let _ = err.flush();
+            }
+        }
+    }
+}
+
+// ── query: one-shot search and the fzf-style picker ─────────────────────
+
+pub use query::{Sessions, build_index, doc_key};
+
+mod query {
+    use std::collections::{HashMap, HashSet};
+    use std::path::Path;
+
+    use txcript::search::{Case, DocKey, DocMatch, Extracted, Index, Origin, Query};
+    use txcript::{HarnessId, local};
+
+    /// One unit of index-building work, per session.
+    enum Work {
+        /// Parse the session from its store and extract it.
+        Parse(usize),
+        /// Deserialize the cached extraction.
+        Thaw(usize, Vec<u8>),
+    }
+
+    /// The sessions behind an index, keyed by the full [`DocKey`] — source
+    /// included — so two sessions sharing a (harness, id), as Claude Code
+    /// writes when one session is resumed from another cwd, both stay
+    /// reachable instead of one overwriting the other.
+    pub type Sessions = HashMap<DocKey, local::Session>;
+
+    /// The index key for a discovered session.
+    #[must_use]
+    pub fn doc_key(session: &local::Session) -> DocKey {
+        DocKey {
+            harness: session.harness,
+            id: session.meta.id.clone(),
+            source: Some(session.location()),
+        }
+    }
+
+    /// Build the same filtered index used by the CLI for the MCP search tool.
+    #[cfg(feature = "mcp")]
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn index_for(
+        from: Option<HarnessId>,
+        cwd: Option<&Path>,
+        git_branch: Option<&str>,
+        model: Option<&str>,
+        since: Option<chrono::DateTime<chrono::Utc>>,
+        until: Option<chrono::DateTime<chrono::Utc>>,
+        cache: Option<&Path>,
+    ) -> Result<Index, String> {
+        build_index(from, cwd, git_branch, model, since, until, cache).map(|(index, _)| index)
+    }
+
+    /// The query behind `txcript query` and the MCP search tool: the pattern
+    /// is one literal needle, spaces included, matched case-insensitively.
+    /// Fuzzy scoring matches any line whose characters contain the pattern in
+    /// order, which turns up lines that only look like matches.
+    pub(super) fn user_query(pattern: &str) -> Query {
+        let mut q = Query::substring(pattern);
+        q.case = Case::Insensitive;
+        q
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn cmd_query(
+        pattern: Option<String>,
+        with: Option<HarnessId>,
+        from: Option<HarnessId>,
+        cwd: Option<&Path>,
+        git_branch: Option<&str>,
+        model: Option<&str>,
+        since: Option<chrono::DateTime<chrono::Utc>>,
+        until: Option<chrono::DateTime<chrono::Utc>>,
+        cache: Option<&Path>,
+    ) -> Result<std::process::ExitCode, String> {
+        let (index, sessions) = build_index(from, cwd, git_branch, model, since, until, cache)?;
+        match pattern {
+            Some(pattern) => {
+                if with.is_some() {
+                    eprintln!("warning: --with ignored with a pattern");
+                }
+                one_shot(&index, &pattern);
+                Ok(std::process::ExitCode::SUCCESS)
+            }
+            None => match tui::pick(&index)? {
+                // Cancelled; terminal already restored, nothing to continue.
+                None => Ok(std::process::ExitCode::SUCCESS),
+                Some(key) => {
+                    let session = sessions
+                        .get(&key)
+                        .ok_or("internal error: picked session not found")?;
+                    drop(index);
+                    super::continue_session(
+                        session,
+                        with,
+                        None,
+                        None,
+                        with != Some(HarnessId::GrokBot),
+                        None,
+                    )
+                }
+            },
+        }
+    }
+
+    /// Build the search index and session lookup over every local session
+    /// passing the `from`/`cwd` filters, and applying the optional
+    /// `git_branch`, `model`, `since`, and `until` metadata filters so that
+    /// only matching sessions are indexed and returned.
+    ///
+    /// Sessions parse and extract on every core: workers pull the next
+    /// undrained session, parse it, extract its searchable lines, and send
+    /// the result back over a bounded channel; this thread folds arrivals
+    /// into the index as they land, so at most a few extracted documents are
+    /// ever in flight.
+    ///
+    /// With a `cache` path, sessions whose change cursor (see
+    /// [`local::fingerprints`]) matches the cached one are thawed from the
+    /// cache instead of parsed, and the cache is brought up to date
+    /// afterwards. A cache that can't be opened is reported on stderr and
+    /// skipped: the index is built the stateless way.
+    ///
+    /// # Errors
+    /// Returns an error when an explicitly selected live store cannot be
+    /// discovered or read.
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    pub fn build_index(
+        from: Option<HarnessId>,
+        cwd: Option<&Path>,
+        git_branch: Option<&str>,
+        model: Option<&str>,
+        since: Option<chrono::DateTime<chrono::Utc>>,
+        until: Option<chrono::DateTime<chrono::Utc>>,
+        cache: Option<&Path>,
+    ) -> Result<(Index, Sessions), String> {
+        let found = super::discover_with_spinner(from)?;
+        let spinner = super::spin::Spinner::start("indexing…");
+        let mut cache = cache.and_then(|path| match super::cache::Cache::open(path) {
+            Ok(cache) => Some(cache),
+            Err(e) => {
+                eprintln!("warning: search cache unavailable ({e}); indexing without it");
+                None
+            }
+        });
+        // Every session on disk, filtered or not: the cache is pruned against
+        // this set, never against one command's filtered view of it.
+        let live: HashSet<DocKey> = if cache.is_some() {
+            found.iter().map(doc_key).collect()
+        } else {
+            HashSet::new()
+        };
+        let scoped: Vec<local::Session> =
+            found
+                .into_iter()
+                .filter(|session| {
+                    if !super::selected(session, from, cwd) {
+                        return false;
+                    }
+                    if let Some(branch) = git_branch
+                        && session.meta.git_branch.as_deref() != Some(branch)
+                    {
+                        return false;
+                    }
+                    if let Some(model_filter) = model
+                        && !session.meta.model.as_deref().is_some_and(|m| {
+                            m.to_lowercase().contains(&model_filter.to_lowercase())
+                        })
+                    {
+                        return false;
+                    }
+                    if let Some(since) = since
+                        && session.meta.timestamp < since
+                    {
+                        return false;
+                    }
+                    if let Some(until) = until
+                        && session.meta.timestamp > until
+                    {
+                        return false;
+                    }
+                    true
+                })
+                .collect();
+        let total = scoped.len();
+
+        // Cursors for the cache check. Empty cursors never hit, so a session
+        // whose store can't say whether it changed is parsed every time.
+        let cursors = cache
+            .as_ref()
+            .map(|_| local::fingerprints(&scoped))
+            .unwrap_or_default();
+        // One work item per session: thaw the cached bytes when the cursor
+        // still matches, parse the session otherwise. Only the SQLite read
+        // happens here; deserializing is CPU work like parsing, and the
+        // workers share it across cores the same way.
+        let work: Vec<Work> = (0..total)
+            .map(|i| {
+                cache
+                    .as_ref()
+                    .and_then(|cache| cache.get_raw(&doc_key(&scoped[i]), &cursors[i]))
+                    .map_or(Work::Parse(i), |bytes| Work::Thaw(i, bytes))
+            })
+            .collect();
+        let from_cache = work.iter().filter(|w| matches!(w, Work::Thaw(..))).count();
+
+        let workers = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        let mut index = Index::new();
+        // Which sessions parsed cleanly, by position in `scoped`; the lookup
+        // map is built from these after the workers release their borrow.
+        let mut indexed = vec![false; total];
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let (tx, rx) = std::sync::mpsc::sync_channel(workers * 2);
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                let tx = tx.clone();
+                let (next, scoped, work) = (&next, &scoped, &work);
+                scope.spawn(move || {
+                    std::iter::from_fn(|| {
+                        let n = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        work.get(n)
+                    })
+                    .filter_map(|item| match item {
+                        // Unreadable sessions are skipped, matching discover.
+                        Work::Parse(i) => scoped[*i].read().ok().map(|common| {
+                            (*i, Extracted::new(doc_key(&scoped[*i]), &common), true)
+                        }),
+                        // A row that no longer deserializes (a hand-edited
+                        // or truncated cache) is re-parsed and rewritten.
+                        Work::Thaw(i, bytes) => match serde_json::from_slice(bytes) {
+                            Ok(doc) => Some((*i, doc, false)),
+                            Err(_) => scoped[*i].read().ok().map(|common| {
+                                (*i, Extracted::new(doc_key(&scoped[*i]), &common), true)
+                            }),
+                        },
+                    })
+                    .for_each(|extracted| {
+                        // A send only fails when the receiver is gone, and
+                        // this thread's scope outlives it.
+                        let _ = tx.send(extracted);
+                    });
+                });
+            }
+            // Workers hold the remaining clones; the receive loop below ends
+            // when the last of them finishes.
+            drop(tx);
+            let mut arrived = Vec::with_capacity(total);
+            for (i, extracted, fresh) in rx {
+                if arrived.len() % 32 == 0 {
+                    spinner.set(match from_cache {
+                        0 => format!("indexing… ({}/{total})", arrived.len()),
+                        n => format!("indexing… ({}/{total}, {n} cached)", arrived.len()),
+                    });
+                }
+                arrived.push((i, extracted, fresh));
+                indexed[i] = true;
+            }
+            // Freshly parsed documents go into the cache before the index
+            // takes ownership of them. Best-effort: a cache write failure
+            // costs the next run a re-parse, not this run its results.
+            if let Some(cache) = cache.as_mut() {
+                let written = cache.put_many(
+                    arrived
+                        .iter()
+                        .filter(|(_, _, fresh)| *fresh)
+                        .map(|(i, doc, _)| (doc, cursors[*i].as_str())),
+                );
+                if let Err(e) = written.and_then(|()| cache.retain(&live)) {
+                    eprintln!("warning: search cache not updated: {e}");
+                }
+            }
+            // Insert in discovery order, not arrival order: document order
+            // breaks full score-and-timestamp ties in query results, and it
+            // should not vary run to run.
+            arrived.sort_unstable_by_key(|&(i, _, _)| i);
+            for (_, extracted, _) in arrived {
+                index.insert_extracted(extracted);
+            }
+        });
+        let sessions: Sessions = scoped
+            .into_iter()
+            .zip(&indexed)
+            .filter_map(|(session, &ok)| ok.then(|| (doc_key(&session), session)))
+            .collect();
+        spinner.finish();
+        Ok((index, sessions))
+    }
+
+    /// Print ranked hits for a pattern, colorized when stdout is a terminal.
+    fn one_shot(index: &Index, pattern: &str) {
+        use std::io::{IsTerminal, Write};
+        let mut q = user_query(pattern);
+        q.limit = Some(20);
+        q.hits_per_doc = Some(3);
+        let matches = index.query(&q);
+        if matches.is_empty() {
+            println!("no matches for `{pattern}`");
+        } else {
+            let color = std::io::stdout().is_terminal();
+            // A failed write means the reader is gone (`… | head`): stop
+            // quietly instead of panicking the way `println!` would.
+            let mut out = std::io::stdout().lock();
+            for m in &matches {
+                if writeln!(out, "{}", doc_line(m, color)).is_err() {
+                    return;
+                }
+                for hit in &m.hits {
+                    let line = format!(
+                        "  [{:>11}] {}",
+                        origin_label(hit.origin),
+                        highlight(&hit.line, &hit.highlights, 120, color)
+                    );
+                    if writeln!(out, "{line}").is_err() {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Label used in query result columns.
+    pub(super) fn origin_label(origin: Origin) -> &'static str {
+        match origin {
+            Origin::User => "user",
+            Origin::Assistant => "assistant",
+            Origin::Thinking => "thinking",
+            Origin::ToolUse => "tool_use",
+            Origin::ToolResult => "tool_result",
+            Origin::Meta => "meta",
+        }
+    }
+
+    fn doc_line(m: &DocMatch<'_>, color: bool) -> String {
+        let label = m
+            .meta
+            .title
+            .clone()
+            .or_else(|| m.meta.cwd.as_deref().map(basename))
+            .unwrap_or_default();
+        let date = m.meta.timestamp.format("%Y-%m-%d %H:%M");
+        format!(
+            "{}  {}  {}  {}",
+            crate::style::harness(m.key.harness, 0, color),
+            crate::style::dim(&crate::style::scrub(&m.key.id), color),
+            crate::style::dim(&date.to_string(), color),
+            crate::style::scrub(&label)
+        )
+    }
+
+    pub(super) fn basename(path: &str) -> String {
+        std::path::Path::new(path)
+            .file_name()
+            .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned())
+    }
+
+    /// Render `line` truncated to `width` chars, match spans emphasized.
+    pub(super) fn highlight(
+        line: &str,
+        spans: &[std::ops::Range<u32>],
+        width: usize,
+        color: bool,
+    ) -> String {
+        let mut out = String::new();
+        let mut in_span = false;
+        for (i, ch) in line.chars().take(width).enumerate() {
+            let i = u32::try_from(i).unwrap_or(u32::MAX);
+            let now = spans.iter().any(|s| s.contains(&i));
+            if color && now != in_span {
+                out.push_str(if now { "\x1b[1;31m" } else { "\x1b[0m" });
+                in_span = now;
+            }
+            // Matched lines are transcript content: a control character here
+            // could drive the terminal. Same one-for-one swap as
+            // `style::scrub`, inline to keep the span indexes aligned.
+            out.push(if ch.is_control() { ' ' } else { ch });
+        }
+        if color && in_span {
+            out.push_str("\x1b[0m");
+        }
+        if line.chars().count() > width {
+            out.push('…');
+        }
+        out
+    }
+
+    // ── the picker ───────────────────────────────────────────────────────
+
+    #[cfg(unix)]
+    mod tui {
+        use std::collections::VecDeque;
+        use std::io::{IsTerminal, Read, Write};
+        use std::process::{Command, Stdio};
+
+        use terminal_size::{Height, Width};
+        use txcript::search::{DocKey, DocMatch, Hit, Index};
+
+        /// RAII guard for raw mode and the alternate screen.
+        struct Term {
+            saved: String,
+        }
+
+        impl Term {
+            fn enter() -> Result<Term, String> {
+                let saved = stty(&["-g"])?.trim().to_string();
+                // min 0 time 1: reads poll at 100ms so a lone ESC is
+                // distinguishable from an escape sequence.
+                stty(&["raw", "-echo", "min", "0", "time", "1"])?;
+                print!("\x1b[?1049h\x1b[?25l");
+                let _ = std::io::stdout().flush();
+                Ok(Term { saved })
+            }
+        }
+
+        fn term_size() -> (usize, usize) {
+            terminal_size::terminal_size().map_or((24, 80), |(Width(cols), Height(rows))| {
+                (usize::from(rows), usize::from(cols))
+            })
+        }
+
+        impl Drop for Term {
+            fn drop(&mut self) {
+                print!("\x1b[?25h\x1b[?1049l");
+                let _ = std::io::stdout().flush();
+                let _ = stty(&[&self.saved]);
+            }
+        }
+
+        fn stty(args: &[&str]) -> Result<String, String> {
+            let out = Command::new("stty")
+                .args(args)
+                .stdin(Stdio::inherit())
+                .output()
+                .map_err(|e| format!("stty: {e}"))?;
+            if out.status.success() {
+                Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+            } else {
+                Err(format!(
+                    "stty {}: {}",
+                    args.join(" "),
+                    String::from_utf8_lossy(&out.stderr).trim()
+                ))
+            }
+        }
+
+        #[derive(Clone, Copy)]
+        enum Key {
+            Char(char),
+            Backspace,
+            Clear,
+            Up,
+            Down,
+            Enter,
+            Cancel,
+            None,
+        }
+
+        /// Interactive picker over the index. Returns the chosen doc, or
+        /// `None` on cancel. The terminal is fully restored either way.
+        pub(super) fn pick(index: &Index) -> Result<Option<DocKey>, String> {
+            if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+                // Raw mode and the alternate screen need real terminal stdio.
+                Err("interactive query needs a terminal (pass a pattern instead)".into())
+            } else {
+                let term = Term::enter()?;
+                let mut input = String::new();
+                let mut selected = 0usize;
+                let mut stdin = Input::new(std::io::stdin().lock());
+                let (mut rows, mut cols) = term_size();
+                let mut results = query(index, &input, rows);
+                let mut pending = None;
+                render(&input, &results, selected, index.len(), rows, cols);
+
+                let picked = 'ui: loop {
+                    let key = pending.take().map_or_else(|| read_key(&mut stdin), Ok)?;
+                    match key {
+                        // A poll timeout: nothing pressed, keep waiting.
+                        Key::None => {}
+                        Key::Char(_) | Key::Backspace | Key::Clear => {
+                            apply_edit(&mut input, key);
+                            // A burst of typing arrives faster than a search
+                            // completes. Apply the whole burst, then search
+                            // once for what was actually typed.
+                            pending = drain_edits(&mut stdin, &mut input)?;
+                            selected = 0;
+                            // Echo before searching: the prompt line is what
+                            // the typist is watching, and it must not wait on
+                            // results to appear.
+                            render_input(&input);
+                            (rows, cols) = term_size();
+                            results = query(index, &input, rows);
+                            render(&input, &results, selected, index.len(), rows, cols);
+                        }
+                        Key::Up | Key::Down => {
+                            move_selection(&mut selected, key, results.len());
+                            // A held arrow can put several complete key
+                            // sequences in one terminal read. Apply all of
+                            // them, then render the final row once.
+                            pending = drain_navigation(&mut stdin, &mut selected, results.len())?;
+
+                            let (new_rows, new_cols) = term_size();
+                            if new_rows != rows {
+                                results = query(index, &input, new_rows);
+                                selected = selected.min(results.len().saturating_sub(1));
+                            }
+                            (rows, cols) = (new_rows, new_cols);
+                            render(&input, &results, selected, index.len(), rows, cols);
+                        }
+                        // Enter with no match under the cursor: keep waiting.
+                        Key::Enter => {
+                            if let Some(key) = results.key(selected) {
+                                break 'ui Some(key.clone());
+                            }
+                        }
+                        Key::Cancel => break 'ui None,
+                    }
+                };
+                drop(term);
+                Ok(picked)
+            }
+        }
+
+        struct Results<'a> {
+            docs: Vec<DocMatch<'a>>,
+            rows: Vec<ResultRow>,
+            searching: bool,
+        }
+
+        #[derive(Clone, Copy)]
+        struct ResultRow {
+            doc: usize,
+            hit: Option<usize>,
+        }
+
+        impl<'a> Results<'a> {
+            fn len(&self) -> usize {
+                self.rows.len()
+            }
+
+            fn key(&self, row: usize) -> Option<&DocKey> {
+                self.rows
+                    .get(row)
+                    .and_then(|row| self.docs.get(row.doc))
+                    .map(|doc| doc.key)
+            }
+
+            fn get(&self, row: usize) -> Option<(&DocMatch<'a>, Option<&Hit>)> {
+                let row = self.rows.get(row)?;
+                let doc = self.docs.get(row.doc)?;
+                Some((doc, row.hit.and_then(|hit| doc.hits.get(hit))))
+            }
+        }
+
+        fn query<'a>(index: &'a Index, input: &str, rows: usize) -> Results<'a> {
+            let visible = rows.saturating_sub(2).max(1);
+            let searching = !input.trim().is_empty();
+            let mut q = super::user_query(input);
+            q.limit = Some(visible);
+            q.hits_per_doc = searching.then_some(visible);
+            let docs = index.query(&q);
+
+            let mut result_rows = if searching {
+                docs.iter()
+                    .enumerate()
+                    .flat_map(|(doc, result)| {
+                        (0..result.hits.len()).map(move |hit| ResultRow {
+                            doc,
+                            hit: Some(hit),
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                (0..docs.len())
+                    .map(|doc| ResultRow { doc, hit: None })
+                    .collect()
+            };
+
+            if searching {
+                // Search rows are occurrences, ranked independently. A
+                // session can therefore occupy several rows when it contains
+                // several strong matches.
+                result_rows.sort_by(|a, b| {
+                    let a_score = a.hit.map_or(0, |hit| docs[a.doc].hits[hit].score);
+                    let b_score = b.hit.map_or(0, |hit| docs[b.doc].hits[hit].score);
+                    b_score
+                        .cmp(&a_score)
+                        .then_with(|| a.doc.cmp(&b.doc))
+                        .then_with(|| a.hit.cmp(&b.hit))
+                });
+                result_rows.truncate(visible);
+            }
+
+            Results {
+                docs,
+                rows: result_rows,
+                searching,
+            }
+        }
+
+        fn move_selection(selected: &mut usize, key: Key, len: usize) {
+            match key {
+                Key::Up => *selected = selected.saturating_sub(1),
+                Key::Down => {
+                    *selected = selected.saturating_add(1).min(len.saturating_sub(1));
+                }
+                _ => {}
+            }
+        }
+
+        /// Apply navigation keys already captured by the current terminal
+        /// read. The first non-navigation key is preserved for the next loop.
+        /// Apply one editing keystroke to the query text.
+        fn apply_edit(input: &mut String, key: Key) {
+            match key {
+                Key::Char(c) => input.push(c),
+                Key::Backspace => {
+                    input.pop();
+                }
+                Key::Clear => input.clear(),
+                // Not an edit; the caller only passes edit keys.
+                _ => {}
+            }
+        }
+
+        /// Apply every editing keystroke already buffered, so one search
+        /// covers a whole burst of typing. Returns the first non-edit key,
+        /// unapplied, for the caller to handle next.
+        fn drain_edits(
+            stdin: &mut Input<impl Read>,
+            input: &mut String,
+        ) -> Result<Option<Key>, String> {
+            while stdin.has_buffered() {
+                let key = read_key(stdin)?;
+                match key {
+                    Key::Char(_) | Key::Backspace | Key::Clear => apply_edit(input, key),
+                    Key::None => {}
+                    other => return Ok(Some(other)),
+                }
+            }
+            Ok(None)
+        }
+
+        /// Repaint the prompt line alone, leaving the result rows as they
+        /// are. Cheap enough to run on every keystroke.
+        fn render_input(input: &str) {
+            use std::io::Write;
+            let mut out = std::io::stdout().lock();
+            let _ = write!(out, "\x1b[H\x1b[2K\x1b[1m>\x1b[0m {input}\x1b[7m \x1b[0m");
+            let _ = out.flush();
+        }
+
+        fn drain_navigation(
+            stdin: &mut Input<impl Read>,
+            selected: &mut usize,
+            len: usize,
+        ) -> Result<Option<Key>, String> {
+            while stdin.has_buffered() {
+                let key = read_key(stdin)?;
+                match key {
+                    Key::Up | Key::Down => move_selection(selected, key, len),
+                    Key::None => {}
+                    other => return Ok(Some(other)),
+                }
+            }
+            Ok(None)
+        }
+
+        fn render(
+            input: &str,
+            results: &Results<'_>,
+            selected: usize,
+            total: usize,
+            rows: usize,
+            cols: usize,
+        ) {
+            use std::fmt::Write as _;
+            // The match count is post-limit: a full page means "at least".
+            let count = if results.len() >= rows.saturating_sub(2) {
+                format!("{}+", results.len())
+            } else {
+                results.len().to_string()
+            };
+            let summary = if results.searching {
+                format!("{count} matches")
+            } else {
+                format!("{count}/{total}")
+            };
+            let mut frame = String::from("\x1b[H\x1b[2J");
+            let _ = write!(
+                frame,
+                "\x1b[1m>\x1b[0m {input}\x1b[7m \x1b[0m\r\n\x1b[2m  {summary}\x1b[0m"
+            );
+            // Lines are *prefixed* with \r\n: a trailing newline on the last
+            // row would scroll the prompt off the top of the screen.
+            for i in 0..results.len().min(rows.saturating_sub(2)) {
+                let Some((doc, hit)) = results.get(i) else {
+                    continue;
+                };
+                let line = row(doc, hit, cols.saturating_sub(2));
+                if i == selected {
+                    // The row's internal styling ends in resets that would
+                    // kill the selection underline mid-line: re-assert it
+                    // after each, and pad to the row edge so the underline
+                    // runs the full width.
+                    let pad =
+                        " ".repeat(cols.saturating_sub(2).saturating_sub(visible_width(&line)));
+                    let line = line.replace("\x1b[0m", "\x1b[0m\x1b[4m");
+                    let _ = write!(frame, "\r\n\x1b[4m▌{line}{pad}\x1b[0m");
+                } else {
+                    let _ = write!(frame, "\r\n {line}");
+                }
+            }
+            let mut out = std::io::stdout().lock();
+            let _ = out.write_all(frame.as_bytes());
+            let _ = out.flush();
+        }
+
+        /// One list row: harness, date, label, then this row's hit line
+        /// prefixed by what kind of content it matched in. Empty-query rows
+        /// have no hit and represent the session itself.
+        fn row(m: &DocMatch<'_>, hit: Option<&Hit>, cols: usize) -> String {
+            let label = m
+                .meta
+                .title
+                .clone()
+                .or_else(|| m.meta.cwd.as_deref().map(super::basename))
+                .unwrap_or_default();
+            let head = format!(
+                "{} \x1b[2m{} {:<8}\x1b[0m {:<24} ",
+                crate::style::harness(m.key.harness, 11, true),
+                m.meta.timestamp.format("%m-%d %H:%M"),
+                truncate_chars(&crate::style::scrub(&m.key.id), 8),
+                truncate_chars(&crate::style::scrub(&label), 24),
+            );
+            // 11 + 1 + 11 + 1 + 8 + 1 + 24 + 1 visible chars so far.
+            let room = cols.saturating_sub(58);
+            let preview = hit.map_or_else(String::new, |hit| {
+                format!(
+                    "\x1b[2m{:>11}\x1b[0m {}",
+                    super::origin_label(hit.origin),
+                    // 11 + 1 for the origin column.
+                    super::highlight(&hit.line, &hit.highlights, room.saturating_sub(12), true)
+                )
+            });
+            format!("{head}{preview}")
+        }
+
+        /// Character width of `s` with its ANSI escape sequences stripped —
+        /// what the terminal will actually render.
+        fn visible_width(s: &str) -> usize {
+            let mut in_escape = false;
+            s.chars()
+                .filter(|&c| match (in_escape, c) {
+                    (false, '\x1b') => {
+                        in_escape = true;
+                        false
+                    }
+                    (false, _) => true,
+                    // `m` closes every sequence this UI emits (SGR only).
+                    (true, 'm') => {
+                        in_escape = false;
+                        false
+                    }
+                    (true, _) => false,
+                })
+                .count()
+        }
+
+        fn truncate_chars(s: &str, max: usize) -> String {
+            if s.chars().count() <= max {
+                s.to_string()
+            } else {
+                let mut t: String = s.chars().take(max.saturating_sub(1)).collect();
+                t.push('…');
+                t
+            }
+        }
+
+        /// Read one key, decoding UTF-8 and the arrow escape sequences. With
+        /// `min 0 time 1`, a read can legitimately return nothing.
+        // Separate arms distinguish timeout from ignored input.
+        #[allow(clippy::match_same_arms)]
+        fn read_key(stdin: &mut Input<impl Read>) -> Result<Key, String> {
+            let key = match stdin.read_byte()? {
+                // A poll timeout: nothing was pressed.
+                None => Key::None,
+                Some(0x03) => Key::Cancel, // ctrl-c
+                Some(0x0a | 0x0d) => Key::Enter,
+                Some(0x7f | 0x08) => Key::Backspace,
+                Some(0x15) => Key::Clear, // ctrl-u
+                Some(0x0e) => Key::Down,  // ctrl-n
+                Some(0x10) => Key::Up,    // ctrl-p
+                Some(0x1b) => match stdin.read_byte()? {
+                    Some(b'[') => match stdin.read_byte()? {
+                        Some(b'A') => Key::Up,
+                        Some(b'B') => Key::Down,
+                        // Any other (or truncated) CSI sequence: not a
+                        // picker key.
+                        Some(_) | None => Key::None,
+                    },
+                    None => Key::Cancel, // a lone ESC
+                    // Other escape sequences (alt-chords): not picker keys.
+                    Some(_) => Key::None,
+                },
+                Some(b) if (0x20..0x7f).contains(&b) => Key::Char(b as char),
+                Some(b) if b >= 0xc2 => utf8_tail(stdin, b)?,
+                // Unmapped control bytes and stray UTF-8 continuation bytes.
+                Some(_) => Key::None,
+            };
+            Ok(key)
+        }
+
+        /// Finish a UTF-8 multibyte sequence whose lead byte was `lead`.
+        fn utf8_tail(stdin: &mut Input<impl Read>, lead: u8) -> Result<Key, String> {
+            let len = match lead {
+                0xc2..=0xdf => 2,
+                0xe0..=0xef => 3,
+                _ => 4, // 0xf0 and above (the caller guarantees lead >= 0xc2)
+            };
+            // `None` folds the whole tail to `None`: a poll timeout
+            // mid-sequence means a truncated character, not a key.
+            let tail: Option<Vec<u8>> = (1..len)
+                .map(|_| stdin.read_byte())
+                .collect::<Result<_, _>>()?;
+            Ok(tail
+                .map(|rest| std::iter::once(lead).chain(rest).collect())
+                .and_then(|buf| String::from_utf8(buf).ok())
+                .and_then(|s| s.chars().next())
+                .map_or(Key::None, Key::Char))
+        }
+
+        /// Buffered terminal input. Reading a chunk instead of one byte at a
+        /// time exposes already-queued repeat events so navigation can batch
+        /// them without a nonblocking syscall or another thread.
+        struct Input<R> {
+            inner: R,
+            buffered: VecDeque<u8>,
+        }
+
+        impl<R: Read> Input<R> {
+            fn new(inner: R) -> Self {
+                Self {
+                    inner,
+                    buffered: VecDeque::new(),
+                }
+            }
+
+            fn has_buffered(&self) -> bool {
+                !self.buffered.is_empty()
+            }
+
+            fn read_byte(&mut self) -> Result<Option<u8>, String> {
+                if let Some(byte) = self.buffered.pop_front() {
+                    return Ok(Some(byte));
+                }
+
+                let mut chunk = [0u8; 4096];
+                match self.inner.read(&mut chunk) {
+                    Ok(0) => Ok(None),
+                    Ok(read) => {
+                        self.buffered.extend(&chunk[1..read]);
+                        Ok(Some(chunk[0]))
+                    }
+                    Err(e) => Err(format!("reading stdin: {e}")),
+                }
+            }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::{
+                Input, Key, apply_edit, drain_edits, drain_navigation, move_selection, read_key,
+            };
+
+            #[test]
+            fn queued_navigation_is_applied_before_one_render() {
+                let bytes = b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[Bx";
+                let mut input = Input::new(&bytes[..]);
+                let first = read_key(&mut input).unwrap();
+                let mut selected = 0;
+                move_selection(&mut selected, first, 20);
+
+                let pending = drain_navigation(&mut input, &mut selected, 20).unwrap();
+
+                assert_eq!(selected, 5);
+                assert!(matches!(pending, Some(Key::Char('x'))));
+            }
+
+            #[test]
+            fn a_burst_of_typing_costs_one_search() {
+                let bytes = b"needle";
+                let mut input = Input::new(&bytes[..]);
+                let first = read_key(&mut input).unwrap();
+                let mut typed = String::new();
+                apply_edit(&mut typed, first);
+
+                let pending = drain_edits(&mut input, &mut typed).unwrap();
+
+                // The whole burst landed before the caller searches once.
+                assert_eq!(typed, "needle");
+                assert!(pending.is_none());
+            }
+
+            #[test]
+            fn draining_a_burst_stops_at_the_first_non_edit_key() {
+                let bytes = b"ab\x7f\r";
+                let mut input = Input::new(&bytes[..]);
+                let first = read_key(&mut input).unwrap();
+                let mut typed = String::new();
+                apply_edit(&mut typed, first);
+
+                let pending = drain_edits(&mut input, &mut typed).unwrap();
+
+                // Backspace applied inside the burst; Enter handed back.
+                assert_eq!(typed, "a");
+                assert!(matches!(pending, Some(Key::Enter)));
+            }
+
+            #[test]
+            fn batched_navigation_preserves_boundary_order() {
+                let bytes = b"\x1b[A\x1b[B";
+                let mut input = Input::new(&bytes[..]);
+                let first = read_key(&mut input).unwrap();
+                let mut selected = 0;
+                move_selection(&mut selected, first, 20);
+
+                let pending = drain_navigation(&mut input, &mut selected, 20).unwrap();
+
+                assert_eq!(selected, 1);
+                assert!(pending.is_none());
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    mod tui {
+        use txcript::search::{DocKey, Index};
+
+        pub(super) fn pick(_: &Index) -> Result<Option<DocKey>, String> {
+            Err("the interactive picker is unix-only; pass a pattern instead".into())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::user_query;
+        use txcript::search::{Case, Mode};
+
+        #[test]
+        fn patterns_are_literal_and_case_insensitive() {
+            let q = user_query("Cargo build");
+            assert_eq!(q.mode, Mode::Substring);
+            assert_eq!(q.case, Case::Insensitive);
+            // One needle, spaces included: the space is not an atom separator.
+            assert_eq!(q.pattern, "Cargo build");
+        }
+    }
+}
+
+#[cfg(test)]
+mod metadata_tests {
+    use super::parse_metadata_specs;
+
+    #[test]
+    fn merges_key_value_and_json_left_to_right() {
+        let specs = vec![
+            "name=First".into(),
+            r#"{"name":"Second","description":"d","extra":true}"#.into(),
+            "description=overridden".into(),
+        ];
+        let v = parse_metadata_specs(&specs).unwrap();
+        assert_eq!(v["name"], "Second");
+        assert_eq!(v["description"], "overridden");
+        assert_eq!(v["extra"], true);
+    }
+
+    #[test]
+    fn rejects_non_object_json() {
+        let err = parse_metadata_specs(&[r#""just a string""#.into()]).unwrap_err();
+        assert!(err.contains("key=value") || err.contains("JSON"), "{err}");
+    }
+}

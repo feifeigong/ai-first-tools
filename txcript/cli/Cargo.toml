@@ -1,0 +1,78 @@
+[package]
+name = "txcript-cli"
+version = "0.14.4"
+edition = "2024"
+rust-version = "1.96"
+description = "CLI for listing, searching, and continuing txcript sessions."
+license = "Apache-2.0"
+repository = "https://github.com/skillsynchq/txcript"
+# Not published: crates.io ships only the txcript library. Install the CLI
+# from git (`cargo install --git … txcript-cli`) or a local checkout.
+publish = false
+
+# The binary keeps the crate-family name. The library exposes the same
+# commands as clap types and a `run_session` entry point.
+[lib]
+name = "txcript_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "txcript"
+path = "src/main.rs"
+
+[features]
+default = ["mcp", "chatgpt", "claude_chat", "cowork_remote"]
+# `txcript mcp` and its rmcp/tokio dependencies.
+mcp = ["dep:rmcp", "dep:schemars", "dep:tokio"]
+chatgpt = ["txcript/chatgpt"]
+claude_chat = ["txcript/claude_chat"]
+cowork_remote = ["txcript/cowork_remote"]
+
+[dependencies]
+base64 = "0.22.1"
+chrono = "0.4.45"
+clap = { version = "4.6.1", features = ["derive", "env", "wrap_help"] }
+clap_complete = "4.6.7"
+crossterm = "0.29.0"
+flate2 = "1.1.9"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+# The crop editor runs the user's editor in a pane: a pseudo-terminal, a
+# screen parsed from its output, and a widget that paints it.
+portable-pty = "0.9.0"
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+rmcp = { version = "2.2.0", default-features = false, features = ["macros", "server", "transport-io"], optional = true }
+# Bundled SQLite is already in the graph through txcript's stores.
+rusqlite = { version = "0.40.1", features = ["bundled"] }
+schemars = { version = "1.2.1", optional = true }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+terminal_size = "0.4.3"
+tokio = { version = "1.48.0", features = ["io-std", "macros", "rt"], optional = true }
+tui-term = { version = "0.3.4", default-features = false, features = ["vt100"] }
+txcript = { version = "0.14.4", path = "..", default-features = false, features = ["opencode", "hermes", "search"] }
+unicode-width = "0.2"
+vt100 = "0.16.2"
+# v7 for codex rollouts, v4 for every other harness — see `fresh_identity`.
+uuid = { version = "1.23.4", features = ["v4", "v7"] }
+
+# Terminal geometry and the raw-mode graphics query behind inline images in
+# `view`; already in the graph through terminal_size.
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1.4", features = ["termios"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true
+
+# Prebuilt binaries are attached to every GitHub Release, one archive per
+# target with the executable at the archive root. Install without compiling:
+#   cargo binstall --git https://github.com/skillsynchq/txcript txcript-cli
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/txcript-{ target }{ archive-suffix }"
+bin-dir = "{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"

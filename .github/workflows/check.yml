@@ -1,0 +1,32 @@
+name: Windows checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  application:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r dialog-mover/requirements-dev.txt
+      - name: Backend safety and sidebar checks
+        working-directory: dialog-mover
+        run: python -m unittest test_chatgpt test_close_safety test_embedded_startup -v
+      - name: UI checks with synthetic records
+        working-directory: dialog-mover
+        run: python -m unittest test_agent_icons test_import_ui test_ui_polish -v
+      - run: dotnet build workspace/AIFirst.Workspace.csproj -c Release
+      - name: Workspace self checks
+        shell: pwsh
+        run: |
+          $app = Resolve-Path 'workspace/bin/Release/net8.0-windows/win-x64/AI一手工具工作台.exe'
+          $report = Join-Path $env:RUNNER_TEMP 'workspace-checks.json'
+          $process = Start-Process -FilePath $app -ArgumentList @('--self-test', '--report', $report) -PassThru -Wait -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw 'Workspace self checks failed' }

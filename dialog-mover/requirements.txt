@@ -1,0 +1,9 @@
+pywebview==6.2.1
+pythonnet==3.2.1
+clr_loader==0.3.1
+bottle==0.13.4
+proxy_tools==0.1.0
+typing_extensions==4.16.0
+brotli==1.2.0
+zstd==1.5.7.2
+ccl_simplesnappy @ git+https://github.com/cclgroupltd/ccl_simplesnappy.git@3d085230baa8c46cf2090ebba29bf6e8eab31087

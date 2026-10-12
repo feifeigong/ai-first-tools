@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 9c76cb6ed4b58e09b392281be6fa1e03f613b3bd2dfe3742155e112507cdd78e # shrinks to units = [UserText("a ")]
+cc 3d6f1c6dcf0f16ff1a9a6cbaf34f76517dad827e79d35a2b59e53b224a738dbf # shrinks to units = [UserText("A"), ToolCall { tool: Edit { file_path: "/repo/a.rs", old_string: "a", new_string: "a", replace_all: true }, result: "a" }]

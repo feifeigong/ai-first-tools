@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework Condition="'$(BootstrapTargetFramework)' == ''">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(BootstrapTargetFramework)' != ''">$(BootstrapTargetFramework)</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>AI一手工具工作台</AssemblyName>
+    <RootNamespace>AIFirst.Workspace</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.3.5</Version>
+    <ApplicationIcon>assets\ai-first-logo.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <DefaultItemExcludes>$(DefaultItemExcludes);dist\**;artifacts\**;tests\**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="assets\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

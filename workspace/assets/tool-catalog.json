@@ -1,0 +1,9 @@
+[
+  {
+    "id": "dialog-mover",
+    "name": "对话搬家",
+    "executable": "tools/dialog-mover-v{version}/对话搬家.exe",
+    "icon": "assets/dialog-mover.png",
+    "embeddedStartup": true
+  }
+]
