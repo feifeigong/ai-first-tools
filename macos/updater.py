@@ -288,6 +288,21 @@ def atomic_swap(first: Path, second: Path) -> None:
         raise OSError(ctypes.get_errno(), "安全替换应用未完成")
 
 
+def start_app(bundle: Path, arguments=()) -> subprocess.Popen:
+    environment = {**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"}
+    for name in ("DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH"):
+        environment.pop(name, None)
+    return subprocess.Popen([str(bundle / "Contents/MacOS" / EXECUTABLE), *arguments], env=environment,
+                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def relaunch_app(bundle: Path) -> None:
+    process = start_app(bundle)
+    time.sleep(2)
+    if process.poll() is not None:
+        raise UpdateError("新版没有保持运行，正在恢复旧版。")
+
+
 def replace_bundle(job: Path, relaunch=None) -> bool:
     data = read_job(job)
     directory = job.parent
@@ -322,7 +337,7 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
         previous = backup
         write_json(receipt, {"success": True, "version": data["version"], "message": f"已更新到 {data['version']}，原来的对话与设置保留。"})
         phase = "relaunch"
-        (relaunch or (lambda app: command(["/usr/bin/open", "-n", str(app)])))(target)
+        (relaunch or relaunch_app)(target)
         return True
     except Exception as error:
         restored = False
@@ -340,7 +355,7 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
                              "message": "更新没有完成，已恢复旧版。" if restored else "更新没有完成，旧版或备份仍保留。请检查文件权限后重试。"})
         if not moved or restored:
             try:
-                (relaunch or (lambda app: command(["/usr/bin/open", "-n", str(app)])))(target)
+                (relaunch or relaunch_app)(target)
             except (OSError, subprocess.SubprocessError):
                 pass
         return False
@@ -395,10 +410,17 @@ def _wait_and_replace(job: Path, data: dict) -> int:
         def relaunch(app):
             fcntl.flock(instance, fcntl.LOCK_UN)
             if not audit:
-                command(["/usr/bin/open", "-n", str(app)])
+                relaunch_app(app)
                 return
             report = job.parent / "relaunch.json"
-            command(["/usr/bin/open", "-W", "-n", str(app), "--args", "--smoke-test", "--report", str(report)], timeout=120)
+            process = start_app(app, ("--smoke-test", "--report", str(report)))
+            try:
+                if process.wait(timeout=120) != 0:
+                    raise UpdateError("隔离 Cocoa 重启进程失败。")
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                process.wait(timeout=15)
+                raise
             if not report.is_file() or json.loads(report.read_text()).get("passed") is not True:
                 raise UpdateError("隔离 Cocoa 重启检查失败。")
         return 0 if replace_bundle(job, relaunch) else 1
@@ -436,7 +458,8 @@ def audit_update(app: Path, report: Path) -> None:
                       "version": json.loads((target / "Contents/Resources/version.json").read_text())["release"] == version}
             report.write_text(json.dumps({"passed": all(checks.values()), "checks": checks, "version": {"release": version},
                                           "diagnostics": {"phase": outcome.get("phase"), "errorCode": outcome.get("errorCode"), "helperReturnCode": worker.returncode,
-                                                          "preflightReport": (directory / "probe.json").is_file(), "receipt": receipt.is_file()},
+                                                          "preflightReport": (directory / "probe.json").is_file(), "receipt": receipt.is_file(),
+                                                          "relaunchChecks": relaunched.get("checks"), "relaunchError": relaunched.get("error")},
                                           "architecture": platform.machine(), "scope": "frozen helper, isolated app copies, atomic replacement and Cocoa relaunch; no installed app or real records"}, indent=2))
         finally:
             if original_home is None:

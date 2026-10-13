@@ -168,6 +168,20 @@ class MacUpdaterTests(unittest.TestCase):
                 updater.start_helper(job)
         self.assertTrue(target.is_dir())
 
+    def test_relaunch_is_independent_and_does_not_reuse_old_frozen_libraries(self):
+        with patch.dict(os.environ, {"DYLD_LIBRARY_PATH": "synthetic-old-libraries"}), patch.object(updater.subprocess, "Popen") as process:
+            updater.start_app(self.root / updater.APP_NAME)
+        arguments, options = process.call_args
+        self.assertEqual(arguments[0], [str(self.root / updater.APP_NAME / "Contents/MacOS" / updater.EXECUTABLE)])
+        self.assertEqual(options["env"]["PYINSTALLER_RESET_ENVIRONMENT"], "1")
+        self.assertNotIn("DYLD_LIBRARY_PATH", options["env"])
+        self.assertTrue(options["start_new_session"])
+
+    def test_relaunch_rejects_immediate_exit(self):
+        with patch.object(updater, "start_app", return_value=Mock(poll=Mock(return_value=0))), patch.object(updater.time, "sleep"):
+            with self.assertRaises(updater.UpdateError):
+                updater.relaunch_app(self.root / updater.APP_NAME)
+
     def test_busy_migration_waits_and_restarting_blocks_new_migration(self):
         from entry import MacApi
 
