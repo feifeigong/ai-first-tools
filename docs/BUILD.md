@@ -47,7 +47,9 @@ dotnet build workspace\AIFirst.Workspace.csproj -c Release
 
 生成安装包、免安装 ZIP 与 SHA-256 校验文件，位于 `artifacts/release/`。工作台以自带 .NET 的方式发布，迁移引擎旁也带所需 Visual C++ 运行库；原应用源码和引擎不因打包而改写。
 
-维护者也可准备同版本草稿，再手动运行 GitHub Actions 的 Windows release packages。流水线打包、在干净 runner 测静默安装/重复覆盖/自检/卸载和额外文件保护，全部通过才上传到已有草稿，不自动公开。当前只在 txcript 源码树与 v0.3.6 完全相同时复用其本项目原生引擎，并校验发布 ZIP 和 EXE 哈希；引擎源码有变化会拒绝复用，须编译、验证并更新此构建步骤，不能拿上游原版替换。
+维护者可准备同版本草稿，手动运行 GitHub Actions 的 Windows release packages。流水线打包，在干净 runner 测静默安装/重复覆盖/自检/卸载和额外文件保护。全部通过后，把同名 lightweight Git 标签指向该次已验证构建提交；已有标签不得移动。暂存检查标签与构建 SHA 一致才上传到草稿，不自动公开。若仅末尾暂存失败，用 Stage verified release assets 输入 windows 与原 run_id，复用通过检查的原资产，不混入另一次构建。必须核对实际资产和日志，绿色但跳过不等于已上传。
+
+当前只在 txcript 源码树与 v0.3.6 完全相同时复用其本项目原生引擎，并校验发布 ZIP 和 EXE 哈希；引擎源码有变化会拒绝复用，须编译、验证并更新此构建步骤，不能拿上游原版替换。NSIS 从官方镜像下载并核对固定长度与 SHA-256，防止下载到镜像 HTML；WebView2 bootstrapper 保持微软签名校验。
 
 安装器只在当前用户的固定程序目录写入，运行时拒绝更新/卸载，不强制结束搬运。卸载按生成的文件清单逐个删除，不递归清空任意目录，也不删除用户新增文件或 Agent 历史。
 

@@ -49,7 +49,7 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 - `test_macos`：路径、中文空格/URI、只读 DB、系统打开、版本选择、UI/Logo 复用。
 - `test_macos_native`：真实 Mac 引擎在隔离合成存储中对文件型目标导入/回读，核对编号、路径与源文件不变；拒绝不匹配 DB。
 - OpenCode 需额外原生 CLI，这批文件型目标检查不包括它。
-- 冻结包 `--self-test` 验证资源与引擎；`--smoke-test` 在空用户目录打开真实 Cocoa 窗口，验证 WebKit/Python 桥、侧栏和 API。
+- 冻结包 `--self-test` 验证资源与引擎；`--smoke-test` 隔离业务目录和更新回执，在不改系统 HOME 的前提下打开真实 Cocoa 窗口，验证 WebKit/Python 桥、侧栏和 API，避免测试环境破坏 WebKit。
 - preview.3 的 `--update-test` 在临时 APP 副本中检查实际 helper、原子交换、备份和 Cocoa 重启；不要在作者安装目录运行测试替换。下载、取消、忙碌等待、失败恢复的单测在 test_macos_updater；流程与限制见 MACOS-UPDATES.md。
 - preview.2 新增冻结包 `--network-test`：在不存在的 Python CA 路径环境中，用系统 Keychain 验证 HTTPS、读取本项目公开 GitHub 发布列表；失败阻止 DMG 发布，不记录代理地址/认证/环境。
 - CI 仅给打包步骤提供一次性只读 `AI_FIRST_CI_UPDATE_TOKEN`，只由 `--network-test` 显式传入请求，报告仅记录是否使用授权。普通更新不会读取此变量或 GH_TOKEN，安装包不包含授权，用户无需配置令牌。这样避免公共 runner IP 的匿名查询限流，不绕过 TLS 或把网络失败当通过。
@@ -89,13 +89,15 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 
 ## 发布维护
 
-- macos/version.json 当前准备版本为 0.4.0-macos-preview.3，新增软件内下载、校验、等待搬运、安全替换与重启；本机单测/浏览器通过，原生验证结果以 MACOS-QA.md 和 CI 为准，不将源码当成已发布包。preview.1/2 必须最后一次手动替换，不能靠旧版不存在的代码完成一键升级。
+- 当前公开 0.4.0-macos-preview.4，构建源码 7dcc96f9f77c9b1a2bd714560521ef0b1dc64756。同源码两次完整构建的两架构各 73 项单测和资源/窗口/HTTPS/更新四类冻结检查通过；独立核对 11 个上传资产后发布。源码标签对应实际构建，后续交接文档提交未重做包；运行、哈希及未验收项见 MACOS-QA.md。preview.1/2 必须最后一次手动替换，preview.3 已可软件内更新。
+- preview.3 的追加隔离重启曾出现 WebKit 页面未加载。996cfb4 保持系统 HOME 的审计修订未完全解决；7dcc96f 避免启动时异步清理共享 WebKit 存储，同时保留随机 localhost 端口，两次两架构复测通过后发布 preview.4。不要重复应用修补、放宽窗口审计或把旧版首次成功说成重复稳定。机制和自己的页面缓存变化见 MACOS-UPDATES.md、PRIVACY.md。
 - 已发布 preview.2 的构建源码 `8674f6f`，修复豆包工作识别/刷新及系统 HTTPS；历史链接、校验见 MACOS-QA.md。
 - 首批两架构包构建源码为 `2b49c7f`，Mac/Windows CI 均通过；构建链接、SHA-256 和未验收项见 MACOS-QA.md。后续只整理交接文档，不能把文档提交说成重做了安装包。
 - 两架构 DMG 名称 `AI-First-Tools-<release>-macos-<architecture>.dmg`，附 SHA-256。
 - CI/报告通过才发布下载包；源码提交不等于已发布应用。
-- 发布前先准备与 macos/version.json 同版本的 GitHub 草稿。两架构构建都成功后，stage-release 校验 DMG 哈希、四类报告、版本和架构，再上传 11 个资产并关联构建提交；草稿仍不公开。独立下载核对报告与上传资产的 digest、补齐本文件和 QA 后才手动公开。
+- 发布前准备与 macos/version.json 同版本的草稿；两架构 build 任务通过后，先在已验证构建提交准备同名 lightweight Git 标签，不移动既有标签。stage-release 校验标签提交、DMG 哈希、四类报告、版本/架构，只暂存 11 个原资产，草稿仍不公开。若仅末尾暂存失败，使用 Stage verified release assets，输入 macos 和原构建 run_id；不要重新编造报告或把新源码包混入旧版本。独立下载核对报告、资产 digest 后才公开。
 - scripts/stage_macos_release.py 只处理已有匹配草稿；草稿不存在或已发布就跳过，禁止自动覆盖公开版本。失败的构建不会进入上传步骤。
+- 暂存成功状态可能只是跳过；必须核对草稿 tag_name、11 个实际资产和日志中的 Validated assets staged。发布脚本不再修改 target_commitish；真实来源取 Git 标签，避免工作流文件标签权限导致暂存失败。
 - 更新拒绝草稿/旧版本/错误域名/不匹配架构。
 - 不加 xattr 解锁脚本，不关闭 Gatekeeper，不宣称苹果审核。
 - Windows 与 Mac 的下载和更新能力分开说明。

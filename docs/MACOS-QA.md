@@ -1,11 +1,49 @@
 # Mac 移植验证记录
 
-## preview.3 一键更新（准备发布，原生验收待 CI）
+## 2026-10-13 preview.4 一键更新与重启修复（当前已发布）
 
-- 软件内下载/进度/取消、搬运中自动等待和完成后重启；Windows v0.3.8 统一按钮，但保留原有完整性验证和更新事务，不另造第二套 Windows 安装逻辑。
-- Windows 本地 34 项 Mac 共用/更新单测及 4 项 Mac 浏览器用例通过；WPF 构建零错误/警告。Mac 冻结 helper、系统原子交换和 Cocoa 重启尚待两架构原生流水线，不在 Windows 假称通过。
-- QA 仅使用合成数据和临时 APP 副本，未更新作者的真实 Mac 安装，也未读取 Agent 对话/认证。preview.1/2 仍需最后一次手动替换，不能宣称旧版本拥有新更新器。
-- 发布前须验证四类冻结报告和 11 个上传资产；结果/链接/哈希通过后补齐。不发布失败或被替代的运行包。
+[公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.4)。构建源码 `7dcc96f9f77c9b1a2bd714560521ef0b1dc64756`，Git 标签指向同一提交；文档提交不重做二进制。
+
+- [发布资产所属运行](https://github.com/feifeigong/ai-first-tools/actions/runs/38357964353) 与 [同源码重复运行](https://github.com/feifeigong/ai-first-tools/actions/runs/38357970395) 均成功，两次的 arm64、x86_64 各 73 项共享/隔离原生单测通过。四组真实 macOS 15 冻结 APP 都通过 7 项资源/引擎、5 项 Cocoa/WebKit/桥、3 项真实 HTTPS、4 项更新检查以及 ad-hoc 封印和 DMG 格式校验。
+- 本次发布使用 38357964353 的两个架构，不混用重复构建的二进制。该运行的 stage-release 日志确认实际上传，而非跳过；发布前独立下载原产物，核对标签、四类报告和 11 个上传资产的大小及 SHA-256 digest，全部匹配后公开。
+- 两架构实际执行冻结 helper、交换前自检、系统原子交换、保留旧 APP 备份、新版 Cocoa/WebKit/Python 桥重启及版本确认；报告 helperReturnCode=0、receipt/preflightReport=true、五项 relaunchChecks=true。使用临时 APP 副本和合成旧版本元数据，不是从已公开旧二进制在作者安装目录手点升级，也未实际执行 Mac 原生整包公网下载/挂载的完整更新回路。
+- 针对 preview.3 后续重启失败，保持系统 HOME 的审计修订仅使 ARM 复测通过，Intel 仍失败。检查锁定 pywebview 6.2.1 Cocoa 实现后推测共享数据异步清理与页面加载竞争；本版避开该清理路径，保留随机本机端口、系统 HOME 和严格 HTTPS，增加两项回归，重复原生构建通过。未取得全部系统错误诊断，不把推测当成已证明所有平台行为。
+- 发布后用匿名公开 GitHub 列表运行生产选择/完整性逻辑：两架构 preview.3 和 preview.2 都选择 preview.4，preview.4 不提示同版本；实际下载公开校验文件并核对 DMG 的 digest/大小要求及哈希条目。此检查在 Windows 宿主运行纯 Python 逻辑，不冒称 Mac 冻结 APP 的用户公网完整升级已经验收。
+- [本源码 Windows 回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38357964354) 通过 75 项后台、15 项浏览器与工作台自检，WPF 构建零错误/警告；未重新发布 Windows 包。Windows 安装/下载证据见 UPDATER-QA.md。
+- 未更新作者真实 Mac 安装，未读取 Agent 对话/认证，未发送模型请求。preview.1/2 最后一次手动替换到本版，preview.3 可软件内升级。Finder/Gatekeeper、macOS 13/14、真实用户完整公网升级及第三方原生显示/续聊仍待验收。
+
+| preview.4 文件后缀 | 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| `macos-arm64.dmg` | 23016126 | `b4f68a65bd1da45ee5885ba23f2c8cce1be12844cac6e641e20295296a38ccd2` |
+| `macos-x86_64.dmg` | 23924220 | `567ff29c16615785ab3cc6a278dbd4f79133fa9fed1fb5db974e15bbb4bd33eb` |
+
+以下是历史版本的证据，不代替本版验证；已经公开的同版本文件保持不变。
+
+## 2026-10-13 preview.3 一键更新（历史已发布）
+
+[公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.3)。构建源码 `957c22611b127514b58b839a1662e458bb7fc956`，Git 标签指向此提交；后续发布流程与文档提交未重做这些包。
+
+- 软件内下载/进度/取消、搬运中自动等待和完成后重启。Windows v0.3.8 沿用原有更新事务；Windows 忙碌时提示结束任务后重试，不将其说成自动等待。见 UPDATER-QA.md。
+- [两架构原生构建](https://github.com/feifeigong/ai-first-tools/actions/runs/38352056433) 的 arm64、x86_64 build 任务均成功：macOS 15 各 71 项共享/隔离单测，以及冻结 APP 的 7 项资源/引擎、5 项 Cocoa/WebKit/桥、3 项真实 HTTPS、4 项更新检查全通过；ad-hoc 资源严格校验和 DMG 格式校验通过。
+- 更新检查在临时 APP 副本中构造旧版本元数据，实际执行独立 helper、系统原子交换、旧版备份保留、新版 Cocoa/WebKit/Python 桥重启及版本确认。这不是从已公开 preview.2 二进制在作者电脑手点升级，也不是实际联网下载整个更新包的原生全流程。单测另覆盖下载、取消、损坏、架构/版本、指纹变化、忙碌保护和失败恢复。
+- 早期原生更新检查发现重启后的 WebKit 页面不加载；先修复独立冻结进程重启及 helper 的审计状态隔离，所选构建两架构检查通过。测试状态与记录路径仍在受控临时目录，失败包未发布。当时本地 Mac 共用/更新单测 36 项、浏览器 4 项通过。
+- 原构建末尾 stage-release 因更改工作流标签权限失败，不能将整条运行说成成功。改为先准备指向已验证源码的不可变标签，再仅上传报告通过的原资产。[最终暂存运行](https://github.com/feifeigong/ai-first-tools/actions/runs/38353974861) 成功；前一次暂存因草稿标签不匹配跳过，没有上传资产，不能用绿色状态冒称完成发布。
+- 发布前独立下载原构建产物，对四类报告及 11 个上传资产逐一核对版本、架构、大小和 GitHub SHA-256 digest。随后公开同一草稿，不替换已公开同版本文件。
+- 发布后用匿名公开列表调用生产版本选择和完整性资产检查：两架构 preview.2 都能选到 preview.3，preview.3 不提示同版本；实际下载公开校验文件并核对 DMG 条目。此项在 Windows 测试宿主运行纯 Python 选择/下载逻辑，不冒称 Mac 冻结应用已实际联网下载整个 DMG 并更新。
+- 未更新作者真实 Mac 安装，未读取 Agent 对话/认证，未发送模型请求。preview.1/2 仍需最后一次手动替换；首次打开/Gatekeeper、macOS 13/14、实际用户网络及第三方客户端显示/续聊尚待真机验收。
+
+| preview.3 文件后缀 | 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| `macos-arm64.dmg` | 23340151 | `ffb8adb3c2078e9be0a3d5456d580d4fcf493951ca58f0e3938e6be37e1e7a45` |
+| `macos-x86_64.dmg` | 23923783 | `312127bd9a0a6d44fdcdc9540647f3d21c59ab2d9ea2fbd7ba7138033e59255a` |
+
+以下 preview.2、preview.1 是历史记录，不是 preview.3 的验收证据。
+
+### 发布后追加复测
+
+同一运行代码随后在 [追加运行一](https://github.com/feifeigong/ai-first-tools/actions/runs/38353318206) 的 ARM 及 [追加运行二](https://github.com/feifeigong/ai-first-tools/actions/runs/38353312883) 的两架构隔离更新检查中仍出现 Cocoa pageLoaded=false，localhost 页面可读取但原生桥未开始注入。未用这些失败包替换公开资产，不将初次通过说成所有重复运行都稳定。
+
+排查发现 --smoke-test 仍在创建 Cocoa 前改写 HOME；996cfb4 改为仅隔离业务 home() 与更新回执，保持系统 HOME，继续排除真实来源/数据。此提交只调整显式审计模式，正常用户的 home() 与启动环境不变；本地新增隔离安全回归后 37 项通过。[该修订原生运行](https://github.com/feifeigong/ai-first-tools/actions/runs/38355445903) 的 ARM 通过，Intel 重启页面仍未加载，因此不能视为完整解决。后续 7dcc96f 调整 WebKit 启动，本地 38 项定向测试及两次两架构 CI 通过后，另发 preview.4，证据在本文件顶部。公开 preview.3 仍对应原构建 957c226，没有用新测试包冒充原资产。
 
 ## 2026-10-13 preview.2 修复与验证
 
@@ -79,6 +117,6 @@ Actions 的 `macos-arm64`、`macos-x86_64` 产物各包含 DMG、`self-test.json
 - macOS 13/14；实际 runner 为 macOS 15。
 - 各第三方客户端实际显示、刷新、附件/工具行为、下一轮对话。
 - OpenCode CLI 不在本批文件型目标矩阵。
-- Mac 自动覆盖更新未实现，只有提醒与下载。
+- preview.1/2 没有自动替换；preview.3 加入此能力，preview.4 修复追加重启问题并重复通过隔离原生审计，用户真实安装的手点公网完整升级仍待验收。
 
 测试全用临时目录/合成记录，不导入真实账户、不发模型请求；按 MACOS-HANDOFF.md 继续真机验收。

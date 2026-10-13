@@ -4,7 +4,7 @@
 
 Windows v0.3.7 起，打开软件即可后台检查更新，也能点击右上角「检查更新」。发现新版时，点「更新并重启」即可；v0.3.8 统一为「下载并更新」，仍然一次点击完成下载、校验、更新与重启，不需要读者手动安装一遍。新工具跟随新版工作台一起交付，不需要添加插件。
 
-Mac preview.3 的同类流程见 [Mac 一键更新](MACOS-UPDATES.md)。两平台包各自匹配，不能用 Windows 版去安装 Mac 更新。
+Mac preview.3 起支持同类流程，当前公开为 preview.4，见 [Mac 一键更新](MACOS-UPDATES.md)。两平台包各自匹配，不能用 Windows 版去安装 Mac 更新。
 
 - 只检查版本，不悄悄安装。下载前需要用户点击；下载中能取消，仍可使用工具。
 - 下载完成后等待工具安全关闭。正在搬运、未保存或工具拒绝关闭时，停止重启，提示先处理任务，不强杀进程。
@@ -29,12 +29,12 @@ v0.3.6 及更早的 EXE 没有后台更新代码，必须先手动安装一次�
 
 1. 修改代码或添加自家工具，更新 `workspace/AIFirst.Workspace.csproj` 与 `scripts/package.ps1` 的版本号。目录中的工具由 `workspace/assets/tool-catalog.json` 统一登记。
 2. 执行回归检查和打包。发布包不得包含用户配置、对话、日志、认证文件或私有截图。检查主程序版本与包清单版本一致。
-3. 在 GitHub 创建同版本草稿 Release，例如 `v0.3.8`，上传**同一次构建**的三个文件：
+3. 在 GitHub 创建同版本草稿 Release；实际构建/测试通过后，先把同名 lightweight Git 标签指向已验证源码提交，已有标签不得移动。可用 Windows release packages 与 Stage verified release assets（windows、原构建 run_id）暂存**同一次构建**的三个文件，例如：
    - `AI-First-Tools-Setup-0.3.8.exe`
    - `AI-First-Tools-Portable-0.3.8-win-x64.zip`
    - `SHA256SUMS.txt`
-4. 包全部上传并核对哈希后，将草稿发布。读者下次检查更新即可看到。已经发布的同版本包不要替换；需要修复就提高版本号另发一个 Release。
-5. 同步 README 的下载链接与更新说明。仅有 v0.3.7 源码而未发布包时，不要承诺 v0.3.6 用户已经拥有自动更新。
+4. 独立下载核对报告、实际上传资产的大小/digest/哈希、源码标签后，将草稿发布。暂存绿色状态可能只是跳过，须确认实际 3 个资产齐全；脚本不更改 target_commitish，源码来源取 Git 标签。读者下次检查即可看到。公开的同版本包不要替换；需修复就提高版本号另发 Release。
+5. 同步 README 的下载链接、QA 与交接。当前已公开 v0.3.8；v0.3.6 及更早仍须先手动安装一次，不能把新代码当作旧 EXE 已具备自动更新。
 
 当前仅识别 `v数字.数字.数字` 标签与 Windows x64 资产；要使用 `-beta` 等后缀或新增架构，应先扩展版本解析和渠道规则。
 
@@ -44,6 +44,6 @@ v0.3.6 及更早的 EXE 没有后台更新代码，必须先手动安装一次�
 
 真实更新验收应使用隔离程序目录：旧版启动 → 提示更新 → 下载与校验 → 工具安全关闭 → 后台更新 → 新版自动打开，另测占用、网络中断、校验失败、用户额外文件与失败恢复。安装版验收不要覆盖其他用户正在使用的安装目录；发布前还需在干净 Windows 环境测试。
 
-开发者可以先发布两个隔离构建（版本 `0.3.7` 和 `0.3.8`）并准备 `workspace/tests/WindowFixture`，再运行 `scripts/prepare_update_fixture.py` 生成无真实搬家工具的测试目录。隔离旧程序以 `--config <隔离配置> --update-fixture <隔离新版目录>` 打开，可检查完整界面；`--update-handoff-test` 配合上述两个参数及 `--report <报告路径>` 可程序化检查下载、校验、交接和重启。安装位置不允许 fixture 模式，交接测试还要求包内带 `WorkspaceWindowFixture.dll`；不要把这些开发参数当成用户的更新入口。
+开发者可先在本地构建两个隔离版本并准备 `workspace/tests/WindowFixture`，再运行 `scripts/prepare_update_fixture.py` 生成无真实搬家工具的测试目录；不要为测试公开假版本。隔离旧程序以 `--config <隔离配置> --update-fixture <隔离新版目录>` 打开，可检查完整界面；`--update-handoff-test` 配合上述两个参数及 `--report <报告路径>` 可程序化检查下载、校验、交接和重启。安装位置不允许 fixture 模式，交接测试还要求包内带 `WorkspaceWindowFixture.dll`；不要把这些开发参数当成用户的更新入口。
 
 更新缓存位于当前用户本地应用数据下的 `AI一手工具工作台/updates`。失败的备份不自动删除；成功后删除已使用的安装包、暂存文件和备份，后台更新程序的运行文件随后清理。

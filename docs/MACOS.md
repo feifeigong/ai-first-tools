@@ -4,7 +4,7 @@ Mac 预览版通过 GitHub 发布，不上苹果商店，不使用 Developer ID 
 
 ## 下载与安装
 
-[Mac 发布页](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.3)
+[Mac 发布页](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.4)
 
 1. 苹果 M 系列选 `macos-arm64.dmg`；Intel Mac 选 `macos-x86_64.dmg`。苹果菜单 → 关于本机可以查看芯片类型。
 2. 打开 DMG，把「AI一手工具工作台」拖到「Applications / 应用程序」。
@@ -28,7 +28,8 @@ Mac 预览版通过 GitHub 发布，不上苹果商店，不使用 Developer ID 
 - preview.2 使用 Mac 系统证书与系统代理，不要求电脑另外安装 Python 的证书。连接失败会区分超时、证书、地址解析或限流，并提供「打开下载页」，不把失败说成已经最新。
 - preview.3 起，有新版会自动出现「下载并更新」。点一次即可在软件里下载、校验，等待搬运结束后自动更新并重新打开，不需要再拖拽或重新安装。持续打开时每六小时后台再检查一次，也能手动检查。
 - 下载时可以继续使用或取消。应用只接受本项目、当前芯片且校验文件完整的更新；验证失败保留当前版本，替换失败尝试恢复，旧版备份保留，不删除 Agent 数据。
-- **preview.1/2 没有一键覆盖功能，需最后一次手动替换到 preview.3；之后使用软件内按钮。** Windows v0.3.7 起已经支持一键下载更新，v0.3.8 统一按钮名称。
+- **preview.1/2 没有一键覆盖功能，需最后一次手动替换到 preview.4；preview.3 可直接在软件里升级。** Windows v0.3.7 起已经支持一键下载更新，v0.3.8 统一按钮名称。
+- preview.4 调整 WebKit 启动，改善更新后偶发页面未加载的问题；保持随机本机端口和严格 HTTPS，不读取其他 Agent 的浏览器登录数据。重复原生构建及验证边界见 [测试记录](MACOS-QA.md)。
 - 请从「应用程序」或自己可写的正常安装目录打开。在 DMG、系统隔离运行位置、不可写目录或不支持安全交换的磁盘中，不强行更新，会提示先处理安装位置/权限。系统安全策略可能仍要求用户确认，不关闭系统保护。
 - 卸载只把工作台移到废纸篓，不需要删除其他 AI 软件的记录。
 

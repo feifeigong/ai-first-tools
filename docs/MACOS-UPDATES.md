@@ -4,7 +4,7 @@
 
 preview.3 起，打开后自动检查，运行中每六小时再检查。有新版时，顶部出现「下载并更新」，点一次即可；下载进度、取消和等待搬运均在原窗口中显示。下载完成且没有搬运时自动安全关闭，替换并重启，不要求手动打开 DMG 或重复安装。
 
-preview.1/2 没有这段更新代码，所以必须最后一次手动升级到 preview.3。这里只改程序；Agent 对话、登录、工作台设置不在替换范围。
+当前公开版为 preview.4。preview.1/2 没有这段更新代码，需最后一次手动升级到 preview.4；preview.3 可以直接在软件内升级。这里只改程序；Agent 对话、登录、工作台设置不在替换范围。
 
 ## 安全链路
 
@@ -19,6 +19,12 @@ preview.1/2 没有这段更新代码，所以必须最后一次手动升级到 p
 
 实现遵循 [PyInstaller 独立重启进程约定](https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#using-sys-executable-to-spawn-subprocesses-that-outlive-the-application-process-implementing-application-restart)，设置子进程 PYINSTALLER_RESET_ENVIRONMENT，不修改全局环境。原子交换采用 [Apple 的卷交换能力](https://developer.apple.com/documentation/foundation/urlresourcekey/volumesupportsswaprenamingkey) 与 [公开系统声明](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/stdio.h)。
 
+## preview.4 启动稳定性修复
+
+追加原生更新审计发现页面偶发不加载，虽然 localhost 页面可读取，WebKit 桥仍未开始注入。保持系统 HOME 的审计修订还不足以消除 Intel 复测失败。检查所锁定 pywebview 6.2.1 的 Cocoa 实现，发现 private_mode 会在窗口启动时异步清理共享 WebKit 数据存储；由此推测存在清理与新页面加载竞争，不把推测当成已取得完整系统错误诊断。
+
+preview.4 用 private_mode=False 启动，避免这条异步清理路径，同时明确 DEFAULT_HTTP_PORT=None 保持随机 localhost 端口，不改成固定端口。工作台自己的 WebKit 页面缓存可能保留，不读取其他 Agent 的 Cookie/认证；HTTPS 和更新来源检查不变。审计的业务 home() 与回执单独隔离，系统 HOME 保持原值。这两项都有回归测试；同源码两次完整构建的两架构资源、Cocoa、网络及更新审计全部通过，见 MACOS-QA.md。相关参数见 [pywebview 官方 API](https://pywebview.flowrl.com/api/)。
+
 ## 限制与测试
 
 - 没有 Developer ID/公证，不关闭 Gatekeeper、不清除隔离属性、不自动提权；受管理机器或系统安全拦截仍可能需确认。安装权限不足时保持旧程序，不绕过限制。
@@ -26,4 +32,5 @@ preview.1/2 没有这段更新代码，所以必须最后一次手动升级到 p
 - 旧版备份和失败任务目录暂不自动删除，以保留恢复机会；保存在应用旁的私有隐藏目录，不含对话/认证。后续如加入清理，必须只清理完成且无人运行的受控任务。
 - 单测覆盖错误地址、缺少校验资产、半包、版本/架构、指纹变化、备份、交换失败恢复、启动失败恢复、迁移中等待与重启时拒绝新迁移；浏览器覆盖自动出现按钮、一次点击、进度、等待和取消。
 - 冻结 APP 的 --update-test 在临时目录复制 APP、构造隔离旧版本元数据，验证真实 helper 进程、原子交换和新 APP 的 Cocoa/WebKit/Python 桥重启。这不是作者真实机器上从已发布旧版手点升级的验收。
+- 审计进程的业务目录与回执单独隔离，不改系统 HOME，不读取真实 Agent 存储。测试模式修订与实际发布包的构建提交分别记录，不能把后续测试包替换为同版本公开资产。
 - 成功构建/测试才发布；报告与仍未验收项见 MACOS-QA.md。

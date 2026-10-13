@@ -28,7 +28,7 @@ ChatGPT 普通云端 Chat/Work 不可写，本机 Work/Codex 分开；Claude 普
 
 `workspace/` 是 .NET 8 WPF 外壳，通过 Win32 承载现有 pywebview 工具。隐藏启动握手、统一任务栏图标、关闭保护解决闪窗和多个图标。
 
-公开版本曾发布 v0.3.6；源码包含 v0.3.7 更新机制。是否已有某个公开安装包须检查 Releases，不能把源码版本当作二进制已发布。
+当前公开 Windows v0.3.8，含安装版/免安装版与一键更新。构建源码 c1f5b97，真实安装与独立资产核对见 UPDATER-QA.md；后续文档/发布流程提交不等于重做二进制。v0.3.6 及更早需手动安装一次，已使用 v0.3.7 可软件内升级。
 
 更新后台比较 GitHub 版本；仅接受完整且校验通过的 Windows 资产。安装版静默运行安装程序，便携版事务性覆盖发布文件，失败提供恢复保护，不触碰 Agent 数据、不强停工具。原理与验证见 `UPDATES.md`、`UPDATER-QA.md`。
 
@@ -44,7 +44,9 @@ WPF/Win32 不能移植到 macOS，更不能改 EXE 后缀。保留 Windows，新
 
 2026-10-13 作者反馈检查更新连接失败、Mac 豆包工作没有显示。preview.2 修复 Mac 豆包的 Default 目录识别，并将同一工作区传给导出引擎；刷新同时重新寻找来源。更新 HTTPS 改用系统证书而非打包机器的 Python CA 路径，保留系统代理、严格证书校验和可信仓库过滤，失败显示脱敏分类与下载页入口。新增冻结应用真实 HTTPS 检查，弥补首版未测这一层的缺口；作者 Mac 的具体网络原因仍需新版提示确认。构建结果以 MACOS-QA.md 为准。
 
-2026-10-13 后续需求：Windows 和 Mac 都用“下载并更新”按钮，有新版自动显示，用户点击后下载、校验、等搬运结束再安全替换并重启。Windows 沿用已有更新器，v0.3.8 统一文案；Mac preview.3 新增独立 helper、系统原子交换和失败恢复，四类冻结检查全部通过才发 DMG。preview.1/2 没有自动替换代码，须最后一次手动换成 preview.3；以后不再拖应用。详见 UPDATES.md、MACOS-UPDATES.md 和 MACOS-QA.md；当前发布状态要查 Releases。
+2026-10-13 后续需求已发布：Windows v0.3.8 和 Mac preview.4 都用“下载并更新”按钮，有新版自动显示，点一次下载、校验、安全替换并重启。Windows 沿用已有更新器，忙碌时提示任务完成后重试；Mac 自动等待搬运结束，新增独立 helper、系统原子交换和失败恢复。Windows 干净 runner 的真实安装/覆盖/卸载 6 项及安装后 62 项自检通过。Mac 一键更新最初在 preview.3 加入；当前 preview.4 构建源码 7dcc96f，两次完整原生构建的两架构各 73 项单测及四类冻结检查通过，独立核对同次构建的 11 个上传资产后公开。构建末尾初次暂存权限问题独立修复，没有将失败程序包公开。preview.1/2 须最后一次手动换成 preview.4；preview.3 可以软件内升级。详见 UPDATES.md、MACOS-UPDATES.md、MACOS-QA.md、UPDATER-QA.md，当前状态仍以 Releases 为准。
+
+preview.3 发布后追加构建出现 WebKit 偶发未加载，未覆盖其公开资产。996cfb4 仅修订审计模式：业务 home() 与回执单独隔离，不改系统 HOME；ARM 通过但 Intel 仍失败。检查锁定 pywebview 的 Cocoa 实现后，7dcc96f 将启动改为不异步清理共享 WebKit 存储，显式保留随机本机端口，另发 preview.4，不移动旧标签或替换旧包。正常业务仍使用真实用户目录，自己的页面缓存可能保留，不读取其他 Agent 登录数据；同源码两次两架构原生重启均通过。公开匿名列表实测 preview.3 选择 preview.4、同版本无提示，Windows 仍只选 v0.3.8。具体证据及未验收项见 MACOS-QA.md，不把受控审计说成用户安装的公网升级或全部 Agent 验收。
 
 ## 代码地图
 
@@ -67,6 +69,8 @@ WPF/Win32 不能移植到 macOS，更不能改 EXE 后缀。保留 Windows，新
 | `scripts/package_macos.py` | 许可证、打包、自检、Cocoa 检查、DMG/校验值 |
 | `txcript/` | 修改后的完整上游，引擎 0.14.4，Rust 最低 1.96 |
 | `.github/workflows/macos.yml` | 两架构原生构建，不在 Windows 伪造 APP |
+| `.github/workflows/windows-release.yml` | Windows 打包、干净 runner 实际安装/卸载检查 |
+| `.github/workflows/stage-verified.yml` | 校对已通过构建和源码标签，只暂存同一批原资产 |
 
 ## 安全和真实验证
 
