@@ -22,9 +22,10 @@
     drawToggle();
     try { localStorage.setItem("ai-first-sidebar-collapsed", String(document.body.classList.contains("workspace-collapsed"))); } catch {}
   });
-  const show = (text, available = false) => {
+  const show = (text, available = false, label = "下载新版") => {
     message.textContent = text;
     download.hidden = !available;
+    download.textContent = label;
     notice.hidden = false;
   };
   document.getElementById("workspace-dismiss").addEventListener("click", () => { notice.hidden = true; });
@@ -36,9 +37,9 @@
     checker.textContent = "正在检查…";
     try {
       const result = await window.pywebview.api.check_update();
-      if (result.error) { if (manual) show(result.error); }
+      if (result.error) { hasUpdate = false; if (manual) show(result.error, result.canOpenDownloads, "打开下载页"); }
       else if (result.available) { hasUpdate = true; show(`有新版本 ${result.version}，下载后拖到“应用程序”替换即可。`, true); }
-      else if (manual) show("已经是当前最新的 Mac 版本。", hasUpdate);
+      else { hasUpdate = false; if (manual) show("已经是当前最新的 Mac 版本。"); }
     } catch { if (manual) show("暂时无法检查更新，您可以继续使用。", hasUpdate); }
     finally { checker.disabled = false; checker.textContent = "检查更新"; checking = false; }
   };
@@ -53,7 +54,7 @@
     initialized = true;
     try {
       const info = await window.pywebview.api.workspace_info();
-      document.getElementById("workspace-version").textContent = `Mac · v${info.version} 预览版`;
+      document.getElementById("workspace-version").textContent = `Mac · v${info.release || info.version}`;
       checker.disabled = false;
       if (info.automaticChecks) setTimeout(() => check(false), 2000);
       else {

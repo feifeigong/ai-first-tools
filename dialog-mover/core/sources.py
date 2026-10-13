@@ -19,7 +19,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-from . import chatgpt, imports, mover
+from . import chatgpt, doubao, imports, mover
 from .common import (
     appdata,
     as_millis,
@@ -50,7 +50,7 @@ def _qwen_db() -> Path:
 
 
 def _doubao_base() -> Path:
-    return localappdata() / "DoubaoWork" / "User Data" / "Default"
+    return doubao.profile()
 
 
 def _gemini_root(agent_id: str) -> Path:
@@ -110,7 +110,7 @@ def installed(agent_id: str) -> bool:
     if agent_id == "qwen_work":
         return _qwen_db().is_file()
     if agent_id == "doubao_work":
-        return (_doubao_base() / ".doubaowork").is_dir()
+        return doubao.installed()
     return False
 
 
@@ -331,15 +331,15 @@ def qwen_groups() -> list[dict]:
 
 def _doubao_snapshots() -> dict[str, dict]:
     """Newest conversation-list snapshot per schema, read from a private copy."""
+    index = _doubao_base() / "IndexedDB"
+    source = index / doubao.INDEX_NAME
+    if not source.is_dir():
+        return {}
     vendor = Path(__file__).resolve().parent.parent / "vendor"
     if str(vendor) not in sys.path:
         sys.path.insert(0, str(vendor))
     from ccl_chromium_reader import ccl_chromium_indexeddb as idb
 
-    index = _doubao_base() / "IndexedDB"
-    source = index / "chrome_doubaowork-chat_0.indexeddb.leveldb"
-    if not source.is_dir():
-        return {}
     scratch = Path(tempfile.mkdtemp(prefix="dialog-mover-"))
     try:
         level = scratch / source.name
@@ -371,7 +371,7 @@ def _doubao_snapshots() -> dict[str, dict]:
 
 def doubao_groups() -> list[dict]:
     snapshots = _doubao_snapshots()
-    local_dir = _doubao_base() / ".doubaowork" / "agent_mode" / "workspace" / ".sessions"
+    local_dir = doubao.workspace() / ".sessions"
     local = {path.name for path in local_dir.iterdir() if path.is_dir()} if local_dir.is_dir() else set()
 
     def build(item: dict, folder: str = "") -> dict:

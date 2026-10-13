@@ -41,7 +41,7 @@ python macos/entry.py
 
 ```sh
 cd dialog-mover
-python -m unittest test_chatgpt test_close_safety test_macos test_macos_native -v
+python -m unittest test_chatgpt test_close_safety test_doubao test_macos test_macos_native -v
 cd ..
 python scripts/package_macos.py --architecture "$(uname -m)"
 ```
@@ -50,6 +50,8 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 - `test_macos_native`：真实 Mac 引擎在隔离合成存储中对文件型目标导入/回读，核对编号、路径与源文件不变；拒绝不匹配 DB。
 - OpenCode 需额外原生 CLI，这批文件型目标检查不包括它。
 - 冻结包 `--self-test` 验证资源与引擎；`--smoke-test` 在空用户目录打开真实 Cocoa 窗口，验证 WebKit/Python 桥、侧栏和 API。
+- preview.2 新增冻结包 `--network-test`：在不存在的 Python CA 路径环境中，用系统 Keychain 验证 HTTPS、读取本项目公开 GitHub 发布列表；失败阻止 DMG 发布，不记录代理地址/认证/环境。
+- `test_doubao` 覆盖 Mac Default、Windows/旧布局、自定义工作区、仅云端缓存、空账户和导出路径一致性。原生测试新增合成本机豆包轨迹 → Claude Code → 回读，保持源文件不变；会话列表快照为合成替身，不表示真实豆包版本已人工验收。
 - JSON 在 `artifacts/macos/<架构>/` 和 Actions 产物；不是所有原生目标软件的人工测试，没有发下一轮模型消息。
 
 ## 真机验收清单
@@ -72,6 +74,8 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 | --- | --- |
 | 黑屏/打不开/模块缺失 | CI、spec、Cocoa/PyObjC、资源路径、最低系统 |
 | 软件没出现 | common.py、sources.py、真实数据位置、是否已有记录 |
+| Mac 豆包工作没出现 | core/doubao.py；Mac 是 DoubaoWork/Default，不是 Windows User Data/Default；刷新会重新寻找软件 |
+| 检查更新失败 | macos/updates.py、truststore._macos/_scproxy；按 errorCode 区分证书、DNS、超时、限流；不要关闭 TLS 校验 |
 | 目录乱码/斜线/重复项目 | URI、POSIX、chatgpt._norm，不强行 Windows 大小写折叠 |
 | 搬完不显示 | 模式、DB 结构、项目/索引、原生客户端版本，不只看文件存在 |
 | ChatGPT 格式变化 | codex_import.validate，先查结构，不放宽安全检查 |
@@ -83,7 +87,7 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 
 ## 发布维护
 
-- macos/version.json 首版 0.4.0-macos-preview.1。
+- macos/version.json 当前准备版本为 0.4.0-macos-preview.2；公开资产是否发布以 Releases 和 MACOS-QA.md 为准。
 - 首批两架构包构建源码为 `2b49c7f`，Mac/Windows CI 均通过；构建链接、SHA-256 和未验收项见 MACOS-QA.md。后续只整理交接文档，不能把文档提交说成重做了安装包。
 - 两架构 DMG 名称 `AI-First-Tools-<release>-macos-<architecture>.dmg`，附 SHA-256。
 - CI/报告通过才发布下载包；源码提交不等于已发布应用。

@@ -15,7 +15,7 @@ analysis = Analysis(
     binaries=[(str(engine), "bin")],
     datas=[(str(resources / "ui"), "ui"), (str(resources / "version.json"), "."),
            (str(root / "licenses"), "licenses"), (str(root / "LICENSE"), "."), (str(root / "NOTICE"), ".")],
-    hiddenimports=["webview.platforms.cocoa", "brotli", "zstd", "ccl_simplesnappy", "Security"] + collect_submodules("ccl_chromium_reader"),
+    hiddenimports=["webview.platforms.cocoa", "brotli", "zstd", "ccl_simplesnappy", "Security", "_scproxy", "truststore._macos"] + collect_submodules("ccl_chromium_reader"),
     excludes=["clr", "pythonnet", "webview.platforms.winforms", "webview.platforms.edgechromium"],
 )
 archive = PYZ(analysis.pure)

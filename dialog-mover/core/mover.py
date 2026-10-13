@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from .common import appdata, codex_home, localappdata, norm, proxy_env, user_env
-from . import codex_import, imports
+from . import codex_import, doubao, imports
 
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 SAFE_ID = re.compile(r"^[0-9A-Za-z_-]{6,80}$")
@@ -296,6 +296,8 @@ def move_one(source: str, session: dict, target: str, directory: str, details: d
     handle.close()
     try:
         src_env = {}
+        if source == "doubao_work":
+            src_env["DOUBAO_WORK_DIR"] = str(doubao.workspace())
         if SOURCES[source] == "antigravity" and session.get("root"):
             src_env["ANTIGRAVITY_DIR"] = str(session["root"])
         if source == "cowork":

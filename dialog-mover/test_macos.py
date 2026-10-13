@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import socket
+import ssl
 import sqlite3
 import sys
 import tempfile
@@ -9,6 +11,7 @@ import unittest
 from contextlib import closing
 from pathlib import Path
 from unittest.mock import Mock, patch
+from urllib.error import HTTPError, URLError
 
 from core import chatgpt, common, mover, sources
 
@@ -17,6 +20,7 @@ sys.path.insert(0, str(ROOT / "macos"))
 sys.path.insert(0, str(ROOT / "scripts"))
 from prepare_macos import prepare
 from updates import REPOSITORY, choose_release, release_key
+import updates
 
 
 class MacPathsTests(unittest.TestCase):
@@ -111,6 +115,78 @@ class MacUpdatesTests(unittest.TestCase):
         release = self.release()
         release["assets"][0]["browser_download_url"] = "https://example.com/file.dmg"
         self.assertIsNone(choose_release([release], "0.4.0", "arm64"))
+
+    def test_native_tls_context_requires_verified_certificate_and_hostname(self):
+        context = updates.tls_context()
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+
+    def test_request_uses_native_context_and_rejects_untrusted_redirects(self):
+        response = Mock()
+        response.geturl.return_value = updates.API_URL
+        response.read.return_value = json.dumps([self.release()]).encode()
+        opener = Mock()
+        opener.open.return_value.__enter__ = Mock(return_value=response)
+        opener.open.return_value.__exit__ = Mock(return_value=False)
+        with patch.object(updates, "build_opener", return_value=opener) as factory, patch.object(updates.platform, "machine", return_value="arm64"):
+            self.assertTrue(updates.check("0.4.0")["available"])
+            self.assertIsInstance(factory.call_args.args[0], updates.NoRedirect)
+            self.assertTrue(factory.call_args.args[1]._context.check_hostname)
+            self.assertEqual(opener.open.call_args.kwargs["timeout"], 15)
+            response.geturl.return_value = "https://example.com/redirect"
+            with self.assertRaises(ValueError):
+                updates.check("0.4.0")
+        with self.assertRaises(ValueError):
+            updates.NoRedirect().redirect_request(None, None, 302, "", {}, "https://example.com")
+
+    def test_oversized_or_invalid_feed_does_not_report_latest(self):
+        response = Mock()
+        response.geturl.return_value = updates.API_URL
+        opener = Mock()
+        opener.open.return_value.__enter__ = Mock(return_value=response)
+        opener.open.return_value.__exit__ = Mock(return_value=False)
+        for body in (b"x" * (4 * 1024 * 1024 + 1), b"{}", b"not json"):
+            with self.subTest(size=len(body)), patch.object(updates, "build_opener", return_value=opener):
+                response.read.return_value = body
+                with self.assertRaises(ValueError):
+                    updates.check("0.4.0")
+
+    def test_failures_are_distinguished_without_leaking_network_secrets(self):
+        secret = "https://secret:password@private-proxy.example"
+        cases = [(URLError(ssl.SSLCertVerificationError(secret)), "certificate"),
+                 (URLError(TimeoutError(secret)), "timeout"), (URLError(socket.gaierror(secret)), "dns"),
+                 (HTTPError(secret, 403, secret, {"X-RateLimit-Remaining": "0"}, None), "rate_limit"),
+                 (HTTPError(secret, 429, secret, {}, None), "rate_limit"),
+                 (HTTPError(secret, 503, secret, {}, None), "http"), (ValueError(secret), "response"),
+                 (ImportError(secret), "component"), (URLError(secret), "network")]
+        for error, code in cases:
+            with self.subTest(code=code):
+                result = updates.failure(error)
+                self.assertEqual(result["errorCode"], code)
+                self.assertTrue(result["canOpenDownloads"])
+                self.assertNotIn(secret, json.dumps(result))
+
+    def test_failed_check_clears_old_update_and_browser_falls_back_to_own_downloads(self):
+        from entry import MacApi
+
+        api = MacApi()
+        api._release = f"{REPOSITORY}/releases/tag/v0.4.1"
+        with patch("entry.version_info", return_value={"release": "0.4.0"}), patch.object(updates, "check", side_effect=URLError(TimeoutError())):
+            self.assertEqual(api.check_update()["errorCode"], "timeout")
+        self.assertIsNone(api._release)
+        with patch("entry.open_external") as browser:
+            self.assertTrue(api.open_update()["ok"])
+            browser.assert_called_once_with(updates.DOWNLOADS_URL)
+
+    def test_network_self_check_fails_without_logging_private_exception_details(self):
+        from entry import network_check
+
+        with tempfile.TemporaryDirectory() as temporary, patch("entry.updates.tls_context", side_effect=URLError("secret proxy")):
+            report = Path(temporary) / "network-test.json"
+            self.assertFalse(network_check(report))
+            result = json.loads(report.read_text())
+            self.assertEqual(result["errorCode"], "network")
+            self.assertNotIn("secret", report.read_text())
 
 
 class MacResourceTests(unittest.TestCase):

@@ -3,10 +3,47 @@ from __future__ import annotations
 import json
 import platform
 import re
-from urllib.request import Request, urlopen
+import socket
+import ssl
+from urllib.error import HTTPError, URLError
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 
 REPOSITORY = "https://github.com/feifeigong/ai-first-tools"
 API_URL = "https://api.github.com/repos/feifeigong/ai-first-tools/releases?per_page=100"
+DOWNLOADS_URL = f"{REPOSITORY}/releases"
+
+
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, newurl):
+        raise ValueError("Unexpected update service redirect")
+
+
+def tls_context():
+    import truststore
+
+    return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+
+def failure(error: Exception) -> dict:
+    code = "network"
+    message = "暂时连不上 GitHub，请检查网络或系统代理，也可以在浏览器打开下载页。"
+    reason = error.reason if isinstance(error, URLError) else error
+    if isinstance(error, HTTPError):
+        if error.code == 429 or error.code == 403 and (error.headers or {}).get("X-RateLimit-Remaining") == "0":
+            code, message = "rate_limit", "GitHub 检查次数达到上限，请稍后再试，或在浏览器打开下载页。"
+        else:
+            code, message = "http", "GitHub 暂未允许此次更新查询，可以在浏览器打开下载页。"
+    elif isinstance(reason, ssl.SSLError):
+        code, message = "certificate", "无法验证 GitHub 的安全连接，请检查系统时间或代理证书。也可以在浏览器打开下载页。"
+    elif isinstance(reason, (TimeoutError, socket.timeout)):
+        code, message = "timeout", "连接 GitHub 超时，请稍后重试，或在浏览器打开下载页。"
+    elif isinstance(reason, socket.gaierror):
+        code, message = "dns", "无法找到 GitHub 的网络地址，请检查网络或系统代理。也可以在浏览器打开下载页。"
+    elif isinstance(error, (ValueError, TypeError)):
+        code, message = "response", "GitHub 返回的更新信息不符合要求，未确认是否有新版。可以打开下载页查看。"
+    elif isinstance(error, ImportError):
+        code, message = "component", "更新组件不完整，请从本项目下载完整的 Mac 应用。"
+    return {"error": message, "errorCode": code, "canOpenDownloads": True}
 
 
 def release_key(value: str) -> tuple[int, int, int, int] | None:
@@ -44,7 +81,8 @@ def choose_release(releases: list, current: str, architecture: str) -> dict | No
 
 def check(current: str) -> dict:
     request = Request(API_URL, headers={"User-Agent": "AI-First-Tools-macOS", "Accept": "application/vnd.github+json"})
-    with urlopen(request, timeout=15) as response:
+    opener = build_opener(NoRedirect(), HTTPSHandler(context=tls_context()))
+    with opener.open(request, timeout=15) as response:
         if response.geturl() != API_URL:
             raise ValueError("Unexpected update service redirect")
         body = response.read(4 * 1024 * 1024 + 1)

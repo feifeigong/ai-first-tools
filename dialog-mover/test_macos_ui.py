@@ -18,6 +18,24 @@ BOOT = "window.pywebview={api:{agents:async()=>(INFO),sessions:async()=>(SESSION
 
 
 class MacUiTests(unittest.TestCase):
+    def test_refresh_discovers_doubao_created_after_workspace_opened(self):
+        bootstrap = BOOT.replace(json.dumps(INFO), json.dumps({**INFO, "agents": []}))
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.get_by_text("还没发现支持的本机记录", exact=True).wait_for()
+                page.evaluate("window.pywebview.api.agents=async()=>({ready:true,agents:[{id:'doubao_work',name:'豆包工作',sub:'字节跳动'}],targets:[],unsupported:[]})")
+                page.get_by_role("button", name="重新读取").click()
+                page.locator('#agents [data-agent="doubao_work"]').wait_for()
+                page.get_by_text("仅用于排版检查的合成记录", exact=True).wait_for()
+                self.assertTrue(page.get_by_role("button", name="重新读取").is_enabled())
+            finally:
+                browser.close()
+
     def test_single_workspace_layout_and_fully_hidden_sidebar(self):
         with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
             resources = prepare(Path(temporary))
@@ -45,6 +63,18 @@ class MacUiTests(unittest.TestCase):
                 self.assertEqual(page.locator("iframe").count(), 0)
                 page.get_by_role("button", name="检查更新").click()
                 page.get_by_text("已经是当前最新的 Mac 版本。", exact=True).wait_for()
+                page.evaluate("window.pywebview.api.check_update=async()=>({error:'无法验证安全连接',errorCode:'certificate',canOpenDownloads:true});window.pywebview.api.open_update=async()=>{window.downloadOpened=true;return {ok:true}}")
+                page.get_by_role("button", name="检查更新").click()
+                page.get_by_text("无法验证安全连接", exact=True).wait_for()
+                page.get_by_role("button", name="打开下载页").click()
+                page.wait_for_function("window.downloadOpened===true")
+                page.evaluate("window.pywebview.api.check_update=async()=>({available:true,version:'0.4.1'})")
+                page.get_by_role("button", name="检查更新").click()
+                page.get_by_role("button", name="下载新版").wait_for()
+                page.evaluate("window.pywebview.api.check_update=async()=>({available:false})")
+                page.get_by_role("button", name="检查更新").click()
+                page.get_by_text("已经是当前最新的 Mac 版本。", exact=True).wait_for()
+                self.assertFalse(page.locator("#workspace-download").is_visible())
             finally:
                 browser.close()
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from audit_import_targets import isolated_env
-from core import imports, mover
+from core import doubao, imports, mover, sources
 from test_imports import CODEX_SCHEMA, QWEN_SCHEMA
 
 
@@ -58,6 +58,36 @@ class NativeMacImportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "格式发生变化"):
             mover._import_document(self.path, self.document, "codex", {})
         self.assertEqual(list((Path(self.env["CODEX_HOME"]) / "sessions").glob("**/*.jsonl")), [])
+
+    def test_doubao_mac_source_moves_native_trajectory_from_default_profile_readonly(self):
+        os.environ.pop("DOUBAO_WORK_DIR")
+        profile = Path(self.env["LOCALAPPDATA"]) / "DoubaoWork/Default"
+        workspace = profile / doubao.WORKSPACE_SUFFIX
+        session_id = str(uuid.uuid4())
+        trajectory = workspace / ".sessions" / session_id / "agents/main/system/trajectory.jsonl"
+        trajectory.parent.mkdir(parents=True)
+        trajectory.write_text('\n'.join(json.dumps(record) for record in [
+            {"role": "user", "content": "Synthetic Mac Doubao question"},
+            {"role": "assistant", "content": "Synthetic Mac Doubao answer"}]), encoding="utf-8")
+        before = trajectory.read_bytes()
+        self.assertTrue(sources.installed("doubao_work"))
+        self.assertEqual(sources._doubao_base(), profile)
+        snapshots = {"conversation-list-data-non-project-v2": {"conversations": [
+            {"conversation_id": session_id, "name": "Synthetic Mac Doubao task"}]}}
+        with patch.object(sources, "_doubao_snapshots", return_value=snapshots):
+            session = sources.doubao_groups()[0]["sessions"][0]
+        self.assertTrue(session["movable"])
+        details = {}
+        result = mover.move_one("doubao_work", session, "claude_code", str(self.directory), details)
+        self.assertEqual(result[0], "ok", result)
+        output = self.base / "doubao-reread.json"
+        exported = mover._run(["export", details["importedId"], "--from", "claude_code", "--out", str(output)], mover.destination_env("claude_code"))
+        self.assertEqual(exported.returncode, 0)
+        document = json.loads(output.read_text())
+        self.assertIn("Synthetic Mac Doubao question", json.dumps(document))
+        self.assertIn("Synthetic Mac Doubao answer", json.dumps(document))
+        self.assertEqual(trajectory.read_bytes(), before)
+        self.assertEqual(list(trajectory.parent.iterdir()), [trajectory])
 
 
 if __name__ == "__main__":

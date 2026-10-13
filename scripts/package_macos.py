@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import platform
 import shutil
 import subprocess
@@ -40,8 +41,13 @@ def main() -> None:
     subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app)], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     launcher = app / "Contents" / "MacOS" / "AI First Tools"
-    for flag in ("--self-test", "--smoke-test"):
-        subprocess.run([str(launcher), flag, "--report", str(output / (flag.removeprefix("--") + ".json"))], check=True, timeout=120)
+    for flag in ("--self-test", "--smoke-test", "--network-test"):
+        environment = os.environ.copy()
+        if flag == "--network-test":
+            environment["SSL_CERT_FILE"] = str(output / "no-host-python-ca.pem")
+            environment["SSL_CERT_DIR"] = str(output / "no-host-python-ca")
+        subprocess.run([str(launcher), flag, "--report", str(output / (flag.removeprefix("--") + ".json"))],
+                       check=True, timeout=120, env=environment)
     version = json.loads((ROOT / "macos" / "version.json").read_text(encoding="utf-8"))["release"]
     staging = output / "dmg-content"
     staging.mkdir(exist_ok=True)

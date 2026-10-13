@@ -44,19 +44,18 @@ class MacApi(Api):
         if not self._update_lock.acquire(blocking=False):
             return {"error": "正在检查更新，请稍等。"}
         try:
+            self._release = None
             result = updates.check(version_info()["release"])
             self._release = result.get("url")
             return result
-        except (OSError, ValueError, TypeError):
-            return {"error": "暂时无法连接 GitHub，您可以继续使用，稍后再检查。"}
+        except (OSError, ValueError, TypeError, ImportError) as error:
+            return updates.failure(error)
         finally:
             self._update_lock.release()
 
     def open_update(self) -> dict:
-        if self._release is None:
-            return {"error": "请先检查更新。"}
         try:
-            open_external(self._release)
+            open_external(self._release or updates.DOWNLOADS_URL)
             return {"ok": True}
         except (OSError, subprocess.SubprocessError):
             return {"error": "无法打开浏览器，请到本项目的 GitHub 发布页面下载。"}
@@ -72,6 +71,25 @@ def self_check(report: Path) -> bool:
     passed = all(checks.values())
     report.write_text(json.dumps({"passed": passed, "checks": checks, "version": info, "architecture": platform.machine(),
                                   "scope": "bundle resources and native engine; no real conversation access"}, indent=2), encoding="utf-8")
+    return passed
+
+
+def network_check(report: Path) -> bool:
+    checks = {}
+    try:
+        context = updates.tls_context()
+        checks["verifiedTls"] = context.verify_mode == updates.ssl.CERT_REQUIRED and context.check_hostname
+        result = updates.check(version_info()["release"])
+        checks["githubReleaseFeed"] = isinstance(result.get("available"), bool)
+        checks["nativeSystemProxy"] = __import__("_scproxy") is not None
+        error = None
+    except (OSError, ValueError, TypeError, ImportError) as exception:
+        error = updates.failure(exception)["errorCode"]
+    passed = error is None and bool(checks) and all(checks.values())
+    report.parent.mkdir(parents=True, exist_ok=True)
+    report.write_text(json.dumps({"passed": passed, "checks": checks, "errorCode": error,
+                                  "architecture": platform.machine(), "version": version_info(),
+                                  "scope": "frozen HTTPS with native macOS trust and proxy support; public GitHub feed only"}, indent=2), encoding="utf-8")
     return passed
 
 
@@ -108,14 +126,17 @@ def run() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--smoke-test", action="store_true")
+    parser.add_argument("--network-test", action="store_true")
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("This entry point runs on macOS. Windows uses workspace/AIFirst.Workspace.csproj.")
-    if (args.self_test or args.smoke_test) and args.report is None:
+    if (args.self_test or args.smoke_test or args.network_test) and args.report is None:
         parser.error("Tests require --report")
     if args.self_test:
         return 0 if self_check(args.report) else 1
+    if args.network_test:
+        return 0 if network_check(args.report) else 1
     with tempfile.TemporaryDirectory(prefix="ai-first-macos-") as temporary:
         if args.smoke_test:
             isolate_profile(Path(temporary))

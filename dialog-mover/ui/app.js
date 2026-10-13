@@ -654,7 +654,7 @@
       groups.forEach((group) => (allFolded ? fold.delete(groupKey(group)) : fold.add(groupKey(group))));
       renderList();
     });
-    $("#reload").addEventListener("click", () => state.current && open(state.current, true));
+    $("#reload").addEventListener("click", refresh);
     $("#bar-clear").addEventListener("click", () => { state.selected = new Set(); updateBar(); renderList(); });
     $("#bar-go").addEventListener("click", openSheet);
     $("#sheet").addEventListener("click", (event) => { if (event.target.closest("[data-close]")) closeSheet(); });
@@ -668,8 +668,7 @@
     });
   }
 
-  async function boot() {
-    wire();
+  async function discoverAgents() {
     const info = await call("agents");
     state.agents = info.agents;
     state.agents.forEach((agent) => { agent.full = state.agents.filter((item) => item.name === agent.name).length > 1 ? `${agent.name} ${agent.sub}` : agent.name; });
@@ -677,12 +676,41 @@
     state.targets.forEach((agent) => { agent.full = state.targets.filter((item) => item.name === agent.name).length > 1 ? `${agent.name} ${agent.sub}` : agent.name; });
     state.unsupported = info.unsupported || [];
     renderRail();
+    return info;
+  }
+
+  async function refresh() {
+    const button = $("#reload");
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      const info = await discoverAgents();
+      if (!info.ready) {
+        $("#list").innerHTML = '<div class="empty"><b>缺少搬运组件</b>请重新安装本软件。</div>';
+        return;
+      }
+      const current = state.agents.find((agent) => agent.id === state.current) || state.agents[0];
+      if (current) await open(current.id, true);
+      else {
+        state.current = null;
+        state.selected = new Set();
+        updateBar();
+        $("#list").innerHTML = '<div class="empty"><b>还没发现支持的本机记录</b>在来源软件中产生记录后，点右上角刷新再试。</div>';
+      }
+    } catch {
+      $("#list").innerHTML = '<div class="empty"><b>刷新没有成功</b>请稍后再试，不会使用演示数据替代您的记录。</div>';
+    } finally { button.disabled = false; }
+  }
+
+  async function boot() {
+    wire();
+    const info = await discoverAgents();
     if (!info.ready) {
       $("#list").innerHTML = '<div class="empty"><b>缺少搬运组件</b>请重新安装本软件。</div>';
       return;
     }
     if (!state.agents.length) {
-      $("#list").innerHTML = '<div class="empty"><b>没有发现已安装的软件</b>安装并用过 Cursor、WorkBuddy 等之后再打开。</div>';
+      $("#list").innerHTML = '<div class="empty"><b>还没发现支持的本机记录</b>在来源软件中产生记录后，点右上角刷新再试。</div>';
       return;
     }
     await open(state.agents[0].id);

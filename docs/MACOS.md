@@ -4,7 +4,7 @@ Mac 预览版通过 GitHub 发布，不上苹果商店，不使用 Developer ID 
 
 ## 下载与安装
 
-[Mac 发布页](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.1)
+[Mac 发布页](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.2)
 
 1. 苹果 M 系列选 `macos-arm64.dmg`；Intel Mac 选 `macos-x86_64.dmg`。苹果菜单 → 关于本机可以查看芯片类型。
 2. 打开 DMG，把「AI一手工具工作台」拖到「Applications / 应用程序」。
@@ -25,6 +25,7 @@ Mac 预览版通过 GitHub 发布，不上苹果商店，不使用 Developer ID 
 ## 更新与卸载
 
 - 启动后后台检查 GitHub，也可点「检查更新」；只查询公开版本，不上传对话、认证或本机路径。
+- preview.2 使用 Mac 系统证书与系统代理，不要求电脑另外安装 Python 的证书。连接失败会区分超时、证书、地址解析或限流，并提供「打开下载页」，不把失败说成已经最新。
 - 有新版点「下载新版」，下载对应架构 DMG。等搬运完成、退出后拖入应用程序替换。
 - **Mac 首版是提醒与下载入口，尚无 Windows 式自动覆盖更新。** 不强停任务、不删除 Agent 数据。
 - 卸载只把工作台移到废纸篓，不需要删除其他 AI 软件的记录。
@@ -36,7 +37,10 @@ Mac 用一个 Cocoa/WebKit 窗口直接显示工作台和工具，不启动另�
 - 适配 Application Support、POSIX 路径、原生引擎、打开文件夹和本机任务链接。
 - 目标按本机数据与原生结构检查，不因移植伪造支持。ChatGPT 本机 Work/Codex 与云端分开，Claude Cowork/Claude Code 与普通聊天分开。
 - 豆包、Hermes、普通云端聊天不作为可写目标；OpenCode 需要另有原生 CLI，不偷偷安装。
+- 豆包工作从 Mac 的 `~/Library/Application Support/DoubaoWork/Default/` 读取会话列表和本机轨迹，修复首版误用 Windows 的 `User Data/Default/`。只有本机存在的任务能搬出；纯云端对话仍不可搬运。打开来源软件后可以点右上角刷新，重新寻找来源，无需重启工作台。
 - 不迁移项目文件、附件、登录状态、模型权限和运行环境。
 - **回读通过不等于所有原生软件实际显示和下一轮对话通过。** 见 [测试记录](MACOS-QA.md)。
 
 反馈提供软件版本、Mac 系统/芯片、来源/目标版本、步骤和脱敏截图。不要上传聊天、完整个人路径、数据库或令牌。
+
+如果旧版「检查更新」无法连接，请直接到上面的发布页下载新版，等搬运结束、退出工作台后替换应用。如果新版仍提示连接失败，反馈完整提示文字即可；浏览器也无法打开 GitHub 时，需要先检查本机网络，应用不能保证绕过网络限制。
