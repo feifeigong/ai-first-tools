@@ -238,6 +238,11 @@ def isolate_profile(scratch: Path) -> None:
         os.environ[name] = str(scratch / name.lower())
 
 
+def start_cocoa(worker) -> None:
+    webview.settings["DEFAULT_HTTP_PORT"] = None
+    webview.start(worker, gui="cocoa", private_mode=False)
+
+
 def run() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
@@ -275,7 +280,7 @@ def run() -> int:
             api.bind(window)
             window.events.closing += lambda: window.evaluate_js("window.aiFirstBusyNotice && window.aiFirstBusyNotice()") if not api.can_close() else None
             worker = (lambda: smoke_check(window, args.report)) if args.smoke_test else None
-            webview.start(worker, gui="cocoa", private_mode=True)
+            start_cocoa(worker)
     if args.smoke_test:
         return 0 if args.report.is_file() and json.loads(args.report.read_text(encoding="utf-8")).get("passed") else 1
     return 0

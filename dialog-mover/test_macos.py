@@ -219,6 +219,16 @@ class MacUpdatesTests(unittest.TestCase):
 
 
 class MacResourceTests(unittest.TestCase):
+    def test_cocoa_start_does_not_clear_shared_webkit_data_or_force_a_fixed_port(self):
+        import entry
+
+        worker = Mock()
+        with patch.object(entry.webview, "settings", dict(entry.webview.settings)), patch.object(entry.webview, "start") as start:
+            entry.start_cocoa(worker)
+            start.assert_called_once_with(worker, gui="cocoa", private_mode=False)
+            self.assertIsNone(entry.webview.settings["DEFAULT_HTTP_PORT"])
+            self.assertFalse(entry.webview.settings["IGNORE_SSL_ERRORS"])
+
     def test_release_staging_leaves_missing_or_published_versions_untouched(self):
         import stage_macos_release
 
