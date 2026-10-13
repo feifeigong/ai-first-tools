@@ -39,7 +39,9 @@ def main() -> None:
     if draft is None or draft.get("draft") is not True:
         print("No matching draft; published packages left unchanged")
         return
-    subprocess.run(["gh", "release", "edit", tag, "--repo", REPOSITORY, "--target", arguments.commit], check=True)
+    reference = json.loads(subprocess.run(["gh", "api", f"repos/{REPOSITORY}/git/ref/tags/{tag}"], check=True, capture_output=True, text=True).stdout)
+    if reference.get("object", {}).get("type") != "commit" or reference["object"]["sha"] != arguments.commit:
+        raise ValueError("Prepare a lightweight release tag at the verified build commit")
     subprocess.run(["gh", "release", "upload", tag, "--repo", REPOSITORY, "--clobber", *map(str, [*assets, sums])], check=True)
     print("Verified Windows packages staged; release remains a draft")
 

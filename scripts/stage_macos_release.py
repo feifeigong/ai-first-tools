@@ -63,8 +63,10 @@ def main() -> None:
     if draft is None or draft.get("draft") is not True:
         print("No matching draft; published releases left unchanged")
         return
+    reference = json.loads(subprocess.run(["gh", "api", f"repos/{REPOSITORY}/git/ref/tags/{tag}"], check=True, capture_output=True, text=True).stdout)
+    if reference.get("object", {}).get("type") != "commit" or reference["object"]["sha"] != arguments.commit:
+        raise ValueError("Prepare a lightweight release tag at the verified build commit")
     assets = validated_assets(arguments.artifacts, release)
-    subprocess.run(["gh", "release", "edit", tag, "--repo", REPOSITORY, "--target", arguments.commit], check=True)
     subprocess.run(["gh", "release", "upload", tag, "--repo", REPOSITORY, "--clobber", *map(str, assets)], check=True)
     print("Validated assets staged; release remains a draft")
 
