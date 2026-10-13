@@ -14,9 +14,11 @@
 
 ### Mac 版
 
-**[⬇ Mac 预览版下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.1)**
+**[⬇ Mac 预览版下载（preview.2 修复版）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.2)**
 
 苹果 M 系列选 `macos-arm64.dmg`，Intel Mac 选 `macos-x86_64.dmg`。打开 DMG，拖到「应用程序」，之后直接打开，不需要源码或开发环境。
+
+preview.2 修复 Mac 豆包工作不显示，改进更新连接的系统证书兼容和失败提示；旧版检查更新失败时，可直接从上方下载新版替换。连接失败会给出具体提示和下载页入口，仍取决于本机网络。
 
 ![Mac 工作台布局预览](docs/assets/macos-preview.png)
 

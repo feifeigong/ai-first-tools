@@ -51,6 +51,7 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 - OpenCode 需额外原生 CLI，这批文件型目标检查不包括它。
 - 冻结包 `--self-test` 验证资源与引擎；`--smoke-test` 在空用户目录打开真实 Cocoa 窗口，验证 WebKit/Python 桥、侧栏和 API。
 - preview.2 新增冻结包 `--network-test`：在不存在的 Python CA 路径环境中，用系统 Keychain 验证 HTTPS、读取本项目公开 GitHub 发布列表；失败阻止 DMG 发布，不记录代理地址/认证/环境。
+- CI 仅给打包步骤提供一次性只读 `AI_FIRST_CI_UPDATE_TOKEN`，只由 `--network-test` 显式传入请求，报告仅记录是否使用授权。普通更新不会读取此变量或 GH_TOKEN，安装包不包含授权，用户无需配置令牌。这样避免公共 runner IP 的匿名查询限流，不绕过 TLS 或把网络失败当通过。
 - `test_doubao` 覆盖 Mac Default、Windows/旧布局、自定义工作区、仅云端缓存、空账户和导出路径一致性。原生测试新增合成本机豆包轨迹 → Claude Code → 回读，保持源文件不变；会话列表快照为合成替身，不表示真实豆包版本已人工验收。
 - JSON 在 `artifacts/macos/<架构>/` 和 Actions 产物；不是所有原生目标软件的人工测试，没有发下一轮模型消息。
 
@@ -87,10 +88,12 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 
 ## 发布维护
 
-- macos/version.json 当前准备版本为 0.4.0-macos-preview.2；公开资产是否发布以 Releases 和 MACOS-QA.md 为准。
+- macos/version.json 当前版本为 0.4.0-macos-preview.2；两架构修复包通过原生检查，构建源码 `8674f6f`，链接和校验见 MACOS-QA.md。公开资产以 Releases 为准，后续文档提交不表示重新打包。
 - 首批两架构包构建源码为 `2b49c7f`，Mac/Windows CI 均通过；构建链接、SHA-256 和未验收项见 MACOS-QA.md。后续只整理交接文档，不能把文档提交说成重做了安装包。
 - 两架构 DMG 名称 `AI-First-Tools-<release>-macos-<architecture>.dmg`，附 SHA-256。
 - CI/报告通过才发布下载包；源码提交不等于已发布应用。
+- 发布前先准备与 macos/version.json 同版本的 GitHub 草稿。两架构构建都成功后，stage-release 校验 DMG 哈希、三类报告、版本和架构，再上传 9 个资产并关联构建提交；草稿仍不公开。独立下载核对报告与上传资产的 digest、补齐本文件和 QA 后才手动公开。
+- scripts/stage_macos_release.py 只处理已有匹配草稿；草稿不存在或已发布就跳过，禁止自动覆盖公开版本。失败的构建不会进入上传步骤。
 - 更新拒绝草稿/旧版本/错误域名/不匹配架构。
 - 不加 xattr 解锁脚本，不关闭 Gatekeeper，不宣称苹果审核。
 - Windows 与 Mac 的下载和更新能力分开说明。
