@@ -1,0 +1,96 @@
+name: Windows release packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-release-packages
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install packaging dependencies
+        run: python -m pip install -r dialog-mover/requirements-dev.txt
+      - name: Reuse only the verified engine from the identical source tree
+        shell: pwsh
+        run: |
+          if ((git rev-parse v0.3.6:txcript) -ne (git rev-parse HEAD:txcript)) { throw 'Engine source changed; build and validate a new native engine instead of reusing this binary.' }
+          New-Item -ItemType Directory -Force artifacts/build-tools,dialog-mover/bin | Out-Null
+          Invoke-WebRequest 'https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.6/AI-First-Tools-Portable-0.3.6-win-x64.zip' -OutFile artifacts/build-tools/previous.zip
+          if ((Get-FileHash artifacts/build-tools/previous.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '5b8bbd50156e162d3961358f2daa49847f4224db0ce3257c16fcd93f4866aedd') { throw 'Previous release digest mismatch' }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip=[IO.Compression.ZipFile]::OpenRead((Resolve-Path artifacts/build-tools/previous.zip))
+          try {
+            $entry=$zip.GetEntry('AI-First-Tools/tools/dialog-mover-v0.3/_internal/bin/txcript.exe')
+            if (!$entry) { throw 'Verified engine is missing' }
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($entry,(Join-Path $PWD 'dialog-mover/bin/txcript.exe'))
+          } finally { $zip.Dispose() }
+          if ((Get-FileHash dialog-mover/bin/txcript.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne '799b80dff7ba44cb05f1a92ed5f64a4969ffefc5ad7b3566600ed88adaaaacd2') { throw 'Engine digest mismatch' }
+      - name: Get official installer tools
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://sourceforge.net/projects/nsis/files/NSIS%203/3.12/nsis-3.12.zip/download' -OutFile artifacts/build-tools/nsis.zip
+          if ((Get-FileHash artifacts/build-tools/nsis.zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne '56581f90db321581c5381193d796fffcf2d24b2f8fed2160a6c6a3baa67f2c4f') { throw 'NSIS digest mismatch' }
+          Expand-Archive artifacts/build-tools/nsis.zip artifacts/build-tools/nsis
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile artifacts/build-tools/MicrosoftEdgeWebview2Setup.exe
+      - name: Freeze mover and package Windows application
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+          Push-Location dialog-mover
+          python -m PyInstaller --noconfirm --distpath ../artifacts/windows/mover --workpath ../artifacts/windows/build 对话搬家.spec
+          if ($LASTEXITCODE) { throw 'Mover freezing failed' }
+          Pop-Location
+          $version=([xml](Get-Content workspace/AIFirst.Workspace.csproj -Raw)).Project.PropertyGroup.Version
+          ./scripts/package.ps1 -Version $version -Python python -MoverPackage (Join-Path $PWD 'artifacts/windows/mover/对话搬家') -AnalysisToc (Join-Path $PWD 'artifacts/windows/build/对话搬家/Analysis-00.toc') -NsisDirectory (Join-Path $PWD 'artifacts/build-tools/nsis/nsis-3.12') -WebViewBootstrapper (Join-Path $PWD 'artifacts/build-tools/MicrosoftEdgeWebview2Setup.exe')
+      - name: Audit silent install, reinstall, self checks and safe uninstall
+        shell: pwsh
+        run: |
+          $version=([xml](Get-Content workspace/AIFirst.Workspace.csproj -Raw)).Project.PropertyGroup.Version
+          $setup=Resolve-Path "artifacts/release/AI-First-Tools-Setup-$version.exe"
+          $target=Join-Path $env:LOCALAPPDATA 'Programs/AI First Tools'
+          if (Test-Path -LiteralPath $target) { throw 'Audit requires an unused installation directory' }
+          $install=Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
+          if ($install.ExitCode -ne 0) { throw 'Silent installation failed' }
+          $app=Join-Path $target 'AI一手工具工作台.exe'
+          $report=Join-Path $PWD 'artifacts/windows/installed-self-test.json'
+          $test=Start-Process -FilePath $app -ArgumentList @('--self-test','--report',$report) -Wait -PassThru -WindowStyle Hidden
+          $checks=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($test.ExitCode -ne 0 -or $checks.failed -ne 0) { throw 'Installed workspace checks failed' }
+          $manifest=Get-Content (Join-Path $target 'update-manifest.json') -Raw | ConvertFrom-Json
+          if ($manifest.version -ne $version) { throw 'Installed manifest version mismatch' }
+          if ((Get-ItemProperty 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/AIFirstTools').DisplayVersion -ne $version) { throw 'Installation registry version mismatch' }
+          $extra=Join-Path $target 'synthetic-user-note.txt'
+          Set-Content -LiteralPath $extra -Value 'synthetic extra file must survive'
+          $reinstall=Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
+          if ($reinstall.ExitCode -ne 0 -or (Get-Content -LiteralPath $extra -Raw).Trim() -ne 'synthetic extra file must survive') { throw 'Silent reinstall or extra-file protection failed' }
+          $uninstall=Start-Process -FilePath (Join-Path $target 'Uninstall.exe') -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
+          $deadline=(Get-Date).AddSeconds(30)
+          while ((Test-Path -LiteralPath $app) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 250 }
+          if ($uninstall.ExitCode -ne 0 -or (Test-Path -LiteralPath $app) -or !(Test-Path -LiteralPath $extra)) { throw 'Uninstall protection failed' }
+          @{ passed=$true; checks=@{ silentInstall=$true; silentReinstall=$true; installedSelfChecks=$true; installedVersion=$true; extraFilePreserved=$true; safeUninstall=$true }; version=$version; scope='Clean GitHub Windows runner, real installer, synthetic extra file; no user installation or Agent data' } | ConvertTo-Json -Depth 4 | Set-Content artifacts/windows/installer-test.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-release
+          path: |
+            artifacts/release/*
+            artifacts/windows/*test.json
+      - name: Stage verified packages in existing draft only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/stage_windows_release.py --commit "$env:GITHUB_SHA"

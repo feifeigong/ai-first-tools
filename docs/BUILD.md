@@ -47,6 +47,8 @@ dotnet build workspace\AIFirst.Workspace.csproj -c Release
 
 生成安装包、免安装 ZIP 与 SHA-256 校验文件，位于 `artifacts/release/`。工作台以自带 .NET 的方式发布，迁移引擎旁也带所需 Visual C++ 运行库；原应用源码和引擎不因打包而改写。
 
+维护者也可准备同版本草稿，再手动运行 GitHub Actions 的 Windows release packages。流水线打包、在干净 runner 测静默安装/重复覆盖/自检/卸载和额外文件保护，全部通过才上传到已有草稿，不自动公开。当前只在 txcript 源码树与 v0.3.6 完全相同时复用其本项目原生引擎，并校验发布 ZIP 和 EXE 哈希；引擎源码有变化会拒绝复用，须编译、验证并更新此构建步骤，不能拿上游原版替换。
+
 安装器只在当前用户的固定程序目录写入，运行时拒绝更新/卸载，不强制结束搬运。卸载按生成的文件清单逐个删除，不递归清空任意目录，也不删除用户新增文件或 Agent 历史。
 
 v0.3.7 起打包脚本生成 `update-manifest.json`，逐个登记程序文件、大小与 SHA-256。不要在生成清单之后修改程序文件。安装包和 ZIP 均须与同次构建的 `SHA256SUMS.txt` 一起发布；GitHub 上传后还会提供各资产的 SHA-256 digest。发布操作与更新测试见 [UPDATES.md](UPDATES.md)。
