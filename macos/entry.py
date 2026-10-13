@@ -23,7 +23,7 @@ if not getattr(sys, "frozen", False):
 
 import webview
 
-from core import mover
+from core import common, mover
 from core.common import appdata, open_external
 from main import Api
 import updates
@@ -229,11 +229,13 @@ def smoke_check(window, report: Path) -> None:
 
 
 def isolate_profile(scratch: Path) -> None:
-    for name in ("HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "COWORK_SESSIONS_DIR",
+    common._isolated_home = scratch / "home"
+    common._isolated_home.mkdir()
+    updater._audit_state = scratch / "updates"
+    for name in ("USERPROFILE", "APPDATA", "LOCALAPPDATA", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "COWORK_SESSIONS_DIR",
                  "WORKBUDDY_DIR", "WORKBUDDY_AI_DIR", "QWENWORK_DIR", "DOUBAO_WORK_DIR", "CURSOR_DESKTOP_USER_DIR",
                  "HERMES_HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
         os.environ[name] = str(scratch / name.lower())
-    Path(os.environ["HOME"]).mkdir()
 
 
 def run() -> int:

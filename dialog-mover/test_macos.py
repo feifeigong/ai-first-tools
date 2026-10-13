@@ -27,12 +27,26 @@ class MacPathsTests(unittest.TestCase):
     def test_smoke_profile_is_empty_without_initializing_destination_stores(self):
         from entry import isolate_profile
         from main import AGENTS
+        import updater
 
-        with tempfile.TemporaryDirectory() as temporary, patch.object(sys, "platform", "darwin"), patch.dict(os.environ, {}, clear=True):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(sys, "platform", "darwin"), patch.dict(os.environ, {}, clear=True), patch.object(common, "_isolated_home", None), patch.object(updater, "_audit_state", None):
             isolate_profile(Path(temporary))
             self.assertTrue(common.home().is_dir())
             self.assertFalse(Path(os.environ["COWORK_SESSIONS_DIR"]).exists())
             self.assertFalse(any(sources.installed(agent["id"]) for agent in AGENTS))
+
+    def test_smoke_isolates_records_and_receipts_without_changing_native_home(self):
+        from entry import isolate_profile
+        import updater
+
+        with tempfile.TemporaryDirectory() as temporary, patch.object(sys, "platform", "darwin"), patch.dict(os.environ, {"HOME": "/Users/native-test"}, clear=True), patch.object(common, "_isolated_home", None), patch.object(updater, "_audit_state", None):
+            scratch = Path(temporary)
+            isolate_profile(scratch)
+            self.assertEqual(os.environ["HOME"], "/Users/native-test")
+            self.assertEqual(common.home(), scratch / "home")
+            self.assertEqual(common.appdata(), scratch / "appdata")
+            self.assertEqual(updater.state_root(), scratch / "updates")
+            self.assertIsNone(common.codex_home())
 
     def test_application_support_not_windows_appdata(self):
         with patch.object(sys, "platform", "darwin"), patch.dict(os.environ, {"HOME": "/Users/test", "USERPROFILE": "C:/wrong"}, clear=True):

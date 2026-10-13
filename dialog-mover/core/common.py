@@ -10,8 +10,12 @@ import time
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+_isolated_home: Path | None = None
+
 
 def home() -> Path:
+    if _isolated_home is not None:
+        return _isolated_home
     if sys.platform != "win32":
         return Path(os.environ.get("HOME") or Path.home())
     return Path(os.environ.get("USERPROFILE") or Path.home())
