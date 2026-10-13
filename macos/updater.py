@@ -298,6 +298,7 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
     previous = candidate
     state_root().mkdir(parents=True, exist_ok=True)
     receipt = state_root() / "result.json"
+    phase = "validation"
     try:
         snapshot = target.stat()
         if snapshot.st_dev != data["device"] or snapshot.st_ino != data["inode"] or backup.exists():
@@ -306,20 +307,24 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
         validate_app(candidate, data["version"], data["architecture"])
         if fingerprint(target) != data["originalDigest"] or fingerprint(candidate) != data["candidateDigest"]:
             raise UpdateError("应用在下载后发生变化，更新没有执行。")
+        phase = "preflight"
         probe = directory / "probe.json"
         environment = {**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"}
         subprocess.run([str(candidate / "Contents/MacOS" / EXECUTABLE), "--self-test", "--report", str(probe)],
                        check=True, timeout=60, capture_output=True, env=environment)
         if json.loads(probe.read_text()).get("passed") is not True:
             raise UpdateError("新版启动自检未通过。")
+        phase = "replacement"
         atomic_swap(target, candidate)
         moved = True
+        phase = "backup"
         candidate.rename(backup)
         previous = backup
         write_json(receipt, {"success": True, "version": data["version"], "message": f"已更新到 {data['version']}，原来的对话与设置保留。"})
+        phase = "relaunch"
         (relaunch or (lambda app: command(["/usr/bin/open", "-n", str(app)])))(target)
         return True
-    except Exception:
+    except Exception as error:
         restored = False
         if moved:
             try:
@@ -331,7 +336,8 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
                     pass
             except OSError:
                 pass
-        write_json(receipt, {"success": False, "version": data["current"], "message": "更新没有完成，已恢复旧版。" if restored else "更新没有完成，旧版或备份仍保留。请检查文件权限后重试。"})
+        write_json(receipt, {"success": False, "version": data["current"], "phase": phase, "errorCode": type(error).__name__,
+                             "message": "更新没有完成，已恢复旧版。" if restored else "更新没有完成，旧版或备份仍保留。请检查文件权限后重试。"})
         if not moved or restored:
             try:
                 (relaunch or (lambda app: command(["/usr/bin/open", "-n", str(app)])))(target)
@@ -370,6 +376,7 @@ def _wait_and_replace(job: Path, data: dict) -> int:
         except ProcessLookupError:
             break
         if time.monotonic() >= deadline:
+            write_json(state_root() / "result.json", {"success": False, "version": data["current"], "phase": "parent_exit", "errorCode": "timeout", "message": "软件尚未关闭，本次更新没有执行。"})
             return 1
         time.sleep(0.25)
     audit = data.get("audit") is True
@@ -428,6 +435,8 @@ def audit_update(app: Path, report: Path) -> None:
                       "backupPreserved": (directory / "backup.app").is_dir(),
                       "version": json.loads((target / "Contents/Resources/version.json").read_text())["release"] == version}
             report.write_text(json.dumps({"passed": all(checks.values()), "checks": checks, "version": {"release": version},
+                                          "diagnostics": {"phase": outcome.get("phase"), "errorCode": outcome.get("errorCode"), "helperReturnCode": worker.returncode,
+                                                          "preflightReport": (directory / "probe.json").is_file(), "receipt": receipt.is_file()},
                                           "architecture": platform.machine(), "scope": "frozen helper, isolated app copies, atomic replacement and Cocoa relaunch; no installed app or real records"}, indent=2))
         finally:
             if original_home is None:
