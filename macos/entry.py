@@ -213,6 +213,15 @@ def smoke_check(window, report: Path) -> None:
     except Exception as error:
         result = {"passed": False, "error": type(error).__name__,
                   "checks": {"windowShown": window.events.shown.is_set(), "pageLoaded": window.events.loaded.is_set()}}
+        try:
+            from urllib.request import ProxyHandler, build_opener
+
+            if window.real_url.startswith("http://127.0.0.1:"):
+                with build_opener(ProxyHandler({})).open(window.real_url, timeout=5) as response:
+                    result["diagnostics"] = {"localPageStatus": response.status, "localPageBytes": len(response.read(1024 * 1024)),
+                                             "bridgeInjectionStarted": window.events.before_load.is_set()}
+        except Exception as diagnostic:
+            result["diagnostics"] = {"localPageError": type(diagnostic).__name__}
     finally:
         report.parent.mkdir(parents=True, exist_ok=True)
         report.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -259,7 +268,7 @@ def run() -> int:
             except BlockingIOError:
                 return 0
             api = MacApi(args.smoke_test)
-            window = webview.create_window("AI一手工具工作台", str(ROOT / "ui" / "index.html"), js_api=api,
+            window = webview.create_window("AI一手工具工作台", str((ROOT / "ui" / "index.html").resolve()), js_api=api,
                                            width=1280, height=820, min_size=(960, 640), background_color="#F6F8FB", text_select=False)
             api.bind(window)
             window.events.closing += lambda: window.evaluate_js("window.aiFirstBusyNotice && window.aiFirstBusyNotice()") if not api.can_close() else None

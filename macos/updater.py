@@ -23,6 +23,7 @@ import updates
 APP_NAME = "AI一手工具工作台.app"
 EXECUTABLE = "AI First Tools"
 MAX_PACKAGE = 512 * 1024 * 1024
+_audit_state = None
 
 
 class UpdateError(Exception):
@@ -34,7 +35,7 @@ class Cancelled(UpdateError):
 
 
 def state_root() -> Path:
-    return Path.home() / "Library/Application Support/AI一手工具工作台/updates"
+    return _audit_state or Path.home() / "Library/Application Support/AI一手工具工作台/updates"
 
 
 def running_bundle() -> Path:
@@ -362,6 +363,7 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
 
 
 def helper_main() -> int:
+    global _audit_state
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply-update", type=Path, required=True)
     arguments = parser.parse_args()
@@ -371,6 +373,11 @@ def helper_main() -> int:
     data = read_job(job)
     if Path(sys.executable).resolve() != (job.parent / "helper.app/Contents/MacOS" / EXECUTABLE).resolve():
         raise UpdateError("更新程序位置不匹配。")
+    if data.get("audit") is True:
+        target = Path(data["target"])
+        if not target.parent.name.startswith("ai-first-update-audit-") or not target.resolve().is_relative_to(Path(tempfile.gettempdir()).resolve()):
+            raise UpdateError("隔离检查不允许更新真实安装位置。")
+        _audit_state = target.parent / "isolated-state/updates"
     import fcntl
 
     state_root().mkdir(parents=True, exist_ok=True)
@@ -445,24 +452,17 @@ def audit_update(app: Path, report: Path) -> None:
         data.update({"parentPid": blocker.pid, "audit": True})
         write_json(job, data)
         threading.Thread(target=blocker.wait, daemon=True).start()
-        original_home = os.environ.get("HOME")
-        os.environ["HOME"] = str(root / "isolated-home")
-        try:
-            worker = start_helper(job)
-            worker.wait(timeout=180)
-            receipt = state_root() / "result.json"
-            outcome = json.loads(receipt.read_text()) if receipt.is_file() else {}
-            relaunched = json.loads((directory / "relaunch.json").read_text()) if (directory / "relaunch.json").is_file() else {}
-            checks = {"replacement": worker.returncode == 0 and outcome.get("success") is True, "nativeRelaunch": relaunched.get("passed") is True,
-                      "backupPreserved": (directory / "backup.app").is_dir(),
-                      "version": json.loads((target / "Contents/Resources/version.json").read_text())["release"] == version}
-            report.write_text(json.dumps({"passed": all(checks.values()), "checks": checks, "version": {"release": version},
-                                          "diagnostics": {"phase": outcome.get("phase"), "errorCode": outcome.get("errorCode"), "helperReturnCode": worker.returncode,
-                                                          "preflightReport": (directory / "probe.json").is_file(), "receipt": receipt.is_file(),
-                                                          "relaunchChecks": relaunched.get("checks"), "relaunchError": relaunched.get("error")},
-                                          "architecture": platform.machine(), "scope": "frozen helper, isolated app copies, atomic replacement and Cocoa relaunch; no installed app or real records"}, indent=2))
-        finally:
-            if original_home is None:
-                os.environ.pop("HOME", None)
-            else:
-                os.environ["HOME"] = original_home
+        worker = start_helper(job)
+        worker.wait(timeout=180)
+        receipt = root / "isolated-state/updates/result.json"
+        outcome = json.loads(receipt.read_text()) if receipt.is_file() else {}
+        relaunched = json.loads((directory / "relaunch.json").read_text()) if (directory / "relaunch.json").is_file() else {}
+        checks = {"replacement": worker.returncode == 0 and outcome.get("success") is True, "nativeRelaunch": relaunched.get("passed") is True,
+                  "backupPreserved": (directory / "backup.app").is_dir(),
+                  "version": json.loads((target / "Contents/Resources/version.json").read_text())["release"] == version}
+        report.write_text(json.dumps({"passed": all(checks.values()), "checks": checks, "version": {"release": version},
+                                      "diagnostics": {"phase": outcome.get("phase"), "errorCode": outcome.get("errorCode"), "helperReturnCode": worker.returncode,
+                                                      "preflightReport": (directory / "probe.json").is_file(), "receipt": receipt.is_file(),
+                                                      "relaunchChecks": relaunched.get("checks"), "relaunchError": relaunched.get("error"),
+                                                      "relaunchDiagnostics": relaunched.get("diagnostics")},
+                                      "architecture": platform.machine(), "scope": "frozen helper, isolated app copies, atomic replacement and Cocoa relaunch; no installed app or real records"}, indent=2))
