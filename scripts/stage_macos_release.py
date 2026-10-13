@@ -54,12 +54,14 @@ def main() -> None:
     root = Path(__file__).resolve().parent.parent
     release = json.loads((root / "macos/version.json").read_text())["release"]
     tag = f"v{release}"
-    command = ["gh", "release", "view", tag, "--repo", REPOSITORY, "--json", "isDraft"]
-    draft = subprocess.run(command, capture_output=True, text=True)
-    if draft.returncode != 0:
-        raise RuntimeError("Cannot verify the existing release draft")
-    if not json.loads(draft.stdout).get("isDraft"):
-        print("Published release left unchanged")
+    command = ["gh", "api", f"repos/{REPOSITORY}/releases?per_page=100"]
+    response = subprocess.run(command, capture_output=True, text=True, check=True)
+    releases = json.loads(response.stdout)
+    if not isinstance(releases, list):
+        raise ValueError("Invalid release list")
+    draft = next((release for release in releases if release.get("tag_name") == tag), None)
+    if draft is None or draft.get("draft") is not True:
+        print("No matching draft; published releases left unchanged")
         return
     assets = validated_assets(arguments.artifacts, release)
     subprocess.run(["gh", "release", "edit", tag, "--repo", REPOSITORY, "--target", arguments.commit], check=True)

@@ -151,6 +151,19 @@ class MacUpdatesTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     updates.check("0.4.0")
 
+    def test_normal_update_never_uses_ci_token_or_other_environment_credentials(self):
+        response = Mock()
+        response.geturl.return_value = updates.API_URL
+        response.read.return_value = b"[]"
+        opener = Mock()
+        opener.open.return_value.__enter__ = Mock(return_value=response)
+        opener.open.return_value.__exit__ = Mock(return_value=False)
+        with patch.object(updates, "build_opener", return_value=opener), patch.dict(os.environ, {"AI_FIRST_CI_UPDATE_TOKEN": "synthetic-ci-token", "GH_TOKEN": "synthetic-other-token"}):
+            updates.check("0.4.0")
+            self.assertIsNone(opener.open.call_args.args[0].get_header("Authorization"))
+            updates.check("0.4.0", token="synthetic-explicit-token")
+            self.assertEqual(opener.open.call_args.args[0].get_header("Authorization"), "Bearer synthetic-explicit-token")
+
     def test_failures_are_distinguished_without_leaking_network_secrets(self):
         secret = "https://secret:password@private-proxy.example"
         cases = [(URLError(ssl.SSLCertVerificationError(secret)), "certificate"),
@@ -192,6 +205,17 @@ class MacUpdatesTests(unittest.TestCase):
 
 
 class MacResourceTests(unittest.TestCase):
+    def test_release_staging_leaves_missing_or_published_versions_untouched(self):
+        import stage_macos_release
+
+        for releases in ([], [{"tag_name": "v0.4.0-macos-preview.2", "draft": False}]):
+            with self.subTest(releases=releases), patch.object(sys, "argv", ["stage", "--artifacts", "synthetic", "--commit", "a" * 40]), \
+                    patch.object(stage_macos_release.subprocess, "run", return_value=Mock(stdout=json.dumps(releases))) as process, \
+                    patch.object(stage_macos_release, "validated_assets") as assets:
+                stage_macos_release.main()
+                process.assert_called_once()
+                assets.assert_not_called()
+
     def test_release_staging_rejects_failed_reports_and_wrong_dmg_hash(self):
         from stage_macos_release import validated_assets
         import hashlib

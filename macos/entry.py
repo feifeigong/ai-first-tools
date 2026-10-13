@@ -76,10 +76,11 @@ def self_check(report: Path) -> bool:
 
 def network_check(report: Path) -> bool:
     checks = {}
+    token = os.environ.get("AI_FIRST_CI_UPDATE_TOKEN")
     try:
         context = updates.tls_context()
         checks["verifiedTls"] = context.verify_mode == updates.ssl.CERT_REQUIRED and context.check_hostname
-        result = updates.check(version_info()["release"])
+        result = updates.check(version_info()["release"], token=token)
         checks["githubReleaseFeed"] = isinstance(result.get("available"), bool)
         checks["nativeSystemProxy"] = __import__("_scproxy") is not None
         error = None
@@ -87,7 +88,7 @@ def network_check(report: Path) -> bool:
         error = updates.failure(exception)["errorCode"]
     passed = error is None and bool(checks) and all(checks.values())
     report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_text(json.dumps({"passed": passed, "checks": checks, "errorCode": error,
+    report.write_text(json.dumps({"passed": passed, "checks": checks, "errorCode": error, "authenticatedProbe": bool(token),
                                   "architecture": platform.machine(), "version": version_info(),
                                   "scope": "frozen HTTPS with native macOS trust and proxy support; public GitHub feed only"}, indent=2), encoding="utf-8")
     return passed

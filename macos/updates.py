@@ -81,8 +81,11 @@ def choose_release(releases: list, current: str, architecture: str) -> dict | No
     return max(candidates, key=lambda item: item[0])[1] if candidates else None
 
 
-def check(current: str) -> dict:
-    request = Request(API_URL, headers={"User-Agent": "AI-First-Tools-macOS", "Accept": "application/vnd.github+json"})
+def check(current: str, *, token: str | None = None) -> dict:
+    headers = {"User-Agent": "AI-First-Tools-macOS", "Accept": "application/vnd.github+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(API_URL, headers=headers)
     opener = build_opener(NoRedirect(), HTTPSHandler(context=tls_context()))
     with opener.open(request, timeout=15) as response:
         if response.geturl() != API_URL:
