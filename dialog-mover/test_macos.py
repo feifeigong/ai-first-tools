@@ -154,6 +154,7 @@ class MacUpdatesTests(unittest.TestCase):
     def test_failures_are_distinguished_without_leaking_network_secrets(self):
         secret = "https://secret:password@private-proxy.example"
         cases = [(URLError(ssl.SSLCertVerificationError(secret)), "certificate"),
+                 (URLError(ssl.SSLEOFError(secret)), "tls"),
                  (URLError(TimeoutError(secret)), "timeout"), (URLError(socket.gaierror(secret)), "dns"),
                  (HTTPError(secret, 403, secret, {"X-RateLimit-Remaining": "0"}, None), "rate_limit"),
                  (HTTPError(secret, 429, secret, {}, None), "rate_limit"),
@@ -191,6 +192,32 @@ class MacUpdatesTests(unittest.TestCase):
 
 
 class MacResourceTests(unittest.TestCase):
+    def test_release_staging_rejects_failed_reports_and_wrong_dmg_hash(self):
+        from stage_macos_release import validated_assets
+        import hashlib
+
+        release = "0.4.0-macos-preview.2"
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            for architecture in ("arm64", "x86_64"):
+                source = directory / f"macos-{architecture}"
+                source.mkdir()
+                name = f"AI-First-Tools-{release}-macos-{architecture}.dmg"
+                payload = b"synthetic package, not a runnable DMG"
+                (source / name).write_bytes(payload)
+                (source / f"SHA256SUMS-{architecture}.txt").write_text(f"{hashlib.sha256(payload).hexdigest()}  {name}\n")
+                for kind in ("self", "smoke", "network"):
+                    (source / f"{kind}-test.json").write_text(json.dumps({"passed": True, "checks": {"synthetic": True},
+                                                                          "architecture": architecture, "version": {"release": release}}))
+            self.assertEqual(len(validated_assets(directory, release)), 9)
+            report = directory / "macos-arm64/network-test.json"
+            report.write_text(json.dumps({"passed": False, "checks": {"synthetic": False}}))
+            with self.assertRaisesRegex(ValueError, "checks did not pass"):
+                validated_assets(directory, release)
+            (directory / f"macos-arm64/AI-First-Tools-{release}-macos-arm64.dmg").write_bytes(b"changed")
+            with self.assertRaisesRegex(ValueError, "digest mismatch"):
+                validated_assets(directory, release)
+
     def test_cocoa_smoke_waits_for_loaded_event_before_evaluating_bridge(self):
         from entry import smoke_check
 

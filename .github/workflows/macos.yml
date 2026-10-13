@@ -80,3 +80,21 @@ jobs:
             ~/.cargo/git
             txcript/target
           key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
+  stage-release:
+    needs: build
+    if: github.repository == 'feifeigong/ai-first-tools' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*
+          path: artifacts/release-stage
+      - name: Stage only verified packages into the existing release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/stage_macos_release.py --artifacts artifacts/release-stage --commit "$GITHUB_SHA"

@@ -33,8 +33,10 @@ def failure(error: Exception) -> dict:
             code, message = "rate_limit", "GitHub 检查次数达到上限，请稍后再试，或在浏览器打开下载页。"
         else:
             code, message = "http", "GitHub 暂未允许此次更新查询，可以在浏览器打开下载页。"
-    elif isinstance(reason, ssl.SSLError):
+    elif isinstance(reason, ssl.SSLCertVerificationError):
         code, message = "certificate", "无法验证 GitHub 的安全连接，请检查系统时间或代理证书。也可以在浏览器打开下载页。"
+    elif isinstance(reason, ssl.SSLError):
+        code, message = "tls", "与 GitHub 的安全连接未能建立，请检查网络或系统代理。也可以在浏览器打开下载页。"
     elif isinstance(reason, (TimeoutError, socket.timeout)):
         code, message = "timeout", "连接 GitHub 超时，请稍后重试，或在浏览器打开下载页。"
     elif isinstance(reason, socket.gaierror):
