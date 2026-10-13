@@ -1,0 +1,29 @@
+# Mac 一键下载更新
+
+## 普通用户
+
+preview.3 起，打开后自动检查，运行中每六小时再检查。有新版时，顶部出现「下载并更新」，点一次即可；下载进度、取消和等待搬运均在原窗口中显示。下载完成且没有搬运时自动安全关闭，替换并重启，不要求手动打开 DMG 或重复安装。
+
+preview.1/2 没有这段更新代码，所以必须最后一次手动升级到 preview.3。这里只改程序；Agent 对话、登录、工作台设置不在替换范围。
+
+## 安全链路
+
+1. 固定仓库公开 Release，匹配更新版本和当前芯片，只接受完整 DMG 和 SHA256SUMS.txt 的精确 URL、大小、SHA-256 digest。
+2. 系统证书校验，下载跳转仅允许 HTTPS GitHub 项目资产及指定 GitHub CDN，不把认证或环境写入包/日志。校验文件与包的哈希再比对，限大小、时间，取消/断流不保留半包。
+3. DMG 只读挂载，不在 Finder 弹出；在当前 APP 同一父目录准备私有更新目录。校验 bundle ID、版本、架构、所有符号链接边界、ad-hoc 资源封印，记录应用内容指纹。更新前再次检查指纹，拒绝期间变化。
+4. 独立的冻结 helper 副本先确认就绪，旧窗口才关闭；等待原进程自然退出，不强杀。新 APP 在交换前运行资源/原生引擎自检。
+5. 使用系统原子交换，把整套 APP 一次性换到原位置，没有“旧目录已删而新目录还没放上”的空档。卷不支持交换则拒绝，不退化为先删旧版；交换/启动失败尝试换回旧版，备份和失败包保留。
+6. 重新打开 APP 后显示更新结果。`open` 返回成功不等于每台用户 Mac 的 Cocoa 或系统安全提示均已通过；CI 的重启检查在隔离 APP 副本中执行，没有访问用户的实际安装目录。
+
+源文件：macos/updater.py（下载、校验、原子交换和 helper）、macos/entry.py（搬运/退出保护、状态桥）、macos/ui/workspace.js（按钮、进度、等待与取消）。
+
+实现遵循 [PyInstaller 独立重启进程约定](https://pyinstaller.org/en/stable/common-issues-and-pitfalls.html#using-sys-executable-to-spawn-subprocesses-that-outlive-the-application-process-implementing-application-restart)，设置子进程 PYINSTALLER_RESET_ENVIRONMENT，不修改全局环境。原子交换采用 [Apple 的卷交换能力](https://developer.apple.com/documentation/foundation/urlresourcekey/volumesupportsswaprenamingkey) 与 [公开系统声明](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/stdio.h)。
+
+## 限制与测试
+
+- 没有 Developer ID/公证，不关闭 Gatekeeper、不清除隔离属性、不自动提权；受管理机器或系统安全拦截仍可能需确认。安装权限不足时保持旧程序，不绕过限制。
+- HTTPS/hash/固定发布者提供传输完整性与固定来源约束，不是苹果审核，也不能防止发布者账号被攻破。
+- 旧版备份和失败任务目录暂不自动删除，以保留恢复机会；保存在应用旁的私有隐藏目录，不含对话/认证。后续如加入清理，必须只清理完成且无人运行的受控任务。
+- 单测覆盖错误地址、缺少校验资产、半包、版本/架构、指纹变化、备份、交换失败恢复、启动失败恢复、迁移中等待与重启时拒绝新迁移；浏览器覆盖自动出现按钮、一次点击、进度、等待和取消。
+- 冻结 APP 的 --update-test 在临时目录复制 APP、构造隔离旧版本元数据，验证真实 helper 进程、原子交换和新 APP 的 Cocoa/WebKit/Python 桥重启。这不是作者真实机器上从已发布旧版手点升级的验收。
+- 成功构建/测试才发布；报告与仍未验收项见 MACOS-QA.md。

@@ -25,7 +25,7 @@ def validated_assets(directory: Path, release: str) -> list[Path]:
         expected = f"{digest}  {name}"
         if (source / f"SHA256SUMS-{architecture}.txt").read_text().strip() != expected:
             raise ValueError("DMG digest mismatch")
-        for kind in ("self", "smoke", "network"):
+        for kind in ("self", "smoke", "network", "update"):
             report = source / f"{kind}-test.json"
             result = json.loads(report.read_text())
             if result.get("passed") is not True or not result.get("checks") or not all(value is True for value in result["checks"].values()):
@@ -40,7 +40,7 @@ def validated_assets(directory: Path, release: str) -> list[Path]:
         assets.append(target)
         sums.append(expected)
     manifest = directory / "SHA256SUMS.txt"
-    manifest.write_text("\n".join(sums) + "\n", encoding="utf-8")
+    manifest.write_text("\n".join(sums) + "\n", encoding="utf-8", newline="\n")
     return [*assets, manifest]
 
 

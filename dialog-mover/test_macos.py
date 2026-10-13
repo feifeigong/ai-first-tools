@@ -230,10 +230,10 @@ class MacResourceTests(unittest.TestCase):
                 payload = b"synthetic package, not a runnable DMG"
                 (source / name).write_bytes(payload)
                 (source / f"SHA256SUMS-{architecture}.txt").write_text(f"{hashlib.sha256(payload).hexdigest()}  {name}\n")
-                for kind in ("self", "smoke", "network"):
+                for kind in ("self", "smoke", "network", "update"):
                     (source / f"{kind}-test.json").write_text(json.dumps({"passed": True, "checks": {"synthetic": True},
                                                                           "architecture": architecture, "version": {"release": release}}))
-            self.assertEqual(len(validated_assets(directory, release)), 9)
+            self.assertEqual(len(validated_assets(directory, release)), 11)
             report = directory / "macos-arm64/network-test.json"
             report.write_text(json.dumps({"passed": False, "checks": {"synthetic": False}}))
             with self.assertRaisesRegex(ValueError, "checks did not pass"):

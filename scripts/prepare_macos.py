@@ -21,6 +21,7 @@ def prepare(destination: Path) -> Path:
       <span class="workspace-name">工具工作台</span>
       <button id="workspace-toggle" class="workspace-button workspace-toggle" aria-controls="workspace-nav" aria-expanded="true" aria-label="隐藏工具栏"></button>
       <span class="workspace-spacer"></span><span id="workspace-version" class="workspace-version">Mac 预览版</span>
+      <button id="workspace-download" class="workspace-button workspace-primary" hidden>下载并更新</button>
       <button id="workspace-update" class="workspace-button" disabled>检查更新</button>
     </header>
     <div class="workspace-body">
@@ -28,7 +29,7 @@ def prepare(destination: Path) -> Path:
         <button class="workspace-tool" aria-current="page"><img src="assets/dialog-mover.png" alt="" width="32" height="32">对话搬家</button>
       </nav>'''
     ending = '''</div><div id="workspace-notice" class="workspace-notice" role="status" aria-live="polite" hidden>
-      <span id="workspace-message"></span><button id="workspace-download" class="workspace-button" hidden>下载新版</button>
+      <div class="workspace-update-detail"><span id="workspace-message"></span><progress id="workspace-progress" max="100" aria-label="更新下载进度" hidden></progress></div>
       <button id="workspace-dismiss" class="workspace-button" aria-label="关闭提示">×</button></div>'''
     html = html.replace("<title>对话搬家</title>", "<title>AI一手工具工作台</title>")
     html = html.replace("</head>", '<link rel="stylesheet" href="workspace.css">\n</head>')

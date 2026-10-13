@@ -44,6 +44,8 @@ WPF/Win32 不能移植到 macOS，更不能改 EXE 后缀。保留 Windows，新
 
 2026-10-13 作者反馈检查更新连接失败、Mac 豆包工作没有显示。preview.2 修复 Mac 豆包的 Default 目录识别，并将同一工作区传给导出引擎；刷新同时重新寻找来源。更新 HTTPS 改用系统证书而非打包机器的 Python CA 路径，保留系统代理、严格证书校验和可信仓库过滤，失败显示脱敏分类与下载页入口。新增冻结应用真实 HTTPS 检查，弥补首版未测这一层的缺口；作者 Mac 的具体网络原因仍需新版提示确认。构建结果以 MACOS-QA.md 为准。
 
+2026-10-13 后续需求：Windows 和 Mac 都用“下载并更新”按钮，有新版自动显示，用户点击后下载、校验、等搬运结束再安全替换并重启。Windows 沿用已有更新器，v0.3.8 统一文案；Mac preview.3 新增独立 helper、系统原子交换和失败恢复，四类冻结检查全部通过才发 DMG。preview.1/2 没有自动替换代码，须最后一次手动换成 preview.3；以后不再拖应用。详见 UPDATES.md、MACOS-UPDATES.md 和 MACOS-QA.md；当前发布状态要查 Releases。
+
 ## 代码地图
 
 | 位置 | 职责 |
@@ -58,7 +60,8 @@ WPF/Win32 不能移植到 macOS，更不能改 EXE 后缀。保留 Windows，新
 | `dialog-mover/core/chatgpt.py` | 本机/云端合并、排序、缓存 |
 | `dialog-mover/ui/` | 共享工具 UI、实际 Logo |
 | `macos/entry.py` | Cocoa 单窗口/单实例、更新桥、冻结包/窗口自检 |
-| `macos/updates.py` | 可信仓库按架构选版本，不下载执行程序 |
+| `macos/updates.py` | 系统 HTTPS、可信仓库按架构选版本 |
+| `macos/updater.py` | 软件内下载、校验、独立 helper、安全替换与重启 |
 | `macos/ui/` | 外层 UI 与侧栏 |
 | `macos/AI-First-Tools.spec` | Cocoa、原生引擎、资源、应用信息 |
 | `scripts/package_macos.py` | 许可证、打包、自检、Cocoa 检查、DMG/校验值 |

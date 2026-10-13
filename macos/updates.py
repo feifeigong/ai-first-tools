@@ -97,4 +97,6 @@ def check(current: str, *, token: str | None = None) -> dict:
     if not isinstance(releases, list):
         raise ValueError("Invalid update response")
     found = choose_release(releases, current, platform.machine())
-    return {"available": found is not None, **(found or {})}
+    assets = next((release.get("assets", []) for release in releases if isinstance(release, dict)
+                   and found and release.get("tag_name") == "v" + found["version"]), [])
+    return {"available": found is not None, **(found or {}), "assets": assets}

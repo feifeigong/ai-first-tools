@@ -332,7 +332,7 @@ public partial class MainWindow : Window
                 {
                     Present(selected, session);
                     ShowStatus(selected.Name + "还有事情没结束，完成后再点 × 关闭。");
-                    if (restartingForUpdate) ShowUpdateOffer("请先完成工具里的任务，再点更新并重启。不会强制停止搬运。");
+                    if (restartingForUpdate) ShowUpdateOffer("请先完成工具里的任务，再点下载并更新。不会强制停止搬运。");
                     return;
                 }
                 ForgetSession(entry.Key, session);
@@ -434,8 +434,8 @@ public partial class MainWindow : Window
     {
         if (availableUpdate is null) return;
         UpdateTitle.Text = "发现新版本 v" + availableUpdate.Version;
-        UpdateDescription.Text = explanation ?? "点一下即可更新全部工具，完成后自动重新打开。原来的对话与设置保留。";
-        InstallUpdateButton.Content = "更新并重启";
+        UpdateDescription.Text = explanation ?? "点一下自动下载、更新并重新打开，不用重新安装。原来的对话与设置保留。";
+        InstallUpdateButton.Content = "下载并更新";
         InstallUpdateButton.Visibility = Visibility.Visible;
         InstallUpdateButton.IsEnabled = true;
         DismissUpdateButton.Content = "稍后";

@@ -11,6 +11,11 @@ import threading
 import time
 from pathlib import Path
 
+if "--apply-update" in sys.argv:
+    import updater
+
+    raise SystemExit(updater.helper_main())
+
 PROJECT = Path(__file__).resolve().parent.parent
 if not getattr(sys, "frozen", False):
     sys.path.insert(0, str(PROJECT / "dialog-mover"))
@@ -22,6 +27,7 @@ from core import mover
 from core.common import appdata, open_external
 from main import Api
 import updates
+import updater
 
 ROOT = Path(getattr(sys, "_MEIPASS", PROJECT / "artifacts" / "macos" / "resources"))
 
@@ -36,18 +42,39 @@ class MacApi(Api):
         self._smoke = smoke
         self._release = None
         self._update_lock = threading.Lock()
+        self._update_gate = threading.RLock()
+        self._package = None
+        self._prepared = None
+        self._update_cancel = threading.Event()
+        self._update_state = {"phase": "idle", "progress": 0}
+        self._handing_off = False
 
     def workspace_info(self) -> dict:
-        return {**version_info(), "platform": "macOS", "architecture": platform.machine(), "automaticChecks": not self._smoke}
+        message = None
+        receipt = updater.state_root() / "result.json"
+        if receipt.is_file():
+            try:
+                result = json.loads(receipt.read_text(encoding="utf-8"))
+                if result.get("version") == version_info()["release"]:
+                    message = result.get("message")
+                    receipt.unlink()
+            except (OSError, ValueError):
+                pass
+        return {**version_info(), "platform": "macOS", "architecture": platform.machine(), "automaticChecks": not self._smoke,
+                "updateMessage": message}
 
     def check_update(self) -> dict:
         if not self._update_lock.acquire(blocking=False):
             return {"error": "正在检查更新，请稍等。"}
         try:
             self._release = None
+            self._package = None
             result = updates.check(version_info()["release"])
             self._release = result.get("url")
-            return result
+            if result.get("available"):
+                self._package = updater.package_from_release(result)
+            return {**{key: value for key, value in result.items() if key != "assets"},
+                    "canInstall": self._package is not None and bool(getattr(sys, "frozen", False))}
         except (OSError, ValueError, TypeError, ImportError) as error:
             return updates.failure(error)
         finally:
@@ -59,6 +86,83 @@ class MacApi(Api):
             return {"ok": True}
         except (OSError, subprocess.SubprocessError):
             return {"error": "无法打开浏览器，请到本项目的 GitHub 发布页面下载。"}
+
+    def start_move(self, source: str, ids: list[str], target: str, directory: str) -> dict:
+        with self._update_gate:
+            if self._handing_off:
+                return {"error": "正在更新并重启，请稍等。"}
+            return super().start_move(source, ids, target, directory)
+
+    def start_update(self) -> dict:
+        with self._update_gate:
+            if self._update_state["phase"] in ("downloading", "preparing", "ready", "restarting"):
+                return {"ok": True}
+            if self._package is None:
+                return {"error": "请先检查更新。此版本没有完整的自动更新包时，可以打开下载页。"}
+            try:
+                target = updater.running_bundle()
+            except updater.UpdateError as error:
+                return {"error": str(error)}
+            package = dict(self._package)
+            self._update_cancel.clear()
+            self._update_state = {"phase": "downloading", "progress": 0}
+            threading.Thread(target=self._prepare_update, args=(target, package), daemon=True).start()
+            return {"ok": True}
+
+    def _prepare_update(self, target: Path, package: dict) -> None:
+        def progress(phase, value):
+            with self._update_gate:
+                self._update_state = {"phase": phase, "progress": value}
+        try:
+            job = updater.prepare(target, package, version_info()["release"], progress, self._update_cancel)
+            with self._update_gate:
+                if self._update_cancel.is_set():
+                    updater.discard(job)
+                    raise updater.Cancelled("已取消下载，当前版本可以继续使用。")
+                self._prepared = job
+                self._update_state = {"phase": "ready", "progress": 100}
+        except Exception as error:
+            message = str(error) if isinstance(error, updater.UpdateError) else updates.failure(error)["error"] if isinstance(error, (OSError, ValueError, ImportError)) else "更新准备未完成，请检查文件权限和磁盘空间。当前版本未改动。"
+            with self._update_gate:
+                self._update_state = {"phase": "error", "progress": 0, "error": message}
+
+    def update_status(self) -> dict:
+        with self._update_gate:
+            return dict(self._update_state)
+
+    def cancel_update(self) -> dict:
+        with self._update_gate:
+            if self._handing_off:
+                return {"error": "正在安全重启，请稍等。"}
+            self._update_cancel.set()
+            if self._prepared is not None:
+                updater.discard(self._prepared)
+                self._prepared = None
+                self._update_state = {"phase": "error", "error": "已取消更新，当前版本可以继续使用。"}
+            return {"ok": True}
+
+    def apply_update(self) -> dict:
+        with self._update_gate:
+            if self._handing_off:
+                return {"ok": True}
+            if self._prepared is None or self._update_cancel.is_set():
+                return {"error": "更新尚未准备好。"}
+            if not super().can_close():
+                return {"waiting": True}
+            try:
+                updater.start_helper(self._prepared)
+            except (OSError, ValueError, updater.UpdateError):
+                return {"error": "暂时无法启动更新，当前版本可以继续使用。请稍后重试。"}
+            self._handing_off = True
+            self._update_state = {"phase": "restarting", "progress": 100}
+        self._window.destroy()
+        return {"ok": True}
+
+    def can_close(self) -> bool:
+        permitted = super().can_close()
+        if permitted and not self._handing_off:
+            self._update_cancel.set()
+        return permitted
 
 
 def self_check(report: Path) -> bool:
@@ -128,16 +232,20 @@ def run() -> int:
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--smoke-test", action="store_true")
     parser.add_argument("--network-test", action="store_true")
+    parser.add_argument("--update-test", action="store_true")
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("This entry point runs on macOS. Windows uses workspace/AIFirst.Workspace.csproj.")
-    if (args.self_test or args.smoke_test or args.network_test) and args.report is None:
+    if (args.self_test or args.smoke_test or args.network_test or args.update_test) and args.report is None:
         parser.error("Tests require --report")
     if args.self_test:
         return 0 if self_check(args.report) else 1
     if args.network_test:
         return 0 if network_check(args.report) else 1
+    if args.update_test:
+        updater.audit_update(updater.running_bundle(), args.report)
+        return 0 if json.loads(args.report.read_text()).get("passed") is True else 1
     with tempfile.TemporaryDirectory(prefix="ai-first-macos-") as temporary:
         if args.smoke_test:
             isolate_profile(Path(temporary))

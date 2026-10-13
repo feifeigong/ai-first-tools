@@ -41,7 +41,7 @@ python macos/entry.py
 
 ```sh
 cd dialog-mover
-python -m unittest test_chatgpt test_close_safety test_doubao test_macos test_macos_native -v
+python -m unittest test_chatgpt test_close_safety test_doubao test_macos test_macos_updater test_macos_native -v
 cd ..
 python scripts/package_macos.py --architecture "$(uname -m)"
 ```
@@ -50,6 +50,7 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 - `test_macos_native`：真实 Mac 引擎在隔离合成存储中对文件型目标导入/回读，核对编号、路径与源文件不变；拒绝不匹配 DB。
 - OpenCode 需额外原生 CLI，这批文件型目标检查不包括它。
 - 冻结包 `--self-test` 验证资源与引擎；`--smoke-test` 在空用户目录打开真实 Cocoa 窗口，验证 WebKit/Python 桥、侧栏和 API。
+- preview.3 的 `--update-test` 在临时 APP 副本中检查实际 helper、原子交换、备份和 Cocoa 重启；不要在作者安装目录运行测试替换。下载、取消、忙碌等待、失败恢复的单测在 test_macos_updater；流程与限制见 MACOS-UPDATES.md。
 - preview.2 新增冻结包 `--network-test`：在不存在的 Python CA 路径环境中，用系统 Keychain 验证 HTTPS、读取本项目公开 GitHub 发布列表；失败阻止 DMG 发布，不记录代理地址/认证/环境。
 - CI 仅给打包步骤提供一次性只读 `AI_FIRST_CI_UPDATE_TOKEN`，只由 `--network-test` 显式传入请求，报告仅记录是否使用授权。普通更新不会读取此变量或 GH_TOKEN，安装包不包含授权，用户无需配置令牌。这样避免公共 runner IP 的匿名查询限流，不绕过 TLS 或把网络失败当通过。
 - `test_doubao` 覆盖 Mac Default、Windows/旧布局、自定义工作区、仅云端缓存、空账户和导出路径一致性。原生测试新增合成本机豆包轨迹 → Claude Code → 回读，保持源文件不变；会话列表快照为合成替身，不表示真实豆包版本已人工验收。
@@ -88,11 +89,12 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 
 ## 发布维护
 
-- macos/version.json 当前版本为 0.4.0-macos-preview.2；两架构修复包通过原生检查，构建源码 `8674f6f`，链接和校验见 MACOS-QA.md。公开资产以 Releases 为准，后续文档提交不表示重新打包。
+- macos/version.json 当前准备版本为 0.4.0-macos-preview.3，新增软件内下载、校验、等待搬运、安全替换与重启；本机单测/浏览器通过，原生验证结果以 MACOS-QA.md 和 CI 为准，不将源码当成已发布包。preview.1/2 必须最后一次手动替换，不能靠旧版不存在的代码完成一键升级。
+- 已发布 preview.2 的构建源码 `8674f6f`，修复豆包工作识别/刷新及系统 HTTPS；历史链接、校验见 MACOS-QA.md。
 - 首批两架构包构建源码为 `2b49c7f`，Mac/Windows CI 均通过；构建链接、SHA-256 和未验收项见 MACOS-QA.md。后续只整理交接文档，不能把文档提交说成重做了安装包。
 - 两架构 DMG 名称 `AI-First-Tools-<release>-macos-<architecture>.dmg`，附 SHA-256。
 - CI/报告通过才发布下载包；源码提交不等于已发布应用。
-- 发布前先准备与 macos/version.json 同版本的 GitHub 草稿。两架构构建都成功后，stage-release 校验 DMG 哈希、三类报告、版本和架构，再上传 9 个资产并关联构建提交；草稿仍不公开。独立下载核对报告与上传资产的 digest、补齐本文件和 QA 后才手动公开。
+- 发布前先准备与 macos/version.json 同版本的 GitHub 草稿。两架构构建都成功后，stage-release 校验 DMG 哈希、四类报告、版本和架构，再上传 11 个资产并关联构建提交；草稿仍不公开。独立下载核对报告与上传资产的 digest、补齐本文件和 QA 后才手动公开。
 - scripts/stage_macos_release.py 只处理已有匹配草稿；草稿不存在或已发布就跳过，禁止自动覆盖公开版本。失败的构建不会进入上传步骤。
 - 更新拒绝草稿/旧版本/错误域名/不匹配架构。
 - 不加 xattr 解锁脚本，不关闭 Gatekeeper，不宣称苹果审核。

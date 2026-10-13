@@ -18,6 +18,55 @@ BOOT = "window.pywebview={api:{agents:async()=>(INFO),sessions:async()=>(SESSION
 
 
 class MacUiTests(unittest.TestCase):
+    def test_update_button_appears_automatically_and_one_click_waits_for_migration(self):
+        bootstrap = BOOT.replace("({available:false})", "({available:true,version:'0.4.1',canInstall:true})") + """
+window.updatePhase='downloading';window.migrationBusy=true;
+window.pywebview.api.start_update=async()=>{window.downloadCount=(window.downloadCount||0)+1;return {ok:true}};
+window.pywebview.api.update_status=async()=>({phase:window.updatePhase,progress:45});
+window.pywebview.api.apply_update=async()=>{if(window.migrationBusy)return {waiting:true};window.updateApplied=true;return {ok:true}};
+window.pywebview.api.open_update=async()=>{window.browserOpened=true;return {ok:true}};
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.get_by_role("button", name="下载并更新").click()
+                page.get_by_text("正在下载 45% · 下载时可以继续使用", exact=True).wait_for()
+                self.assertEqual(page.evaluate("window.downloadCount"), 1)
+                self.assertIsNone(page.evaluate("window.browserOpened"))
+                page.evaluate("window.updatePhase='ready'")
+                page.get_by_text("下载完成，等当前搬运结束后自动更新。", exact=True).wait_for()
+                self.assertIsNone(page.evaluate("window.updateApplied"))
+                page.evaluate("window.migrationBusy=false")
+                page.wait_for_function("window.updateApplied===true")
+                page.get_by_text("正在更新并重新打开，请稍等…", exact=True).wait_for()
+            finally:
+                browser.close()
+
+    def test_download_can_be_cancelled_without_hiding_retry_button(self):
+        bootstrap = BOOT.replace("({available:false})", "({available:true,version:'0.4.1',canInstall:true})") + """
+window.updatePhase='downloading';
+window.pywebview.api.start_update=async()=>({ok:true});
+window.pywebview.api.update_status=async()=>({phase:window.updatePhase,progress:20,error:'已取消下载，当前版本可以继续使用。'});
+window.pywebview.api.cancel_update=async()=>{window.updatePhase='error';return {ok:true}};
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.get_by_role("button", name="下载并更新").click()
+                page.get_by_role("button", name="取消更新").click()
+                page.get_by_text("已取消下载，当前版本可以继续使用。", exact=True).wait_for()
+                self.assertTrue(page.get_by_role("button", name="下载并更新").is_enabled())
+            finally:
+                browser.close()
+
     def test_refresh_discovers_doubao_created_after_workspace_opened(self):
         bootstrap = BOOT.replace(json.dumps(INFO), json.dumps({**INFO, "agents": []}))
         with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
@@ -68,9 +117,9 @@ class MacUiTests(unittest.TestCase):
                 page.get_by_text("无法验证安全连接", exact=True).wait_for()
                 page.get_by_role("button", name="打开下载页").click()
                 page.wait_for_function("window.downloadOpened===true")
-                page.evaluate("window.pywebview.api.check_update=async()=>({available:true,version:'0.4.1'})")
+                page.evaluate("window.pywebview.api.check_update=async()=>({available:true,version:'0.4.1',canInstall:true})")
                 page.get_by_role("button", name="检查更新").click()
-                page.get_by_role("button", name="下载新版").wait_for()
+                page.get_by_role("button", name="下载并更新").wait_for()
                 page.evaluate("window.pywebview.api.check_update=async()=>({available:false})")
                 page.get_by_role("button", name="检查更新").click()
                 page.get_by_text("已经是当前最新的 Mac 版本。", exact=True).wait_for()

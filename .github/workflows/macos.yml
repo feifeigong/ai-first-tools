@@ -60,7 +60,7 @@ jobs:
       - name: Shared safety, Mac paths and isolated native imports
         working-directory: dialog-mover
         run: |
-          python -m unittest test_chatgpt test_close_safety test_doubao test_macos test_macos_native -v
+          python -m unittest test_chatgpt test_close_safety test_doubao test_macos test_macos_updater test_macos_native -v
       - name: Package and test actual Cocoa app and DMG
         env:
           AI_FIRST_CI_UPDATE_TOKEN: ${{ github.token }}

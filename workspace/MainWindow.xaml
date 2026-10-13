@@ -92,7 +92,7 @@
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
               <Button x:Name="DismissUpdateButton" Content="稍后" Click="DismissUpdateClick" MinHeight="40" Padding="16,8" Background="Transparent" BorderThickness="0" Margin="0,0,8,0" />
-              <Button x:Name="InstallUpdateButton" Content="更新并重启" Click="InstallUpdateClick" MinHeight="40" Padding="18,8" Background="#0073E6" Foreground="White" BorderThickness="0" />
+              <Button x:Name="InstallUpdateButton" Content="下载并更新" Click="InstallUpdateClick" MinHeight="40" Padding="18,8" Background="#0073E6" Foreground="White" BorderThickness="0" />
             </StackPanel>
           </Grid>
         </Border>
