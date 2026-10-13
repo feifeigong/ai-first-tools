@@ -181,7 +181,8 @@ class MacUpdatesTests(unittest.TestCase):
     def test_network_self_check_fails_without_logging_private_exception_details(self):
         from entry import network_check
 
-        with tempfile.TemporaryDirectory() as temporary, patch("entry.updates.tls_context", side_effect=URLError("secret proxy")):
+        with tempfile.TemporaryDirectory() as temporary, patch("entry.version_info", return_value={"release": "0.4.0-macos-preview.2"}), \
+                patch("entry.updates.tls_context", side_effect=URLError("secret proxy")):
             report = Path(temporary) / "network-test.json"
             self.assertFalse(network_check(report))
             result = json.loads(report.read_text())
