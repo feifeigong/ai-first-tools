@@ -18,6 +18,33 @@ BOOT = "window.pywebview={api:{agents:async()=>(INFO),sessions:async()=>(SESSION
 
 
 class MacUiTests(unittest.TestCase):
+    def test_cocoa_start_waits_for_the_native_bridge_ready_signal(self):
+        bootstrap = BOOT + """
+window.pywebview.platform='cocoa';window.__AI_FIRST_BRIDGE_READY__=false;
+window.agentCalls=0;window.infoCalls=0;window.checkCalls=0;
+window.pywebview.api.agents=async()=>{window.agentCalls++;return AGENTS};
+window.pywebview.api.workspace_info=async()=>{window.infoCalls++;return {version:'0.4.0',automaticChecks:true}};
+window.pywebview.api.check_update=async()=>{window.checkCalls++;return {available:false}};
+""".replace("AGENTS", json.dumps(INFO))
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.clock.fast_forward(6000)
+                self.assertEqual(page.evaluate("[window.agentCalls,window.infoCalls,window.checkCalls]"), [0, 0, 0])
+                page.evaluate("window.__AI_FIRST_BRIDGE_READY__=true;window.dispatchEvent(new CustomEvent('ai-first-ready'))")
+                page.get_by_text("Mac · v0.4.0", exact=True).wait_for()
+                page.get_by_text("仅用于排版检查的合成记录", exact=True).wait_for()
+                page.clock.fast_forward(2100)
+                page.wait_for_function("window.checkCalls===1")
+                self.assertEqual(page.evaluate("[window.agentCalls,window.infoCalls]"), [1, 1])
+            finally:
+                browser.close()
+
     def test_failed_automatic_check_is_visible_and_retries_without_a_click(self):
         for failure_kind in ("response", "exception"):
             with self.subTest(failure_kind=failure_kind), tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:

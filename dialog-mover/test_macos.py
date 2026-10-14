@@ -219,6 +219,14 @@ class MacUpdatesTests(unittest.TestCase):
 
 
 class MacResourceTests(unittest.TestCase):
+    def test_native_bridge_ready_signal_uses_the_injected_script_channel(self):
+        import entry
+
+        window = Mock()
+        entry.signal_bridge_ready(window)
+        window.run_js.assert_called_once_with("window.__AI_FIRST_BRIDGE_READY__=true;window.dispatchEvent(new CustomEvent('ai-first-ready'));")
+        window.evaluate_js.assert_not_called()
+
     def test_cocoa_start_does_not_clear_shared_webkit_data_or_force_a_fixed_port(self):
         import entry
 

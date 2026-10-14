@@ -724,12 +724,14 @@
 
   let started = false;
   const start = () => {
+    if (window.pywebview?.platform === "cocoa" && !window.__AI_FIRST_BRIDGE_READY__) return;
     if (!started && (real() || preview)) {
       started = true;
       boot().catch(() => { $("#list").innerHTML = '<div class="empty"><b>连接本机搬运组件失败</b>请重新打开软件，不会使用演示记录代替您的数据。</div>'; });
     }
   };
   window.addEventListener("pywebviewready", start);
+  window.addEventListener("ai-first-ready", start);
   setTimeout(() => {
     if (!started && !real() && !preview) $("#list").innerHTML = '<div class="loading"><div class="spinner"></div>正在连接本机搬运组件…</div>';
     start();

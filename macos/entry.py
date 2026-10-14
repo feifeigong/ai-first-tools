@@ -243,6 +243,10 @@ def start_cocoa(worker) -> None:
     webview.start(worker, gui="cocoa", private_mode=False)
 
 
+def signal_bridge_ready(window) -> None:
+    window.run_js("window.__AI_FIRST_BRIDGE_READY__=true;window.dispatchEvent(new CustomEvent('ai-first-ready'));")
+
+
 def run() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
@@ -278,6 +282,7 @@ def run() -> int:
             window = webview.create_window("AI一手工具工作台", str((ROOT / "ui" / "index.html").resolve()), js_api=api,
                                            width=1280, height=820, min_size=(960, 640), background_color="#F6F8FB", text_select=False)
             api.bind(window)
+            window.events.loaded += signal_bridge_ready
             window.events.closing += lambda: window.evaluate_js("window.aiFirstBusyNotice && window.aiFirstBusyNotice()") if not api.can_close() else None
             worker = (lambda: smoke_check(window, args.report)) if args.smoke_test else None
             start_cocoa(worker)

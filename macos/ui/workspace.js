@@ -148,6 +148,7 @@
     finally { if (!updating) download.disabled = false; }
   });
   const start = async () => {
+    if (window.pywebview?.platform === "cocoa" && !window.__AI_FIRST_BRIDGE_READY__) return;
     if (initialized || !window.pywebview?.api) return;
     initialized = true;
     try {
@@ -172,5 +173,6 @@
     } catch { show("工作台连接失败，请重新打开。不会用演示数据替代您的记录。"); }
   };
   window.addEventListener("pywebviewready", start);
+  window.addEventListener("ai-first-ready", start);
   setTimeout(start, 500);
 })();
