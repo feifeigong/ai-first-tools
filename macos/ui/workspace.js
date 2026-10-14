@@ -12,6 +12,17 @@
   let hasUpdate = false;
   let installing = false;
   let updating = false;
+  let automaticChecks = false;
+  let checkTimer = null;
+  let retryCount = 0;
+  let failureNotice = null;
+  const checkInterval = 6 * 60 * 60 * 1000;
+  const retryDelays = [60000, 300000, 900000, 3600000];
+  const scheduleCheck = delay => {
+    if (!automaticChecks) return;
+    clearTimeout(checkTimer);
+    checkTimer = setTimeout(() => check(false), delay);
+  };
   const drawToggle = () => {
     const collapsed = document.body.classList.contains("workspace-collapsed");
     toggle.setAttribute("aria-expanded", String(!collapsed));
@@ -41,20 +52,49 @@
   });
   window.aiFirstBusyNotice = () => show("正在搬运，请等这一批完成后再退出。不会强制停止或删除原记录。", hasUpdate);
   const check = async (manual = false) => {
-    if (checking || updating || !window.pywebview?.api) return;
+    if (checking || updating || !window.pywebview?.api) {
+      if (!manual) scheduleCheck(60000);
+      return;
+    }
+    clearTimeout(checkTimer);
     checking = true;
     checker.disabled = true;
     checker.textContent = "正在检查…";
+    let failure = null;
+    const showFailure = result => {
+      failure = result;
+      hasUpdate = false;
+      installing = false;
+      download.hidden = true;
+      checker.title = result.error;
+      if (manual) show(result.error, result.canOpenDownloads, "打开下载页");
+      else if (!failureNotice) show("暂时没能检查更新，将自动重试。您可以继续使用。");
+      if (manual || !failureNotice) failureNotice = message.textContent;
+    };
     try {
       const result = await window.pywebview.api.check_update();
-      if (result.error) { hasUpdate = false; installing = false; download.hidden = true; if (manual) show(result.error, result.canOpenDownloads, "打开下载页"); }
-      else if (result.available) {
-        hasUpdate = true; installing = result.canInstall === true;
-        show(`发现新版本 ${result.version}，${installing ? "点一下即可更新并重新打开。" : "可以打开下载页获取完整安装包。"}`, true, installing ? "下载并更新" : "打开下载页");
+      if (result.error) showFailure(result);
+      else {
+        retryCount = 0;
+        checker.title = "检查是否有新版本";
+        if (failureNotice && message.textContent === failureNotice) notice.hidden = true;
+        failureNotice = null;
+        if (result.available) {
+          hasUpdate = true; installing = result.canInstall === true;
+          show(`发现新版本 ${result.version}，${installing ? "点一下即可更新并重新打开。" : "可以打开下载页获取完整安装包。"}`, true, installing ? "下载并更新" : "打开下载页");
+        }
+        else { hasUpdate = false; installing = false; download.hidden = true; if (manual) show("已经是当前最新的 Mac 版本。"); }
       }
-      else { hasUpdate = false; installing = false; download.hidden = true; if (manual) show("已经是当前最新的 Mac 版本。"); }
-    } catch { if (manual) show("暂时无法检查更新，您可以继续使用。", hasUpdate); }
-    finally { checker.disabled = false; checker.textContent = "检查更新"; checking = false; }
+    } catch { showFailure({error: "暂时无法检查更新，您可以继续使用。", canOpenDownloads: true}); }
+    finally {
+      checker.disabled = false;
+      checker.textContent = "检查更新";
+      checking = false;
+      if (failure) {
+        retryCount += 1;
+        scheduleCheck(failure.errorCode === "rate_limit" ? 3600000 : retryDelays[Math.min(retryCount - 1, retryDelays.length - 1)]);
+      } else scheduleCheck(checkInterval);
+    }
   };
   checker.addEventListener("click", () => check(true));
   const finishUpdate = text => {
@@ -115,9 +155,9 @@
       document.getElementById("workspace-version").textContent = `Mac · v${info.release || info.version}`;
       checker.disabled = false;
       if (info.automaticChecks) {
+        automaticChecks = true;
         if (info.updateMessage) show(info.updateMessage);
-        setTimeout(() => check(false), 2000);
-        setInterval(() => check(false), 6 * 60 * 60 * 1000);
+        scheduleCheck(2000);
       }
       else {
         const agents = await window.pywebview.api.agents();
