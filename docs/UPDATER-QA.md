@@ -10,6 +10,8 @@
 - 发布前独立下载 CI 原产物，逐一核对 3 个上传资产的大小、GitHub digest、SHA256SUMS；ZIP 内 1175 个发布文件的清单、长度、SHA-256、私有数据排除和内外工具 Logo 一致性通过。
 - [同源码树 Windows 回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38353318159) 通过 73 项后台、15 项浏览器检查与 62 项工作台自检，构建零错误/警告；最新运行结果优先，不把绿色暂存当作程序测试。
 - 后续 Mac 重启修订在共享源码 `7dcc96f` 的 [Windows 回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38357964354) 通过 75 项后台、15 项浏览器和工作台自检，WPF 零错误/警告，没有改动或替换已公开 Windows v0.3.8 资产。Mac preview.4 发布后还核对两平台公开选择互不干扰，不把 Mac 的版本号当作 Windows 更新。
+- 2026-10-14 Mac 自动查询漏提示修订 `6fe261b` 的 [Windows 回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38496236759) 通过 75 项后台、20 项浏览器和工作台自检，WPF 零错误/警告。新增的是 Mac 页面失败恢复用例，不改 Windows 运行代码、版本或已公开安装包。
+- 同日 Cocoa 就绪保护 `9703d43` 的 [Windows CI](https://github.com/feifeigong/ai-first-tools/actions/runs/38497770629) 通过 76 项后台、21 项浏览器和工作台自检，WPF 零错误/警告；本地完整 21 项页面回归也通过。共享页面新增的等待条件只针对 Cocoa，Windows 不等待该信号，已公开 Windows 包不替换。Mac preview.6 发布后匿名公开列表仍只让 Windows v0.3.7 选择 v0.3.8，同版不更新；重新核对先前下载的公开安装包，不重复安装或读取 Agent 数据。
 - 发布后读取匿名公开 Release 列表，直接运行生产 UpdateClient 源码确认 v0.3.7 选择 v0.3.8、v0.3.8 不提示同版且忽略 Mac 标签。生产客户端实际联网下载公开安装包，严格 HTTPS 跳转、校验文件/包的双层 SHA-256 与长度全部通过；没有执行安装或访问用户数据。首轮遇到本机传输握手中断，按原逻辑报错、不安装；重试成功，没有关闭证书校验或改全局网络设置。公网下载通过仍不等于用户安装目录的完整升级回路已手点通过。
 - 未覆盖作者安装或 Agent 数据；真实静默重复安装补足旧 QA 的干净 runner 缺口，但不等于安装版完整旧程序 → 公网下载 → helper → 新程序重启已在用户机器手点验收。免安装独立交接回路的既有隔离证据见下方。
 - 当前公开 Windows 为 v0.3.8；v0.3.6 及更早需先手动安装一次，已使用 v0.3.7 可软件内升级。没有为测试公开假版本；本次不扩大 Agent 原生显示/续聊验证范围。
