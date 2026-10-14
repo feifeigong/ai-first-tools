@@ -4,7 +4,7 @@ Mac 预览版通过 GitHub 发布，不上苹果商店，不使用 Developer ID 
 
 ## 下载与安装
 
-[Mac 发布页](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.6)
+[Mac 发布页](https://github.com/feifeigong/ai-first-tools/releases?q=macos&expanded=true)
 
 1. 苹果 M 系列选 `macos-arm64.dmg`；Intel Mac 选 `macos-x86_64.dmg`。苹果菜单 → 关于本机可以查看芯片类型。
 2. 打开 DMG，把「AI一手工具工作台」拖到「Applications / 应用程序」。
@@ -35,6 +35,12 @@ Mac 预览版通过 GitHub 发布，不上苹果商店，不使用 Developer ID 
 - 卸载只把工作台移到废纸篓，不需要删除其他 AI 软件的记录。
 
 ## 能力与边界
+
+preview.7 修正本机 Work/Codex 长对话的分页导入。旧版只校验短对话回读，导入的是旧式历史，逐条分页接口不能读取；新版同时保留模型上下文与可分页显示记录、稳定轮次/消息编号、连续记录序号，完整校验正文后再登记成功。
+
+**已用旧版搬过但向上翻页失败的记录，请更新工作台，再从 Cursor 重新搬一次。** 新版允许这一次重搬，产生新副本，之后恢复去重；不会删除原 Cursor 记录或修改已搬入的旧副本。打开新的那条记录查看；不要继续查看旧的残缺副本。建议先完全退出 ChatGPT，再重新打开，让它加载新记录。不需清空历史或手动删除数据库。
+
+使用新版 ChatGPT 桌面端的本机 Work/Codex。目标原生引擎的分页读取验证与实际 Mac 桌面界面人工验收是不同层次，边界见 [测试记录](MACOS-QA.md)。本项目不会代用户发送模型请求或测试付费续聊。
 
 Mac 用一个 Cocoa/WebKit 窗口直接显示工作台和工具，不启动另一个窗口再合并。共用原有来源读取、目标模式、搬运、去重、关闭保护和实际 Agent Logo。
 

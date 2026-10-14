@@ -141,7 +141,18 @@ def history_key(source: str, session_id: str, target: str, directory: str) -> st
 
 
 def already_moved(source: str, session_id: str, target: str, directory: str) -> bool:
-    return history_key(source, session_id, target, directory) in _load_history()
+    saved = _load_history().get(history_key(source, session_id, target, directory))
+    if target in ("codex", "chatgpt_work"):
+        return isinstance(saved, dict) and saved.get("format") == codex_import.HISTORY_FORMAT
+    return saved is not None
+
+
+def _record_move(source: str, session_id: str, target: str, directory: str) -> None:
+    history = _load_history()
+    stamp = int(time.time())
+    history[history_key(source, session_id, target, directory)] = (
+        {"time": stamp, "format": codex_import.HISTORY_FORMAT} if target in ("codex", "chatgpt_work") else stamp)
+    _save_history(history)
 
 
 def _friendly(detail: str) -> str:
@@ -198,8 +209,18 @@ def _import_document(path: Path, document: dict, target: str, details: dict | No
     verification.close()
     try:
         reread = _run(["export", imported_id, "--from", TARGETS[target]["harness"], "--out", str(verification_path)], environment)
-        if reread.returncode != 0 or not json.loads(verification_path.read_text(encoding="utf-8")).get("messages"):
+        verified = json.loads(verification_path.read_text(encoding="utf-8")) if reread.returncode == 0 else {}
+        if not verified.get("messages"):
             raise ValueError("记录已写入，但重新读取验证失败。请查看日志，未登记为搬运成功。")
+        if target in ("codex", "chatgpt_work"):
+            try:
+                codex_import.verify_body(document, verified)
+            except ValueError:
+                location_path = Path(location).resolve()
+                sessions_root = (Path(environment["CODEX_HOME"]) / "sessions").resolve()
+                if location_path.is_relative_to(sessions_root) and location_path.name.endswith(f"-{imported_id}.jsonl"):
+                    location_path.unlink(missing_ok=True)
+                raise
     finally:
         verification_path.unlink(missing_ok=True)
     if target == "qwen_work":
@@ -260,9 +281,7 @@ def _move_cached_claude(session: dict, target: str, directory: str, details: dic
         result = _import_document(path, document, target, details)
         if result[0] != "ok":
             return result
-        history = _load_history()
-        history[history_key("claude_desktop", sid, target, directory)] = int(time.time())
-        _save_history(history)
+        _record_move("claude_desktop", sid, target, directory)
         log(f"moved claude_desktop/{sid} -> {target} in {directory}")
         return result
     except subprocess.TimeoutExpired:
@@ -322,9 +341,7 @@ def move_one(source: str, session: dict, target: str, directory: str, details: d
         result = _import_document(path, document, target, details)
         if result[0] != "ok":
             return result
-        history = _load_history()
-        history[history_key(source, sid, target, directory)] = int(time.time())
-        _save_history(history)
+        _record_move(source, sid, target, directory)
         log(f"moved {source}/{sid} -> {target} in {directory}")
         return result
     except subprocess.TimeoutExpired:

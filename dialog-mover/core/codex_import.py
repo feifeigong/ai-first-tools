@@ -11,6 +11,139 @@ from pathlib import Path
 from .chatgpt import _norm
 
 
+HISTORY_FORMAT = "paginated-import-v1"
+
+
+def verify_body(document: dict, reread: dict) -> None:
+    def signature(body: dict) -> dict:
+        values = {("user", "text"): [], ("assistant", "text"): [],
+                  ("user", "thinking"): [], ("assistant", "thinking"): [],
+                  ("user", "image"): [], ("assistant", "image"): []}
+        for message in body.get("messages", []):
+            role = message.get("role")
+            content = message.get("content", [])
+            parts = [{"type": "text", "text": content}] if isinstance(content, str) else content
+            for part in parts:
+                kind = part.get("type")
+                if kind == "artifact":
+                    artifact = part["artifact"]
+                    source = artifact["source"]
+                    text = "[artifact: " + artifact["name"] + "]"
+                    if source["type"] == "text":
+                        text += "\n" + source["text"]
+                    elif source["type"] == "path":
+                        text += " " + source["path"]
+                    values[(role, "text")].append(text)
+                elif kind in ("text", "thinking"):
+                    text = part.get("text", "")
+                    if text:
+                        values[(role, kind)].append(text)
+                elif kind == "image":
+                    values[(role, kind)].append(part["source"])
+        return {key: "\n\n".join(value) if key[1] != "image" else value for key, value in values.items()}
+
+    if signature(document) != signature(reread):
+        raise ValueError("本机任务正文完整性校验失败，未登记搬运成功；原记录不变，请更新软件后重新搬运。")
+
+
+def paginated_history(records: list[dict], imported_id: str) -> list[dict]:
+    namespace = uuid.UUID(imported_id)
+    output = [records[0]]
+    turn_id = None
+    last_agent = None
+    pending_calls = {}
+    last_timestamp = records[0]["timestamp"]
+
+    def event(timestamp: str, payload: dict) -> dict:
+        if payload["type"] == "item_completed":
+            payload["completed_at_ms"] = int(datetime.fromisoformat(timestamp.replace("Z", "+00:00")).timestamp() * 1000)
+        return {"timestamp": timestamp, "type": "event_msg", "payload": payload}
+
+    def complete_turn() -> None:
+        if turn_id:
+            if last_agent:
+                last_agent["phase"] = "final_answer"
+            output.append(event(last_timestamp, {"type": "task_complete", "turn_id": turn_id,
+                                                 "last_agent_message": None}))
+
+    for index, record in enumerate(records[1:]):
+        if record.get("type") != "response_item":
+            continue
+        payload = record["payload"]
+        kind = payload.get("type")
+        timestamp = record.get("timestamp") or last_timestamp
+        if turn_id is None or kind == "message" and payload.get("role") == "user":
+            complete_turn()
+            turn_id = str(uuid.uuid5(namespace, f"turn:{index}"))
+            last_agent = None
+            pending_calls = {}
+            output.append(event(timestamp, {"type": "task_started", "turn_id": turn_id,
+                                            "model_context_window": None}))
+        item_id = str(uuid.uuid5(namespace, f"item:{index}"))
+        item = None
+        if kind == "message":
+            content = payload.get("content", [])
+            if payload.get("role") == "user":
+                inputs = []
+                for part in content:
+                    if part.get("type") == "input_text":
+                        inputs.append({"type": "text", "text": part["text"], "text_elements": []})
+                    elif part.get("type") == "input_image":
+                        inputs.append({"type": "image", "url": part["image_url"]})
+                    else:
+                        raise ValueError("本机任务包含未支持的正文格式，未登记搬运成功。")
+                item = {"type": "UserMessage", "id": item_id, "content": inputs}
+            elif payload.get("role") == "assistant":
+                if any(part.get("type") != "output_text" for part in content):
+                    raise ValueError("本机任务包含未支持的回复格式，未登记搬运成功。")
+                item = {"type": "AgentMessage", "id": item_id,
+                        "content": [{"type": "Text", "text": part["text"]} for part in content],
+                        "phase": "commentary"}
+                last_agent = item
+        elif kind == "reasoning":
+            item = {"type": "Reasoning", "id": item_id,
+                    "summary_text": [part["text"] for part in payload.get("summary", [])], "raw_content": []}
+        elif kind in ("function_call", "custom_tool_call", "web_search_call"):
+            arguments = payload.get("arguments", payload.get("input", payload.get("action", {})))
+            if isinstance(arguments, str):
+                try:
+                    arguments = json.loads(arguments)
+                except json.JSONDecodeError:
+                    pass
+            item = {"type": "DynamicToolCall", "id": item_id,
+                    "tool": payload.get("name", "web_search"), "arguments": arguments,
+                    "status": "failed", "content_items": None, "success": None,
+                    "error": "来源未提供工具结果，仅保留历史调用"}
+            if payload.get("call_id"):
+                pending_calls[payload["call_id"]] = item
+        elif kind in ("function_call_output", "custom_tool_call_output"):
+            result = payload.get("output", "")
+            if not isinstance(result, str):
+                result = json.dumps(result, ensure_ascii=False)
+            called = pending_calls.pop(payload.get("call_id"), None)
+            if called is not None:
+                called["content_items"] = [{"type": "inputText", "text": result}]
+                called["status"] = "completed"
+                called["error"] = None
+            else:
+                item = {"type": "AgentMessage", "id": item_id,
+                        "content": [{"type": "Text", "text": "[迁入的历史工具结果]\n" + result}],
+                        "phase": "commentary"}
+        else:
+            raise ValueError("本机任务包含未支持的记录格式，未登记搬运成功。")
+        output.append(record)
+        if item is not None:
+            output.append(event(timestamp, {"type": "item_completed", "thread_id": imported_id,
+                                            "turn_id": turn_id, "item": item}))
+        last_timestamp = timestamp
+    complete_turn()
+    if not any(record.get("payload", {}).get("type") == "item_completed" for record in output):
+        raise ValueError("本机任务没有可分页的正文，未登记搬运成功。")
+    for ordinal, record in enumerate(output):
+        record["ordinal"] = ordinal
+    return output
+
+
 COLUMNS = {
     "threads": {"id", "rollout_path", "created_at", "updated_at", "source", "model_provider", "cwd", "title", "sandbox_policy", "approval_mode", "has_user_event", "first_user_message", "preview", "created_at_ms", "updated_at_ms", "recency_at", "recency_at_ms", "thread_source", "history_mode", "name", "originator", "project_id"},
     "projects": {"id", "name", "metadata", "position", "created_at_ms", "updated_at_ms"},
@@ -70,8 +203,9 @@ def register(path: Path, imported_id: str, document: dict, target: str, env: dic
     title = str(document.get("title") or _first_user_text(document)[:120] or "搬入的对话")
     metadata = records[0]["payload"]
     metadata.update({"source": "vscode", "thread_source": "user", "originator": originator, "cwd": directory,
-                     "timestamp": timestamp, "history_mode": "legacy"})
+                     "timestamp": timestamp, "history_mode": "paginated"})
     records[0]["timestamp"] = timestamp
+    records = paginated_history(records, imported_id)
     temporary = path.with_suffix(".importing")
     try:
         temporary.write_text("".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records), encoding="utf-8")
@@ -94,7 +228,7 @@ def register(path: Path, imported_id: str, document: dict, target: str, env: dic
                       "cwd": directory, "title": title, "name": title, "first_user_message": _first_user_text(document),
                       "preview": _first_user_text(document)[:600] or title,
                       "has_user_event": 1, "sandbox_policy": '{"type":"read-only"}', "approval_mode": "on-request",
-                      "history_mode": "legacy", "project_id": project_id}
+                      "history_mode": "paginated", "project_id": project_id}
             columns = ",".join(values)
             placeholders = ",".join("?" for _column in values)
             connection.execute(f"INSERT INTO threads({columns}) VALUES({placeholders})", tuple(values.values()))

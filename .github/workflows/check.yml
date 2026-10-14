@@ -18,7 +18,7 @@ jobs:
       - run: python -m pip install -r dialog-mover/requirements-dev.txt
       - name: Backend safety and sidebar checks
         working-directory: dialog-mover
-        run: python -m unittest test_chatgpt test_close_safety test_embedded_startup test_doubao test_macos test_macos_updater -v
+        run: python -m unittest test_chatgpt test_close_safety test_embedded_startup test_doubao test_macos test_macos_updater test_codex_history -v
       - name: UI checks with synthetic records
         working-directory: dialog-mover
         run: python -m unittest test_agent_icons test_import_ui test_ui_polish test_macos_ui -v

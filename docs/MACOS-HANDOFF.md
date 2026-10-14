@@ -105,3 +105,11 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 - Windows 与 Mac 的下载和更新能力分开说明。
 
 进展以 MACOS-QA.md 和当前 Actions 为准。Windows 仅验证共享业务/浏览器布局，真实 Mac 应用由 macOS runner 检查；最终第三方列表/续聊由作者实机验收。
+## 本轮补充：preview.7 长对话分页导入
+
+- 用户现象是 Cursor → 本机 Work 只显示尾部，上翻「重试」无效；不是更新检查问题。
+- 旧版原生 `thread/read` 通过不等于分页通过。旧 legacy 导入可复现 `thread/items/list` 返回不支持；见 `dialog-mover/test_codex_native.py` 新增长对话测试。
+- 新导入用 paginated 元数据、完整 `item_completed`、稳定轮次/消息 UUID、从零连续 ordinal；保留原协议内容，不手写目标分页数据库，让目标原生恢复线程建立投影。
+- 旧版搬过的记录更新后重新搬一次，创建新副本，不修改旧副本或源。新格式成功后恢复去重。
+- 新增 `test_codex_history.py` 完整性/格式/旧去重回归；Mac CI 下载 SHA 固定的官方 0.162.1 引擎，三个原生历史测试均禁止模型请求。CI 测试引擎不进入发行包。
+- 不把原生引擎分页验证说成用户 Mac 的 ChatGPT 界面手工滚动或实际发送续聊已经完成。发布状态以 GitHub 和下一节 QA 为准。
