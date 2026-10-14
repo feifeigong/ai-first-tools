@@ -8,6 +8,10 @@
   const progress = document.getElementById("workspace-progress");
   const dismiss = document.getElementById("workspace-dismiss");
   let initialized = false;
+  let initializing = false;
+  let startTimer = null;
+  let startRetryCount = 0;
+  let initializationNotice = null;
   let checking = false;
   let hasUpdate = false;
   let installing = false;
@@ -16,8 +20,13 @@
   let checkTimer = null;
   let retryCount = 0;
   let failureNotice = null;
-  const checkInterval = 6 * 60 * 60 * 1000;
+  let announcedVersion = null;
+  let lastCheckAt = null;
+  let retryAfter = 0;
+  const checkInterval = 10 * 60 * 1000;
+  const wakeInterval = 2 * 60 * 1000;
   const retryDelays = [60000, 300000, 900000, 3600000];
+  const startRetryDelays = [1000, 5000, 30000, 60000];
   const scheduleCheck = delay => {
     if (!automaticChecks) return;
     clearTimeout(checkTimer);
@@ -58,15 +67,21 @@
     }
     clearTimeout(checkTimer);
     checking = true;
+    lastCheckAt = Date.now();
     checker.disabled = true;
     checker.textContent = "正在检查…";
     let failure = null;
     const showFailure = result => {
       failure = result;
+      checker.title = result.error;
+      if (result.retainedUpdate && hasUpdate) {
+        if (manual) show(result.error, true, installing ? "下载并更新" : "打开下载页");
+        return;
+      }
       hasUpdate = false;
       installing = false;
+      announcedVersion = null;
       download.hidden = true;
-      checker.title = result.error;
       if (manual) show(result.error, result.canOpenDownloads, "打开下载页");
       else if (!failureNotice) show("暂时没能检查更新，将自动重试。您可以继续使用。");
       if (manual || !failureNotice) failureNotice = message.textContent;
@@ -81,9 +96,18 @@
         failureNotice = null;
         if (result.available) {
           hasUpdate = true; installing = result.canInstall === true;
-          show(`发现新版本 ${result.version}，${installing ? "点一下即可更新并重新打开。" : "可以打开下载页获取完整安装包。"}`, true, installing ? "下载并更新" : "打开下载页");
+          download.hidden = false;
+          download.textContent = installing ? "下载并更新" : "打开下载页";
+          if (manual || announcedVersion !== result.version) {
+            show(`发现新版本 ${result.version}，${installing ? "点一下即可更新并重新打开。" : "可以打开下载页获取完整安装包。"}`, true, download.textContent);
+          }
+          announcedVersion = result.version;
         }
-        else { hasUpdate = false; installing = false; download.hidden = true; if (manual) show("已经是当前最新的 Mac 版本。"); }
+        else {
+          hasUpdate = false; installing = false; announcedVersion = null; download.hidden = true;
+          if (manual) show("已经是当前最新的 Mac 版本。");
+          else if (message.textContent.startsWith("发现新版本 ")) notice.hidden = true;
+        }
       }
     } catch { showFailure({error: "暂时无法检查更新，您可以继续使用。", canOpenDownloads: true}); }
     finally {
@@ -92,8 +116,10 @@
       checking = false;
       if (failure) {
         retryCount += 1;
-        scheduleCheck(failure.errorCode === "rate_limit" ? 3600000 : retryDelays[Math.min(retryCount - 1, retryDelays.length - 1)]);
-      } else scheduleCheck(checkInterval);
+        const delay = failure.errorCode === "rate_limit" ? 3600000 : retryDelays[Math.min(retryCount - 1, retryDelays.length - 1)];
+        retryAfter = Date.now() + delay;
+        scheduleCheck(delay);
+      } else { retryAfter = 0; scheduleCheck(checkInterval); }
     }
   };
   checker.addEventListener("click", () => check(true));
@@ -149,10 +175,15 @@
   });
   const start = async () => {
     if (window.pywebview?.platform === "cocoa" && !window.__AI_FIRST_BRIDGE_READY__) return;
-    if (initialized || !window.pywebview?.api) return;
-    initialized = true;
+    if (initialized || initializing || !window.pywebview?.api) return;
+    clearTimeout(startTimer);
+    initializing = true;
     try {
       const info = await window.pywebview.api.workspace_info();
+      initialized = true;
+      startRetryCount = 0;
+      if (initializationNotice && message.textContent === initializationNotice) notice.hidden = true;
+      initializationNotice = null;
       document.getElementById("workspace-version").textContent = `Mac · v${info.release || info.version}`;
       checker.disabled = false;
       if (info.automaticChecks) {
@@ -160,7 +191,7 @@
         if (info.updateMessage) show(info.updateMessage);
         scheduleCheck(2000);
       }
-      else {
+      if (info.smokeAudit || !info.automaticChecks) {
         const agents = await window.pywebview.api.agents();
         toggle.click();
         const hidden = getComputedStyle(document.getElementById("workspace-nav")).display === "none";
@@ -170,9 +201,26 @@
           checks: { sidebarHidden: hidden, sidebarState: expanded, nativeEngineReady: agents.ready, isolatedRecords: agents.agents.length === 0, bridge: true },
           scope: "Cocoa window, WebKit UI and Python bridge; synthetic empty user profile" };
       }
-    } catch { show("工作台连接失败，请重新打开。不会用演示数据替代您的记录。"); }
+    } catch {
+      initialized = false;
+      if (!initializationNotice) {
+        initializationNotice = "工作台连接暂未就绪，正在自动重试。您无需点击检查更新。";
+        show(initializationNotice);
+      }
+      const delay = startRetryDelays[Math.min(startRetryCount, startRetryDelays.length - 1)];
+      startRetryCount += 1;
+      startTimer = setTimeout(start, delay);
+    } finally { initializing = false; }
+  };
+  const wake = () => {
+    if (!initialized) { start(); return; }
+    if (!automaticChecks || checking || updating || document.visibilityState === "hidden" || lastCheckAt === null) return;
+    if (Date.now() >= retryAfter && Date.now() - lastCheckAt >= wakeInterval) scheduleCheck(250);
   };
   window.addEventListener("pywebviewready", start);
   window.addEventListener("ai-first-ready", start);
-  setTimeout(start, 500);
+  window.addEventListener("focus", wake);
+  window.addEventListener("online", wake);
+  document.addEventListener("visibilitychange", wake);
+  startTimer = setTimeout(start, 500);
 })();

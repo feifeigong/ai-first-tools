@@ -217,6 +217,35 @@ class MacUpdatesTests(unittest.TestCase):
             self.assertEqual(result["errorCode"], "network")
             self.assertNotIn("secret", report.read_text())
 
+    def test_transient_failure_retains_previously_validated_update_but_invalid_feed_clears_it(self):
+        from entry import MacApi
+
+        for error, retained in ((URLError(TimeoutError()), True), (ValueError("synthetic invalid feed"), False)):
+            with self.subTest(retained=retained):
+                api = MacApi()
+                release = {"available": True, "version": "0.4.1", "url": f"{REPOSITORY}/releases/tag/v0.4.1"}
+                package = {"version": "0.4.1", "sha256": "a" * 64}
+                with patch("entry.version_info", return_value={"release": "0.4.0"}), \
+                        patch.object(updates, "check", side_effect=[release, error]), \
+                        patch("entry.updater.package_from_release", return_value=package) as validator:
+                    self.assertTrue(api.check_update()["available"])
+                    result = api.check_update()
+                    self.assertEqual(result["retainedUpdate"], retained)
+                    self.assertEqual(api._package, package if retained else None)
+                    self.assertEqual(api._release, release["url"] if retained else None)
+                    validator.assert_called_once_with(release)
+
+    def test_smoke_automatic_reminder_is_synthetic_and_never_contacts_github(self):
+        from entry import MacApi
+
+        api = MacApi(smoke=True)
+        with patch.object(updates, "check") as network:
+            self.assertTrue(api.check_update()["available"])
+            self.assertEqual(api._smoke_check_calls, 1)
+            self.assertIsNone(api._package)
+            self.assertEqual(api.update_status()["phase"], "idle")
+            network.assert_not_called()
+
 
 class MacResourceTests(unittest.TestCase):
     def test_native_bridge_ready_signal_uses_the_injected_script_channel(self):
@@ -275,20 +304,22 @@ class MacResourceTests(unittest.TestCase):
                 validated_assets(directory, release)
 
     def test_cocoa_smoke_waits_for_loaded_event_before_evaluating_bridge(self):
-        from entry import smoke_check
+        from entry import MacApi, smoke_check
 
         window = Mock()
         window.events.loaded.wait.return_value = True
-        window.evaluate_js.return_value = json.dumps({"passed": True})
+        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True]
+        api = MacApi(smoke=True)
+        api._smoke_check_calls = 1
         with tempfile.TemporaryDirectory() as temporary:
             report = Path(temporary) / "smoke.json"
-            smoke_check(window, report)
+            smoke_check(window, api, report)
             self.assertTrue(json.loads(report.read_text())["passed"])
         self.assertEqual(window.mock_calls[0], unittest.mock.call.events.loaded.wait(45))
         window.destroy.assert_called_once()
 
     def test_unloaded_cocoa_window_fails_without_evaluating_javascript(self):
-        from entry import smoke_check
+        from entry import MacApi, smoke_check
 
         window = Mock()
         window.events.loaded.wait.return_value = False
@@ -296,11 +327,25 @@ class MacResourceTests(unittest.TestCase):
         window.events.shown.is_set.return_value = True
         with tempfile.TemporaryDirectory() as temporary:
             report = Path(temporary) / "smoke.json"
-            smoke_check(window, report)
+            smoke_check(window, MacApi(smoke=True), report)
             result = json.loads(report.read_text())
             self.assertFalse(result["passed"])
             self.assertFalse(result["checks"]["pageLoaded"])
         window.evaluate_js.assert_not_called()
+        window.destroy.assert_called_once()
+
+    def test_native_smoke_rejects_missing_automatic_reminder_even_with_a_ready_bridge(self):
+        from entry import MacApi, smoke_check
+
+        window = Mock()
+        window.events.loaded.wait.return_value = True
+        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), False]
+        with tempfile.TemporaryDirectory() as temporary, patch("entry.time.monotonic", side_effect=[0, 1, 46]), patch("entry.time.sleep"):
+            report = Path(temporary) / "smoke.json"
+            smoke_check(window, MacApi(smoke=True), report)
+            result = json.loads(report.read_text())
+            self.assertFalse(result["passed"])
+            self.assertFalse(result["checks"]["automaticUpdateReminder"])
         window.destroy.assert_called_once()
 
     def test_workspace_wraps_shared_ui_without_iframes_or_child_processes(self):

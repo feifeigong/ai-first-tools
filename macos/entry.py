@@ -40,6 +40,7 @@ class MacApi(Api):
     def __init__(self, smoke: bool = False) -> None:
         super().__init__()
         self._smoke = smoke
+        self._smoke_check_calls = 0
         self._release = None
         self._update_lock = threading.Lock()
         self._update_gate = threading.RLock()
@@ -60,23 +61,29 @@ class MacApi(Api):
                     receipt.unlink()
             except (OSError, ValueError):
                 pass
-        return {**version_info(), "platform": "macOS", "architecture": platform.machine(), "automaticChecks": not self._smoke,
-                "updateMessage": message}
+        return {**version_info(), "platform": "macOS", "architecture": platform.machine(), "automaticChecks": True,
+                "smokeAudit": self._smoke, "updateMessage": message}
 
     def check_update(self) -> dict:
+        if self._smoke:
+            self._smoke_check_calls += 1
+            return {"available": True, "version": "synthetic-reminder-only", "canInstall": True}
         if not self._update_lock.acquire(blocking=False):
             return {"error": "正在检查更新，请稍等。"}
         try:
-            self._release = None
-            self._package = None
             result = updates.check(version_info()["release"])
+            package = updater.package_from_release(result) if result.get("available") else None
             self._release = result.get("url")
-            if result.get("available"):
-                self._package = updater.package_from_release(result)
+            self._package = package
             return {**{key: value for key, value in result.items() if key != "assets"},
                     "canInstall": self._package is not None and bool(getattr(sys, "frozen", False))}
         except (OSError, ValueError, TypeError, ImportError) as error:
-            return updates.failure(error)
+            result = updates.failure(error)
+            retained = self._package is not None and result["errorCode"] in ("timeout", "dns", "network", "http", "rate_limit", "tls", "certificate")
+            if not retained:
+                self._release = None
+                self._package = None
+            return {**result, "retainedUpdate": retained}
         finally:
             self._update_lock.release()
 
@@ -198,7 +205,7 @@ def network_check(report: Path) -> bool:
     return passed
 
 
-def smoke_check(window, report: Path) -> None:
+def smoke_check(window, api: MacApi, report: Path) -> None:
     result = {"passed": False, "error": "UI bridge did not become ready"}
     try:
         if not window.events.loaded.wait(45):
@@ -208,8 +215,16 @@ def smoke_check(window, report: Path) -> None:
             value = window.evaluate_js("JSON.stringify(window.__AI_FIRST_SMOKE__ || null)")
             if value and value != "null":
                 result = json.loads(value)
-                break
+                reminder = window.evaluate_js("!document.getElementById('workspace-download').hidden && document.getElementById('workspace-message').textContent.includes('synthetic-reminder-only')")
+                if reminder:
+                    result["checks"]["automaticUpdateReminder"] = api._smoke_check_calls == 1
+                    result["checks"]["noUnrequestedDownload"] = api.update_status()["phase"] == "idle"
+                    result["passed"] = all(result["checks"].values())
+                    break
             time.sleep(0.25)
+        else:
+            result["passed"] = False
+            result.setdefault("checks", {})["automaticUpdateReminder"] = False
     except Exception as error:
         result = {"passed": False, "error": type(error).__name__,
                   "checks": {"windowShown": window.events.shown.is_set(), "pageLoaded": window.events.loaded.is_set()}}
@@ -284,7 +299,7 @@ def run() -> int:
             api.bind(window)
             window.events.loaded += signal_bridge_ready
             window.events.closing += lambda: window.evaluate_js("window.aiFirstBusyNotice && window.aiFirstBusyNotice()") if not api.can_close() else None
-            worker = (lambda: smoke_check(window, args.report)) if args.smoke_test else None
+            worker = (lambda: smoke_check(window, api, args.report)) if args.smoke_test else None
             start_cocoa(worker)
     if args.smoke_test:
         return 0 if args.report.is_file() and json.loads(args.report.read_text(encoding="utf-8")).get("passed") else 1

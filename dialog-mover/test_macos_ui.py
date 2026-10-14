@@ -18,6 +18,108 @@ BOOT = "window.pywebview={api:{agents:async()=>(INFO),sessions:async()=>(SESSION
 
 
 class MacUiTests(unittest.TestCase):
+    def test_open_workspace_discovers_a_later_release_within_ten_minutes(self):
+        bootstrap = BOOT + """
+window.checkCalls=0;
+window.pywebview.api.check_update=async()=>{window.checkCalls++;return window.checkCalls===1?{available:false}:{available:true,version:'0.4.1',canInstall:true}};
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.get_by_text("Mac · v0.4.0", exact=True).wait_for()
+                page.clock.fast_forward(2100)
+                page.wait_for_function("window.checkCalls===1")
+                page.clock.fast_forward(600100)
+                page.wait_for_function("window.checkCalls===2", timeout=2000)
+                self.assertTrue(page.get_by_role("button", name="下载并更新", exact=True).is_visible())
+            finally:
+                browser.close()
+
+    def test_returning_to_workspace_or_network_reconnect_checks_without_a_click(self):
+        for event in ("focus", "online", "visibilitychange"):
+            with self.subTest(event=event), tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+                resources = prepare(Path(temporary))
+                browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+                try:
+                    page = browser.new_page()
+                    page.clock.install()
+                    page.add_init_script(BOOT + """
+window.checkCalls=0;
+window.pywebview.api.check_update=async()=>{window.checkCalls++;return window.checkCalls===1?{available:false}:{available:true,version:'0.4.1',canInstall:true}};
+""")
+                    page.goto((resources / "ui/index.html").as_uri())
+                    page.get_by_text("Mac · v0.4.0", exact=True).wait_for()
+                    page.clock.fast_forward(2100)
+                    page.wait_for_function("window.checkCalls===1")
+                    page.clock.fast_forward(121000)
+                    surface = "document" if event == "visibilitychange" else "window"
+                    page.evaluate(f"{surface}.dispatchEvent(new Event('{event}'))")
+                    page.clock.fast_forward(1100)
+                    page.wait_for_function("window.checkCalls===2", timeout=2000)
+                    self.assertTrue(page.get_by_role("button", name="下载并更新", exact=True).is_visible())
+                    for _ in range(5):
+                        page.evaluate(f"{surface}.dispatchEvent(new Event('{event}'))")
+                    page.clock.fast_forward(1100)
+                    self.assertEqual(page.evaluate("window.checkCalls"), 2)
+                finally:
+                    browser.close()
+
+    def test_initialization_failure_recovers_and_starts_automatic_checking(self):
+        bootstrap = BOOT + """
+window.infoCalls=0;window.checkCalls=0;
+window.pywebview.api.workspace_info=async()=>{window.infoCalls++;if(window.infoCalls===1)throw new Error('synthetic initialization error');return {version:'0.4.0',automaticChecks:true}};
+window.pywebview.api.check_update=async()=>{window.checkCalls++;return {available:true,version:'0.4.1',canInstall:true}};
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.wait_for_function("window.infoCalls===1")
+                page.clock.fast_forward(1100)
+                page.wait_for_function("window.infoCalls===2", timeout=2000)
+                page.clock.fast_forward(2100)
+                page.wait_for_function("window.checkCalls===1", timeout=2000)
+                self.assertTrue(page.get_by_role("button", name="下载并更新", exact=True).is_visible())
+            finally:
+                browser.close()
+
+    def test_known_update_survives_transient_failure_without_reopening_dismissed_notice(self):
+        bootstrap = BOOT + """
+window.checkCalls=0;
+window.pywebview.api.check_update=async()=>{window.checkCalls++;return window.checkCalls===2?{error:'连接超时',errorCode:'timeout',retainedUpdate:true}:{available:true,version:'0.4.1',canInstall:true}};
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.get_by_text("Mac · v0.4.0", exact=True).wait_for()
+                page.clock.fast_forward(2100)
+                page.get_by_role("button", name="下载并更新", exact=True).wait_for()
+                page.get_by_role("button", name="关闭提示", exact=True).click()
+                page.clock.fast_forward(600100)
+                page.wait_for_function("window.checkCalls===2", timeout=2000)
+                self.assertTrue(page.get_by_role("button", name="下载并更新", exact=True).is_visible())
+                self.assertFalse(page.locator("#workspace-notice").is_visible())
+                page.clock.fast_forward(61000)
+                page.wait_for_function("window.checkCalls===3", timeout=2000)
+                self.assertTrue(page.get_by_role("button", name="下载并更新", exact=True).is_visible())
+                self.assertFalse(page.locator("#workspace-notice").is_visible())
+            finally:
+                browser.close()
+
     def test_cocoa_start_waits_for_the_native_bridge_ready_signal(self):
         bootstrap = BOOT + """
 window.pywebview.platform='cocoa';window.__AI_FIRST_BRIDGE_READY__=false;
@@ -94,6 +196,8 @@ window.pywebview.api.check_update=async()=>{window.checkCalls++;return {error:'�
                 page.clock.fast_forward(61000)
                 self.assertEqual(page.evaluate("window.checkCalls"), 1)
                 page.clock.fast_forward(3600000)
+                page.evaluate("window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'))")
+                page.clock.fast_forward(1100)
                 page.wait_for_function("window.checkCalls===2", timeout=2000)
             finally:
                 browser.close()
@@ -118,7 +222,7 @@ window.pywebview.api.check_update=async()=>{window.checkCalls++;return window.ch
                 page.get_by_role("button", name="下载并更新", exact=True).wait_for()
                 page.clock.fast_forward(61000)
                 self.assertEqual(page.evaluate("window.checkCalls"), 2)
-                page.clock.fast_forward(6 * 60 * 60 * 1000)
+                page.clock.fast_forward(10 * 60 * 1000)
                 page.wait_for_function("window.checkCalls===3", timeout=2000)
             finally:
                 browser.close()
@@ -171,9 +275,36 @@ window.pywebview.api.update_status=async()=>({phase:'downloading',progress:20});
                 page.clock.fast_forward(2100)
                 page.get_by_role("button", name="下载并更新", exact=True).click()
                 page.get_by_text("正在下载 20% · 下载时可以继续使用", exact=True).wait_for()
-                page.clock.fast_forward(6 * 60 * 60 * 1000)
+                page.evaluate("window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'))")
+                page.clock.fast_forward(10 * 60 * 1000)
                 page.clock.fast_forward(61000)
                 self.assertEqual(page.evaluate("window.checkCalls"), 1)
+            finally:
+                browser.close()
+
+    def test_reactivation_does_not_overlap_an_inflight_check(self):
+        bootstrap = BOOT + """
+window.checkCalls=0;
+window.pywebview.api.check_update=()=>{window.checkCalls++;return new Promise(resolve=>{window.finishCheck=resolve})};
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.get_by_text("Mac · v0.4.0", exact=True).wait_for()
+                page.clock.fast_forward(2100)
+                page.wait_for_function("window.checkCalls===1")
+                page.clock.fast_forward(121000)
+                page.evaluate("window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'))")
+                page.clock.fast_forward(1100)
+                self.assertEqual(page.evaluate("window.checkCalls"), 1)
+                page.evaluate("window.finishCheck({available:true,version:'0.4.1',canInstall:true})")
+                page.get_by_role("button", name="下载并更新", exact=True).wait_for()
+                self.assertTrue(page.get_by_role("button", name="检查更新", exact=True).is_enabled())
             finally:
                 browser.close()
 
