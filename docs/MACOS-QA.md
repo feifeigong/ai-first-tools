@@ -1,6 +1,6 @@
 # Mac 移植验证记录
 
-## 2026-10-14 preview.6 自动检查与桥就绪（当前已发布）
+## 2026-10-14 preview.6 自动检查与桥就绪（历史已发布）
 
 [公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.6)。构建源码 `9703d4335043526fe3ad0ecb00fdba6e31b83ac4`，同名 Git 标签指向此提交；后续交接文档不重做包。
 
@@ -142,7 +142,20 @@ Actions 的 `macos-arm64`、`macos-x86_64` 产物各包含 DMG、`self-test.json
 - preview.1/2 没有自动替换；preview.3 加入此能力，preview.4 修复追加重启问题并重复通过隔离原生审计，用户真实安装的手点公网完整升级仍待验收。
 
 测试全用临时目录/合成记录，不导入真实账户、不发模型请求；按 MACOS-HANDOFF.md 继续真机验收。
-## preview.7：长对话分页专项（构建结果待登记）
+## preview.7：长对话分页专项（当前已发布）
+
+[公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.7)，发布 ID `412440705`，2026-10-14 08:09:00 UTC 公开。源码标签固定为 `12aa483b9191ee4772cbfaa288dd9429a23f047f`，文档补充不重做运行包。
+
+发布包来自主分支构建 `38527937388 / attempt 2`：两架构各 80 项共享/格式检查、3 项原生历史分页检查，冻结资源 7 项、Cocoa 窗口/桥 5 项、实际 HTTPS 3 项、更新 helper/安全替换/原生重开 4 项通过；实际 Stage 上传 11 个资产，全部独立下载原 CI 资产并对照 GitHub 上传大小与 digest。标签构建 `38527943205` 同源码两架构检查也通过。Windows 两次源码回归成功，本地 85 项共享+原生检查和 21 项浏览器检查通过；隔离 19 项旧导入回归通过，2 项「读取已安装个人数据库结构」因不读取真实数据库而跳过。未重发 Windows v0.3.8。
+
+**保留失败记录：** 主分支首轮 Intel 的搬家分页、初次窗口和 HTTPS 检查通过，但更新后 Cocoa 重开页面加载超时，`windowShown=true / pageLoaded=false / bridgeInjectionStarted=false / localPageStatus=200`，更新审计回滚且为失败，未生成/发布该 DMG。没有放宽检查或改动无关 UI 来掩盖问题；相同源码的标签构建及主分支完整复测通过。这里只证明发布批次通过，不保证用户设备没有偶发 WebKit 启动失败。
+
+| preview.7 文件后缀 | 大小（字节） | SHA-256 |
+|---|---:|---|
+| macos-arm64.dmg | 23,277,144 | `73aa4075403786bae352525fc64cf32757ec988cb0cb735d8d3c9459caa1e7a2` |
+| macos-x86_64.dmg | 24,763,337 | `518d39c0a80192c16f982424b73d8acac6272280db85372223730ab8455f0e58` |
+
+公开后，在 Windows 宿主用无认证生产选择逻辑确认两架构 preview.2/3/4/6 都选到 preview.7，同版本不提示；实际下载公开 SHA 清单，核对架构 DMG 条目。不是用户 Mac 上的真实完整更新/界面人工测试。
 
 旧测试仅验证短正文整体回读，漏掉了桌面端逐条分页。新增隔离原生用例先复现 legacy 历史的 `thread/items/list` 报不支持；修正后验证 paginated 记录及索引由目标引擎自然加载。
 

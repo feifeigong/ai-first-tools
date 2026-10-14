@@ -14,7 +14,7 @@
 
 ### Mac 版
 
-**[⬇ Mac 预览版下载（preview.6 一键更新版）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.6)**
+**[⬇ Mac 预览版下载（preview.7 长对话分页修复版）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.7)**
 
 苹果 M 系列选 `macos-arm64.dmg`，Intel Mac 选 `macos-x86_64.dmg`。打开 DMG，拖到「应用程序」，之后直接打开，不需要源码或开发环境。
 
@@ -74,7 +74,8 @@
 
 - **Windows 和 Mac 都会自动提醒更新**：有新版时出现「下载并更新」，点一次即可下载、校验、更新并重新打开。也能点击「检查更新」。新工具随工作台一起更新，无需单独添加。
 - 安装版自动覆盖更新；免安装版更新原来的整个程序目录。不操作各 AI 软件的对话目录，保留工作台设置。搬运未结束时不会强制停止；下载可取消，网络不通仍能正常使用。
-- Windows v0.3.6 及更早需先手动安装一次 v0.3.8；已使用 v0.3.7 的用户可以软件内升级。Mac preview.1/2 需最后一次手动替换到 preview.6；preview.3/4 可软件内升级。旧版没有更新器，不能靠新代码让旧版直接完成自动替换。
+- Windows v0.3.6 及更早需先手动安装一次 v0.3.8；已使用 v0.3.7 的用户可以软件内升级。Mac preview.1/2 需最后一次手动替换到 preview.7；preview.3 及之后可软件内升级。旧版没有更新器，不能靠新代码让旧版直接完成自动替换。
+- 旧版 Mac 搬到本机 Work 后只见尾部、上翻重试的记录：更新到 preview.7，再从来源重新搬一次，打开新副本；原记录和旧副本保留，不需删数据库。新版完整比较正文并写入可分页历史，原生验证边界见 [Mac 测试记录](docs/MACOS-QA.md)。
 - 卸载：Windows「设置 → 应用」中找到「AI一手工具工作台」。卸载不删除各 AI 软件的对话，也不主动删除工作台的用户配置。
 - 反馈：[提交问题](https://github.com/feifeigong/ai-first-tools/issues)，附版本、Windows 版本、来源和目标软件即可。**不要贴登录令牌、完整聊天或个人路径。**
 
