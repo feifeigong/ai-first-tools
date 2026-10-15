@@ -31,7 +31,11 @@ def main() -> None:
     if reference.get("type") != "commit" or reference.get("sha") != args.commit:
         raise ValueError("Release tag does not match the verified native build")
     expected = validated_assets(args.artifacts, release)
-    metadata = api(f"releases/tags/{tag}")
+    # GitHub's public tag lookup can return 404 for an unpublished draft.
+    matching = [item for item in api("releases?per_page=100") if item.get("tag_name") == tag]
+    if len(matching) != 1:
+        raise ValueError("Expected exactly one release draft for the verified tag")
+    metadata = matching[0]
     assets = {asset["name"]: asset for asset in metadata["assets"]}
     if metadata.get("draft") is not True or len(assets) != len(metadata["assets"]) or set(assets) != {path.name for path in expected}:
         raise ValueError("Expected the complete matching draft, leaving published releases unchanged")
