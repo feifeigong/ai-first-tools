@@ -82,3 +82,15 @@ jobs:
           else
             python3 scripts/stage_windows_release.py --commit "$SOURCE"
           fi
+      - name: Independently download and compare every staged Mac asset
+        if: inputs.platform == 'macos'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ steps.build.outputs.source }}
+        run: python3 scripts/verify_macos_release.py --artifacts artifacts/release-stage --commit "$SOURCE" --report artifacts/release-verification.json
+      - uses: actions/upload-artifact@v4
+        if: inputs.platform == 'macos'
+        with:
+          name: macos-release-verification
+          path: artifacts/release-verification.json
+          if-no-files-found: error
