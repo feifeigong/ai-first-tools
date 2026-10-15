@@ -4,6 +4,8 @@
 
 28f808d 的 [38726399032](https://github.com/feifeigong/ai-first-tools/actions/runs/38726399032) 未通过，未创建公开标签或资产。ARM 准备八步通过，更新后的页面仍未加载，说明提前挂载视图不足以解决；Intel 在原生分页检查后的临时目录清理遇到默认插件后台 git 写入。随后隔离测试显式禁用 plugins，应用重开改为系统 LaunchServices。仍需两架构真实窗口、更新重开及再次打开的全部检查通过，不能用启动器返回码替代应用自己的报告。
 
+fcc4742 的 38727438948 ARM 仍在更新重开未加载，且 nativeContentAttached=true、localhost=200，LaunchServices 未解决问题，撤回该启动方式以保留对子进程的直接等待和停止。只在隔离 smoke 中添加 Cocoa 导航观察器，记录导航阶段、错误域/编号和异常类型，不记录 URL、请求头、环境或用户记录；先取得更具体的失败证据，不把待验证假设算成修复。
+
 ## 2026-10-14 preview.6 自动检查与桥就绪（历史已发布）
 
 [公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.6)。构建源码 `9703d4335043526fe3ad0ecb00fdba6e31b83ac4`，同名 Git 标签指向此提交；后续交接文档不重做包。

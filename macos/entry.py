@@ -242,6 +242,7 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
         except Exception as diagnostic:
             result["diagnostics"] = {"localPageError": type(diagnostic).__name__}
     finally:
+        result.setdefault("diagnostics", {})["navigation"] = vars(window).get("_ai_first_navigation")
         report.parent.mkdir(parents=True, exist_ok=True)
         report.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         window.destroy()
@@ -314,6 +315,10 @@ def run() -> int:
                                            width=1280, height=820, min_size=(960, 640), background_color="#F6F8FB", text_select=False)
             api.bind(window)
             window.events.before_show += attach_cocoa_content
+            if args.smoke_test:
+                from cocoa_audit import observe_navigation
+
+                window.events.before_show += observe_navigation
             window.events.loaded += signal_bridge_ready
             window.events.closing += lambda: window.evaluate_js("window.aiFirstBusyNotice && window.aiFirstBusyNotice()") if not api.can_close() else None
             worker = (lambda: smoke_check(window, api, args.report)) if args.smoke_test else None

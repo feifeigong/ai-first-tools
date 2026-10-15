@@ -310,8 +310,8 @@ class MacUpdaterTests(unittest.TestCase):
         with patch.dict(os.environ, {"DYLD_LIBRARY_PATH": "synthetic-old-libraries"}), patch.object(updater.subprocess, "Popen") as process:
             updater.start_app(self.root / updater.APP_NAME, ("--smoke-test", "--report", "synthetic-report.json"))
         arguments, options = process.call_args
-        self.assertEqual(arguments[0], ["/usr/bin/open", "-n", "-W", str(self.root / updater.APP_NAME),
-                                       "--args", "--smoke-test", "--report", "synthetic-report.json"])
+        self.assertEqual(arguments[0], [str(self.root / updater.APP_NAME / "Contents/MacOS" / updater.EXECUTABLE),
+                                       "--smoke-test", "--report", "synthetic-report.json"])
         self.assertEqual(options["env"]["PYINSTALLER_RESET_ENVIRONMENT"], "1")
         self.assertNotIn("DYLD_LIBRARY_PATH", options["env"])
         self.assertTrue(options["start_new_session"])
