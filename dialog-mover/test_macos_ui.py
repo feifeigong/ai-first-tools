@@ -357,6 +357,42 @@ window.pywebview.api.cancel_update=async()=>{window.updatePhase='error';return {
             finally:
                 browser.close()
 
+    def test_preparation_shows_actual_step_elapsed_time_and_pending_cancellation(self):
+        bootstrap = BOOT.replace("({available:false})", "({available:true,version:'0.4.1',canInstall:true})") + """
+window.updateState={phase:'preparing',step:'checking_package',progress:30};window.applyCalls=0;
+window.pywebview.api.start_update=async()=>({ok:true});
+window.pywebview.api.update_status=async()=>window.updateState;
+window.pywebview.api.cancel_update=async()=>{window.updateState.cancelRequested=true;return {ok:true}};
+window.pywebview.api.apply_update=async()=>{window.applyCalls++;return {ok:true}};
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.get_by_role("button", name="下载并更新").click()
+                page.get_by_text("正在检查新版应用（3/8）", exact=False).wait_for()
+                page.clock.fast_forward(31000)
+                page.wait_for_function("document.getElementById('workspace-message').textContent.includes('已用时 31 秒')")
+                self.assertIn("已用时 31 秒", page.locator("#workspace-message").inner_text())
+                page.evaluate("window.updateState.step='copying'")
+                page.clock.fast_forward(700)
+                self.assertIn("正在复制新版文件（4/8）", page.locator("#workspace-message").inner_text())
+                page.get_by_role("button", name="取消更新").click()
+                page.clock.fast_forward(700)
+                page.get_by_text("正在取消更新，当前版本保持不变…", exact=True).wait_for()
+                self.assertEqual(page.evaluate("window.applyCalls"), 0)
+                page.evaluate("window.updateState={phase:'error',error:'已取消更新，当前版本可以继续使用。'}")
+                page.clock.fast_forward(700)
+                page.get_by_text("已取消更新，当前版本可以继续使用。", exact=True).wait_for()
+                self.assertTrue(page.get_by_role("button", name="下载并更新").is_enabled())
+                self.assertTrue(page.get_by_role("button", name="关闭提示").is_enabled())
+            finally:
+                browser.close()
+
     def test_refresh_discovers_doubao_created_after_workspace_opened(self):
         bootstrap = BOOT.replace(json.dumps(INFO), json.dumps({**INFO, "agents": []}))
         with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:

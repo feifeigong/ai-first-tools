@@ -16,6 +16,13 @@
   let hasUpdate = false;
   let installing = false;
   let updating = false;
+  let preparingSince = null;
+  const preparationLabels = {
+    mounting: "正在打开安装包（1/8）", checking_current: "正在检查当前应用（2/8）",
+    checking_package: "正在检查新版应用（3/8）", copying: "正在复制新版文件（4/8）",
+    preparing_helper: "正在准备更新程序（5/8）", verifying: "正在复核更新文件（6/8）",
+    fingerprinting: "正在核对应用完整性（7/8）", unmounting: "正在释放安装包（8/8）"
+  };
   let automaticChecks = false;
   let checkTimer = null;
   let retryCount = 0;
@@ -125,7 +132,9 @@
   checker.addEventListener("click", () => check(true));
   const finishUpdate = text => {
     updating = false;
+    preparingSince = null;
     checker.disabled = download.disabled = false;
+    dismiss.disabled = false;
     progress.hidden = true;
     dismiss.textContent = "×";
     dismiss.setAttribute("aria-label", "关闭提示");
@@ -140,8 +149,12 @@
         progress.value = Math.min(100, Math.max(0, state.progress || 0));
         message.textContent = `正在下载 ${Math.floor(progress.value)}% · 下载时可以继续使用`;
       } else if (state.phase === "preparing") {
+        if (preparingSince === null) preparingSince = Date.now();
         progress.removeAttribute("value");
-        message.textContent = "正在校验更新包，当前版本保持不变…";
+        const elapsed = Math.max(0, Math.floor((Date.now() - preparingSince) / 1000));
+        message.textContent = state.cancelRequested ? "正在取消更新，当前版本保持不变…" :
+          `${preparationLabels[state.step] || "正在准备更新"} · 已用时 ${elapsed} 秒`;
+        dismiss.disabled = state.cancelRequested === true;
       } else if (state.phase === "ready") {
         progress.value = 100;
         const result = await window.pywebview.api.apply_update();

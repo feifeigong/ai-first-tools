@@ -117,9 +117,10 @@ class MacApi(Api):
             return {"ok": True}
 
     def _prepare_update(self, target: Path, package: dict) -> None:
-        def progress(phase, value):
+        def progress(phase, value, step=None):
             with self._update_gate:
-                self._update_state = {"phase": phase, "progress": value}
+                self._update_state = {"phase": phase, "progress": value, "step": step,
+                                      "cancelRequested": self._update_cancel.is_set()}
         try:
             job = updater.prepare(target, package, version_info()["release"], progress, self._update_cancel)
             with self._update_gate:
@@ -142,6 +143,7 @@ class MacApi(Api):
             if self._handing_off:
                 return {"error": "正在安全重启，请稍等。"}
             self._update_cancel.set()
+            self._update_state["cancelRequested"] = True
             if self._prepared is not None:
                 updater.discard(self._prepared)
                 self._prepared = None

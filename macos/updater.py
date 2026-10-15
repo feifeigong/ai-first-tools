@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -23,6 +24,7 @@ import updates
 APP_NAME = "AI一手工具工作台.app"
 EXECUTABLE = "AI First Tools"
 MAX_PACKAGE = 512 * 1024 * 1024
+PREPARATION_TIMEOUT = 180
 _audit_state = None
 
 
@@ -32,6 +34,32 @@ class UpdateError(Exception):
 
 class Cancelled(UpdateError):
     pass
+
+
+class Preparation:
+    def __init__(self, cancelled, progress, timeout=None):
+        self.cancelled = cancelled
+        self.progress = progress
+        self.deadline = time.monotonic() + (PREPARATION_TIMEOUT if timeout is None else timeout)
+        self.label = "准备更新"
+
+    def checkpoint(self):
+        if self.cancelled.is_set():
+            raise Cancelled("已取消更新，当前版本可以继续使用。")
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise UpdateError(f"{self.label}等待太久，已停止本次更新准备。当前版本未改动，可以重试或打开下载页。")
+        return remaining
+
+    def step(self, name, value, label):
+        self.checkpoint()
+        self.label = label
+        self.progress("preparing", value, name)
+
+
+def checkpoint(control):
+    if control is not None:
+        control.checkpoint()
 
 
 def state_root() -> Path:
@@ -123,20 +151,51 @@ def download(asset: dict, path: Path, progress, cancelled) -> None:
         raise
 
 
-def command(arguments, timeout=60) -> subprocess.CompletedProcess:
+def command(arguments, timeout=60, control=None) -> subprocess.CompletedProcess:
     environment = os.environ.copy()
     for name in ("DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH"):
         environment.pop(name, None)
-    return subprocess.run(arguments, capture_output=True, check=True, timeout=timeout, env=environment)
+    if control is None:
+        return subprocess.run(arguments, capture_output=True, check=True, timeout=timeout, env=environment)
+    control.checkpoint()
+    deadline = min(control.deadline, time.monotonic() + timeout)
+    process = subprocess.Popen(arguments, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment,
+                               creationflags=0x08000000 if sys.platform == "win32" else 0)
+    try:
+        while True:
+            control.checkpoint()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise UpdateError(f"{control.label}等待太久，已停止本次更新准备。当前版本未改动，可以重试或打开下载页。")
+            try:
+                output, errors = process.communicate(timeout=min(0.2, remaining))
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        control.checkpoint()
+        result = subprocess.CompletedProcess(arguments, process.returncode, output, errors)
+        result.check_returncode()
+        return result
+    except BaseException:
+        if process.poll() is None:
+            process.terminate()
+        try:
+            process.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate(timeout=2)
+        raise
 
 
-def validate_app(bundle: Path, release: str, architecture: str) -> None:
+def validate_app(bundle: Path, release: str, architecture: str, control=None) -> None:
+    checkpoint(control)
     if bundle.is_symlink() or not bundle.is_dir() or bundle.suffix != ".app":
         raise UpdateError("更新包不是完整的应用。")
     root = bundle.resolve()
     total = count = 0
     for directory, folders, files in os.walk(bundle, followlinks=False):
         for name in [*folders, *files]:
+            checkpoint(control)
             path = Path(directory) / name
             count += 1
             if not path.resolve().is_relative_to(root):
@@ -149,8 +208,9 @@ def validate_app(bundle: Path, release: str, architecture: str) -> None:
     metadata = json.loads((bundle / "Contents/Resources/version.json").read_text(encoding="utf-8"))
     if info.get("CFBundleIdentifier") != "cn.aifirst.tools" or info.get("CFBundleExecutable") != EXECUTABLE or metadata.get("release") != release:
         raise UpdateError("更新包的软件或版本不匹配。")
-    command(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(bundle)])
-    architectures = command(["/usr/bin/lipo", "-archs", str(bundle / "Contents/MacOS" / EXECUTABLE)]).stdout.decode().split()
+    command(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(bundle)], control=control)
+    checkpoint(control)
+    architectures = command(["/usr/bin/lipo", "-archs", str(bundle / "Contents/MacOS" / EXECUTABLE)], control=control).stdout.decode().split()
     if architecture not in architectures:
         raise UpdateError("更新包与 Mac 芯片不匹配。")
 
@@ -162,78 +222,119 @@ def write_json(path: Path, value: dict) -> None:
     temporary.replace(path)
 
 
-def fingerprint(bundle: Path) -> str:
+def fingerprint(bundle: Path, control=None) -> str:
+    checkpoint(control)
     digest = hashlib.sha256()
     for directory, folders, files in os.walk(bundle, followlinks=False):
         for name in sorted([*folders, *files]):
+            checkpoint(control)
             path = Path(directory) / name
             digest.update(path.relative_to(bundle).as_posix().encode())
             if path.is_symlink():
                 digest.update(os.readlink(path).encode())
             elif path.is_file():
                 with path.open("rb") as handle:
-                    digest.update(hashlib.file_digest(handle, "sha256").digest())
+                    if control is None:
+                        content_digest = hashlib.file_digest(handle, "sha256")
+                    else:
+                        content_digest = hashlib.sha256()
+                        while True:
+                            control.checkpoint()
+                            block = handle.read(1024 * 1024)
+                            if not block:
+                                break
+                            content_digest.update(block)
+                    digest.update(content_digest.digest())
                 digest.update(str(path.stat().st_mode).encode())
         folders.sort()
     return digest.hexdigest()
 
 
-def stage_bundle(target: Path, candidate: Path, version: str, current: str, architecture: str, directory: Path) -> Path:
-    validate_app(target, current, architecture)
-    validate_app(candidate, version, architecture)
+def stage_bundle(target: Path, candidate: Path, version: str, current: str, architecture: str, directory: Path, control=None) -> Path:
+    if control:
+        control.step("checking_current", 15, "检查当前应用")
+    validate_app(target, current, architecture, control=control)
+    if control:
+        control.step("checking_package", 30, "检查新版应用")
+    validate_app(candidate, version, architecture, control=control)
     if updates.release_key(version) is None or updates.release_key(current) is None or updates.release_key(version) <= updates.release_key(current):
         raise UpdateError("更新版本必须比当前版本新。")
     staged = directory / "candidate.app"
+    if control:
+        control.step("copying", 40, "复制新版文件")
     if candidate != staged:
-        command(["/usr/bin/ditto", str(candidate), str(staged)])
+        command(["/usr/bin/ditto", str(candidate), str(staged)], control=control)
     helper = directory / "helper.app"
-    command(["/usr/bin/ditto", str(target), str(helper)])
-    validate_app(staged, version, architecture)
-    validate_app(helper, current, architecture)
+    if control:
+        control.step("preparing_helper", 55, "准备更新程序")
+    command(["/usr/bin/ditto", str(target), str(helper)], control=control)
+    if control:
+        control.step("verifying", 70, "复核更新文件")
+    validate_app(staged, version, architecture, control=control)
+    validate_app(helper, current, architecture, control=control)
+    if control:
+        control.step("fingerprinting", 85, "核对应用完整性")
     snapshot = target.stat()
     job = directory / "job.json"
     write_json(job, {"target": str(target), "version": version, "current": current, "architecture": architecture,
-                     "device": snapshot.st_dev, "inode": snapshot.st_ino, "originalDigest": fingerprint(target),
-                     "candidateDigest": fingerprint(staged), "parentPid": os.getpid(), "nonce": uuid.uuid4().hex})
+                     "device": snapshot.st_dev, "inode": snapshot.st_ino, "originalDigest": fingerprint(target, control),
+                     "candidateDigest": fingerprint(staged, control), "parentPid": os.getpid(), "nonce": uuid.uuid4().hex})
+    checkpoint(control)
     return job
 
 
-def prepare(target: Path, package: dict, current: str, progress, cancelled) -> Path:
+def _discard_preparation(directory: Path, parent: Path) -> None:
+    # Only this attempt's private staging directory is eligible; mounted images stay intact.
+    try:
+        if directory.is_symlink() or not directory.name.startswith(".ai-first-update-") \
+                or directory.resolve().parent != parent.resolve() or os.path.ismount(directory / "mount"):
+            return
+        shutil.rmtree(directory)
+    except OSError:
+        pass
+
+
+def prepare(target: Path, package: dict, current: str, progress, cancelled, *, download_asset=None) -> Path:
     directory = Path(tempfile.mkdtemp(prefix=".ai-first-update-", dir=target.parent))
     directory.chmod(0o700)
     mount = directory / "mount"
     mounted = False
+    downloader = download_asset or download
     try:
         progress("downloading", 0)
         sums = directory / "SHA256SUMS.txt"
-        download(package["sums"], sums, lambda value: None, cancelled)
+        downloader(package["sums"], sums, lambda value: None, cancelled)
         pattern = rf"{package['dmg']['digest']}  {re.escape(package['dmg']['name'])}"
         lines = sums.read_text(encoding="utf-8").splitlines()
         matches = [line for line in lines if line.endswith("  " + package["dmg"]["name"])]
         if len(matches) != 1 or re.fullmatch(pattern, matches[0]) is None:
             raise UpdateError("发布校验文件与更新包不匹配。")
         dmg = directory / "update.dmg"
-        download(package["dmg"], dmg, lambda value: progress("downloading", value), cancelled)
-        progress("preparing", 100)
+        downloader(package["dmg"], dmg, lambda value: progress("downloading", value), cancelled)
+        control = Preparation(cancelled, progress)
+        control.step("mounting", 5, "打开安装包")
         mount.mkdir()
-        command(["/usr/bin/hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", str(mount), str(dmg)])
+        command(["/usr/bin/hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", str(mount), str(dmg)], control=control)
         mounted = True
         if cancelled.is_set():
             raise Cancelled("已取消下载，当前版本可以继续使用。")
-        job = stage_bundle(target, mount / APP_NAME, package["version"], current, package["architecture"], directory)
-        command(["/usr/bin/hdiutil", "detach", str(mount)])
+        job = stage_bundle(target, mount / APP_NAME, package["version"], current, package["architecture"], directory, control)
+        control.step("unmounting", 95, "释放安装包")
+        command(["/usr/bin/hdiutil", "detach", str(mount)], control=control)
         mounted = False
         dmg.unlink()
+        control.checkpoint()
         return job
     except Exception:
+        mounted = mounted or os.path.ismount(mount)
         if mounted:
             try:
-                command(["/usr/bin/hdiutil", "detach", str(mount)])
-                mounted = False
+                command(["/usr/bin/hdiutil", "detach", str(mount)], timeout=10)
+                mounted = os.path.ismount(mount)
             except (OSError, subprocess.SubprocessError):
                 pass
         if not mounted:
-            shutil.rmtree(directory)
+            threading.Thread(target=_discard_preparation, args=(directory, target.parent), daemon=True).start()
         raise
 
 
@@ -255,10 +356,10 @@ def read_job(path: Path) -> dict:
 
 
 def discard(job: Path) -> None:
-    read_job(job)
+    data = read_job(job)
     if (job.parent / "mount").is_dir() and os.path.ismount(job.parent / "mount"):
         raise UpdateError("正在准备更新，请稍后再试。")
-    shutil.rmtree(job.parent)
+    threading.Thread(target=_discard_preparation, args=(job.parent, Path(data["target"]).parent), daemon=True).start()
 
 
 def start_helper(job: Path) -> subprocess.Popen:
@@ -434,8 +535,6 @@ def _wait_and_replace(job: Path, data: dict) -> int:
 
 
 def audit_update(app: Path, report: Path) -> None:
-    import threading
-
     with tempfile.TemporaryDirectory(prefix="ai-first-update-audit-") as temporary:
         root = Path(temporary)
         target = root / APP_NAME
@@ -444,9 +543,33 @@ def audit_update(app: Path, report: Path) -> None:
         metadata = target / "Contents/Resources/version.json"
         metadata.write_text(json.dumps({"version": "0.4.0", "release": "0.4.0-macos-preview.2"}))
         command(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(target)])
-        directory = Path(tempfile.mkdtemp(prefix=".ai-first-update-", dir=root))
-        directory.chmod(0o700)
-        job = stage_bundle(target, app, version, "0.4.0-macos-preview.2", platform.machine(), directory)
+        fixture = root / "fixture"
+        fixture.mkdir()
+        command(["/usr/bin/ditto", str(app), str(fixture / APP_NAME)])
+        dmg = root / "fixture.dmg"
+        command(["/usr/bin/hdiutil", "create", "-volname", "AI First Update Audit", "-srcfolder", str(fixture), "-format", "UDZO", str(dmg)])
+        sums = root / "fixture-sums.txt"
+        with dmg.open("rb") as stream:
+            dmg_digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        sums.write_text(f"{dmg_digest}  fixture.dmg\n")
+        package = {"version": version, "architecture": platform.machine(), "dmg": {"name": "fixture.dmg", "digest": dmg_digest}, "sums": {}}
+        phases = []
+
+        def fixture_download(asset, destination, progress, cancelled):
+            if not destination.resolve().is_relative_to(root.resolve()):
+                raise UpdateError("隔离检查不能写入真实安装目录。")
+            source = dmg if asset is package["dmg"] else sums
+            shutil.copy2(source, destination)
+            if source == dmg:
+                with destination.open("rb") as stream:
+                    if hashlib.file_digest(stream, "sha256").hexdigest() != dmg_digest:
+                        raise UpdateError("隔离更新包完整性校验失败。")
+            progress(100)
+
+        job = prepare(target, package, "0.4.0-macos-preview.2",
+                      lambda phase, value, step=None: phases.append(step) if step else None,
+                      threading.Event(), download_asset=fixture_download)
+        directory = job.parent
         data = read_job(job)
         blocker = subprocess.Popen(["/bin/sleep", "2"])
         data.update({"parentPid": blocker.pid, "audit": True})
@@ -457,7 +580,8 @@ def audit_update(app: Path, report: Path) -> None:
         receipt = root / "isolated-state/updates/result.json"
         outcome = json.loads(receipt.read_text()) if receipt.is_file() else {}
         relaunched = json.loads((directory / "relaunch.json").read_text()) if (directory / "relaunch.json").is_file() else {}
-        checks = {"replacement": worker.returncode == 0 and outcome.get("success") is True, "nativeRelaunch": relaunched.get("passed") is True,
+        checks = {"preparationStages": phases == ["mounting", "checking_current", "checking_package", "copying", "preparing_helper", "verifying", "fingerprinting", "unmounting"],
+                  "replacement": worker.returncode == 0 and outcome.get("success") is True, "nativeRelaunch": relaunched.get("passed") is True,
                   "backupPreserved": (directory / "backup.app").is_dir(),
                   "version": json.loads((target / "Contents/Resources/version.json").read_text())["release"] == version}
         report.write_text(json.dumps({"passed": all(checks.values()), "checks": checks, "version": {"release": version},

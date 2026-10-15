@@ -4,9 +4,12 @@ import hashlib
 import json
 import os
 import plistlib
+import shutil
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -108,6 +111,141 @@ class MacUpdaterTests(unittest.TestCase):
                 updater.validate_app(path, "0.4.2", "arm64")
             with self.assertRaises(updater.UpdateError):
                 updater.validate_app(path, "0.4.1", "x86_64")
+
+    def test_cancelling_during_validation_stops_before_copy_or_job_creation(self):
+        target = self.bundle(self.root / updater.APP_NAME, "0.4.0-macos-preview.8")
+        before = updater.fingerprint(target)
+        cancelled = threading.Event()
+        copied = []
+        cleanup = threading.Event()
+        package = {"version": "0.4.0-macos-preview.9", "architecture": "arm64",
+                   "dmg": {"name": "synthetic.dmg", "digest": "a" * 64}, "sums": {}}
+
+        def download(asset, destination, progress, event):
+            destination.write_text("a" * 64 + "  synthetic.dmg\n" if destination.name == "SHA256SUMS.txt" else "synthetic dmg")
+
+        def command(arguments, **options):
+            if arguments[0].endswith("hdiutil") and "attach" in arguments:
+                mount = Path(arguments[arguments.index("-mountpoint") + 1])
+                self.bundle(mount / updater.APP_NAME, package["version"])
+            elif arguments[0].endswith("codesign"):
+                cancelled.set()
+            elif arguments[0].endswith("ditto"):
+                copied.append(arguments)
+                shutil.copytree(arguments[1], arguments[2])
+            return Mock(stdout=b"arm64")
+
+        def cleanup_directory(directory, **options):
+            self.assertTrue(Path(directory).resolve().is_relative_to(self.root.resolve()))
+            self.assertTrue(Path(directory).name.startswith(".ai-first-update-"))
+            cleanup.set()
+
+        with patch.object(updater, "download", side_effect=download), patch.object(updater, "command", side_effect=command), \
+                patch.object(updater.shutil, "rmtree", side_effect=cleanup_directory):
+            with self.assertRaises(updater.Cancelled):
+                updater.prepare(target, package, "0.4.0-macos-preview.8", Mock(), cancelled)
+            self.assertTrue(cleanup.wait(2))
+        self.assertEqual(copied, [])
+        self.assertEqual(updater.fingerprint(target), before)
+        self.assertFalse(list(self.root.rglob("job.json")))
+
+    def test_cancel_interrupts_a_running_preparation_command_and_reaps_it(self):
+        cancelled = threading.Event()
+        control = updater.Preparation(cancelled, Mock(), timeout=5)
+        processes = []
+        popen = subprocess.Popen
+
+        def start(*args, **kwargs):
+            process = popen(*args, **kwargs)
+            processes.append(process)
+            return process
+
+        timer = threading.Timer(0.4, cancelled.set)
+        started = time.monotonic()
+        timer.start()
+        try:
+            with patch.object(updater.subprocess, "Popen", side_effect=start), self.assertRaises(updater.Cancelled):
+                updater.command([sys.executable, "-c", "import time; time.sleep(20)"], control=control)
+        finally:
+            timer.cancel()
+            timer.join()
+        self.assertLess(time.monotonic() - started, 4)
+        self.assertTrue(processes)
+        self.assertTrue(all(process.poll() is not None for process in processes))
+
+    def test_preparation_budget_is_shared_across_commands(self):
+        control = updater.Preparation(threading.Event(), Mock(), timeout=1.2)
+        started = time.monotonic()
+        updater.command([sys.executable, "-c", "import time; time.sleep(0.1)"], control=control)
+        with self.assertRaisesRegex(updater.UpdateError, "等待太久"):
+            updater.command([sys.executable, "-c", "import time; time.sleep(20)"], control=control)
+        self.assertLess(time.monotonic() - started, 4)
+
+    def test_controlled_fingerprint_matches_existing_integrity_checks(self):
+        bundle = self.bundle(self.root / updater.APP_NAME, "0.4.1")
+        (bundle / "Contents/Resources/data.bin").write_bytes(b"synthetic integrity data" * 100000)
+        control = updater.Preparation(threading.Event(), Mock())
+        self.assertEqual(updater.fingerprint(bundle, control), updater.fingerprint(bundle))
+        control.cancelled.set()
+        with self.assertRaises(updater.Cancelled):
+            updater.fingerprint(bundle, control)
+
+    def test_failed_attach_never_recursively_cleans_a_still_mounted_image(self):
+        target = self.bundle(self.root / updater.APP_NAME, "0.4.0-macos-preview.8")
+        before = updater.fingerprint(target)
+        package = {"version": "0.4.0-macos-preview.9", "architecture": "arm64",
+                   "dmg": {"name": "synthetic.dmg", "digest": "a" * 64}, "sums": {}}
+
+        def download(asset, destination, progress, event):
+            destination.write_text("a" * 64 + "  synthetic.dmg\n" if destination.name == "SHA256SUMS.txt" else "synthetic dmg")
+
+        def failed_command(arguments, **options):
+            raise subprocess.TimeoutExpired(arguments, 0.01)
+
+        with patch.object(updater, "download", side_effect=download), patch.object(updater, "command", side_effect=failed_command), \
+                patch.object(updater.os.path, "ismount", return_value=True), patch.object(updater.shutil, "rmtree") as cleanup:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                updater.prepare(target, package, "0.4.0-macos-preview.8", Mock(), threading.Event())
+            cleanup.assert_not_called()
+        self.assertEqual(updater.fingerprint(target), before)
+
+    def test_preparation_cancel_request_is_visible_until_worker_finishes(self):
+        from entry import MacApi
+
+        api = MacApi()
+        api._update_state = {"phase": "preparing", "step": "copying", "progress": 40}
+        self.assertEqual(api.cancel_update(), {"ok": True})
+        self.assertTrue(api.update_status()["cancelRequested"])
+        self.assertEqual(api.update_status()["phase"], "preparing")
+
+    def test_cancelled_ready_update_does_not_wait_for_slow_staging_cleanup(self):
+        from entry import MacApi
+
+        target, candidate, job = self.job()
+        api = MacApi()
+        api._prepared = job
+        api._update_state = {"phase": "ready"}
+        entered = threading.Event()
+        release = threading.Event()
+        finished = threading.Event()
+
+        def cleanup(directory):
+            self.assertEqual(Path(directory), job.parent)
+            entered.set()
+            release.wait(2)
+            finished.set()
+
+        with patch.object(updater.shutil, "rmtree", side_effect=cleanup):
+            try:
+                started = time.monotonic()
+                self.assertEqual(api.cancel_update(), {"ok": True})
+                self.assertLess(time.monotonic() - started, 0.5)
+                self.assertTrue(entered.wait(1))
+                self.assertEqual(api.update_status()["phase"], "error")
+                self.assertTrue(target.is_dir())
+            finally:
+                release.set()
+                self.assertTrue(finished.wait(2))
 
     def test_replacement_preserves_backup_and_non_program_data(self):
         target, candidate, job = self.job()
