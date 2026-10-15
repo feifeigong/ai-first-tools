@@ -135,3 +135,5 @@ Mac preview.7 构建增加固定校验值的官方 Codex 0.162.1 测试引擎，
 冻结 smoke 新增 nativeContentAttached 门槛，更新审计在完成一次真实更新重开后，再从同一目标执行一次独立原生重开，二者均通过才报告成功。新增隔离单元用例确认挂载不伪造 loaded 或执行 JS，并拒绝“桥就绪但原生内容未挂载”的报告。新候选构建和发布核验尚未完成。
 
 参考：[Apple WKWebView](https://developer.apple.com/documentation/webkit/wkwebview)；具体框架顺序以锁定版本的 Cocoa 源码和本轮原生报告为准。
+
+28f808d 的 38726399032 中，ARM 八步准备通过，但首次更新重开仍 pageLoaded=false，因此提前挂载视图不足以解决，不公开此产物。Intel 的只读原生分页断言已完成，退出清理却遇到默认插件后台 git clone 的写入竞争；测试启动显式禁用 plugins，不更改用户 Codex 配置。后续重开统一交给 macOS LaunchServices（open -n -W，精确 APP 路径和参数），保留独立冻结环境；open 的返回码不代表应用通过，仍必须读取真实窗口桥接报告，两次打开均通过才放行。当前修订等待新的两架构原生结果。

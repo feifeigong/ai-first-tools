@@ -230,7 +230,8 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
             result.setdefault("checks", {})["automaticUpdateReminder"] = False
     except Exception as error:
         result = {"passed": False, "error": type(error).__name__,
-                  "checks": {"windowShown": window.events.shown.is_set(), "pageLoaded": window.events.loaded.is_set()}}
+                  "checks": {"windowShown": window.events.shown.is_set(), "pageLoaded": window.events.loaded.is_set(),
+                             "nativeContentAttached": getattr(window, "_ai_first_content_attached", False) is True}}
         try:
             from urllib.request import ProxyHandler, build_opener
 

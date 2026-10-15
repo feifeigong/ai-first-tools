@@ -394,7 +394,11 @@ def start_app(bundle: Path, arguments=()) -> subprocess.Popen:
     environment = {**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"}
     for name in ("DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH"):
         environment.pop(name, None)
-    return subprocess.Popen([str(bundle / "Contents/MacOS" / EXECUTABLE), *arguments], env=environment,
+    # Launch through LaunchServices so WebKit receives a normal GUI-app launch context.
+    # -n starts the exact replacement bundle as a fresh instance; -W keeps our wait
+    # tied to its lifetime. Audit success still requires the app's own JSON report,
+    # since open does not forward the application's exit status.
+    return subprocess.Popen(["/usr/bin/open", "-n", "-W", str(bundle), "--args", *arguments], env=environment,
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 

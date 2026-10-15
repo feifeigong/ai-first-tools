@@ -35,7 +35,9 @@ class NativeServer:
         self.messages = queue.Queue()
         self.next_id = 0
         self.stderr = (directory / "native-server.log").open("w", encoding="utf-8")
-        self.process = subprocess.Popen([str(binary), "app-server", "--stdio"], env=env, cwd=directory,
+        # These read-only fixtures do not need the default plugin marketplace clone.
+        # Disabling it also prevents orphan git writers racing temporary-store cleanup.
+        self.process = subprocess.Popen([str(binary), "-c", "features.plugins=false", "app-server", "--stdio"], env=env, cwd=directory,
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.stderr,
                                         text=True, encoding="utf-8", creationflags=mover.CREATE_NO_WINDOW)
         self.reader = threading.Thread(target=self._read, daemon=True)

@@ -1,5 +1,9 @@
 # Mac 移植验证记录
 
+## preview.10 后续候选：启动失败继续保留
+
+28f808d 的 [38726399032](https://github.com/feifeigong/ai-first-tools/actions/runs/38726399032) 未通过，未创建公开标签或资产。ARM 准备八步通过，更新后的页面仍未加载，说明提前挂载视图不足以解决；Intel 在原生分页检查后的临时目录清理遇到默认插件后台 git 写入。随后隔离测试显式禁用 plugins，应用重开改为系统 LaunchServices。仍需两架构真实窗口、更新重开及再次打开的全部检查通过，不能用启动器返回码替代应用自己的报告。
+
 ## 2026-10-14 preview.6 自动检查与桥就绪（历史已发布）
 
 [公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.6)。构建源码 `9703d4335043526fe3ad0ecb00fdba6e31b83ac4`，同名 Git 标签指向此提交；后续交接文档不重做包。
