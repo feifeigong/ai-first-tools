@@ -273,12 +273,24 @@ def load_bundled_content(window) -> None:
     # limited to the UI directory, rather than using a loopback HTTP navigation.
     from Foundation import NSURL
     from PyObjCTools import AppHelper
+    from WebKit import WKNavigationActionPolicyAllow, WKNavigationActionPolicyCancel
     from webview.platforms.cocoa import BrowserView
 
     host = BrowserView.instances[window.uid]
     ui = (ROOT / "ui").resolve()
     page = ui / "index.html"
     url = page.as_uri()
+
+    class AIFirstBundledPageDelegate(BrowserView.BrowserDelegate):
+        def webView_decidePolicyForNavigationAction_decisionHandler_(self, view, action, handler):
+            requested = action.request().URL()
+            # File navigation has no HTTP headers. Only our exact bundled page
+            # may navigate in the window that receives the privileged Python bridge.
+            allowed = requested.isFileURL() and str(requested.path()) == str(page)
+            handler(WKNavigationActionPolicyAllow if allowed else WKNavigationActionPolicyCancel)
+
+    host._ai_first_file_delegate = AIFirstBundledPageDelegate.alloc().init()
+    host.webview.setNavigationDelegate_(host._ai_first_file_delegate)
 
     def load_file(requested):
         if requested != url:

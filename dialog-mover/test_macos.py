@@ -257,11 +257,20 @@ class MacResourceTests(unittest.TestCase):
         view = Mock()
         view.window.side_effect = [None, native]
         host = SimpleNamespace(window=native, webview=view)
-        cocoa = SimpleNamespace(BrowserView=SimpleNamespace(instances={window.uid: host}))
+        class Delegate:
+            @classmethod
+            def alloc(cls):
+                return cls()
+
+            def init(self):
+                return self
+
+        cocoa = SimpleNamespace(BrowserView=SimpleNamespace(instances={window.uid: host}, BrowserDelegate=Delegate))
         helper = Mock(callAfter=lambda call: call())
         urls = SimpleNamespace(fileURLWithPath_=lambda path: path)
         with patch.dict(sys.modules, {"webview.platforms.cocoa": cocoa, "Foundation": SimpleNamespace(NSURL=urls),
-                                     "PyObjCTools": SimpleNamespace(AppHelper=helper)}):
+                                     "PyObjCTools": SimpleNamespace(AppHelper=helper),
+                                     "WebKit": SimpleNamespace(WKNavigationActionPolicyAllow=1, WKNavigationActionPolicyCancel=0)}):
             entry.load_bundled_content(window)
             host.load_url(window.real_url)
             with self.assertRaises(ValueError):
@@ -271,6 +280,14 @@ class MacResourceTests(unittest.TestCase):
         view.loadFileURL_allowingReadAccessToURL_.assert_called_once_with(str(ui / "index.html"), str(ui))
         self.assertTrue(window._ai_first_content_attached)
         self.assertTrue(window._ai_first_bundled_file_load)
+        for local, path, expected in ((True, str(ui / "index.html"), 1), (False, str(ui / "index.html"), 0),
+                                      (True, str(ui / "untrusted.html"), 0)):
+            action = Mock()
+            action.request().URL().isFileURL.return_value = local
+            action.request().URL().path.return_value = path
+            handler = Mock()
+            host._ai_first_file_delegate.webView_decidePolicyForNavigationAction_decisionHandler_(view, action, handler)
+            handler.assert_called_once_with(expected)
         window.events.loaded.set.assert_not_called()
         window.run_js.assert_not_called()
 

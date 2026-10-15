@@ -14,7 +14,9 @@ def observe_navigation(window):
         if error is not None:
             state["failure"] = {"domain": str(error.domain()), "code": int(error.code())}
 
-    class AIFirstAuditNavigationDelegate(BrowserView.BrowserDelegate):
+    host = BrowserView.instances[window.uid]
+
+    class AIFirstAuditNavigationDelegate(type(host._ai_first_file_delegate)):
         def webView_decidePolicyForNavigationAction_decisionHandler_(self, view, action, handler):
             note(view, "policy")
             try:
@@ -43,7 +45,6 @@ def observe_navigation(window):
         def webViewWebContentProcessDidTerminate_(self, view):
             note(view, "contentProcessTerminated")
 
-    host = BrowserView.instances[window.uid]
     host._ai_first_audit_delegate = AIFirstAuditNavigationDelegate.alloc().init()
     host.webview.setNavigationDelegate_(host._ai_first_audit_delegate)
     window._ai_first_navigation["installed"] = True
