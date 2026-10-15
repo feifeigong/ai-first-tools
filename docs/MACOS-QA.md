@@ -142,7 +142,7 @@ Actions 的 `macos-arm64`、`macos-x86_64` 产物各包含 DMG、`self-test.json
 - preview.1/2 没有自动替换；preview.3 加入此能力，preview.4 修复追加重启问题并重复通过隔离原生审计，用户真实安装的手点公网完整升级仍待验收。
 
 测试全用临时目录/合成记录，不导入真实账户、不发模型请求；按 MACOS-HANDOFF.md 继续真机验收。
-## preview.8：自动提醒专项（当前已发布）
+## preview.8：自动提醒专项（历史发布）
 
 [公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.8)，发布 ID `412665873`，2026-10-14 12:22:52 UTC 公开。源码标签固定为 `5e669f20af6b19c808889e4d4c320fbd4740200d`。
 
@@ -186,11 +186,24 @@ Actions 的 `macos-arm64`、`macos-x86_64` 产物各包含 DMG、`self-test.json
 - Mac 两架构 CI 使用官方 Codex 0.162.1（固定 SHA），全为隔离数据，不登录、不发模型请求；该测试引擎不进入 DMG。
 - 未在用户真实 Mac 上手动滚动 ChatGPT；未验证付费下一轮、全部来源 × 目标组合。不能把本节原生协议验证宣传为这些检查已经通过。
 
-## 2026-10-15：Mac 迁入历史的续聊长度限制（preview.9 待原生构建）
+## 2026-10-15：Mac 迁入历史的续聊长度限制（preview.9 已发布）
 
 - 用户已确认错误出现在发送下一条消息后。preview.7/8 验证分页和回读，没有覆盖真实续聊请求中历史工具字段的长度；不能据此说续聊已通过。
 - `codex_import.py` 在生成分页历史前，为超长/非法工具名称和调用编号建立稳定的兼容映射，调用与结果成对，重复编号分配唯一别名；合法名称预先保留，避免别名碰撞。原字段保留在记录的 `dialog_mover_original`，正文、思考、参数与结果不截断；配对缺失/类型不符停止导入，不放宽格式检查。
 - 导入格式升为 `paginated-import-v2`，旧成功记录允许创建一次新副本，之后恢复去重；不自动修改源或用户已经继续聊过的旧副本。
 - 新增 `test_codex_replay.py`：隔离合成 Cursor 数据库 → 实际搬家 → 原生引擎 `exec resume` → 仅监听 127.0.0.1 的模拟 Responses 服务。关闭兼容映射时，85 字符调用编号/工具名分别复现同样的 400 长度拒绝；开启后普通、超长、重复编号和自定义补丁的五类测试通过，补丁不重新执行，参数/结果完整，源不变。全程不使用真实认证、不请求在线模型。
-- 本机 92 项共享/格式/原生分页检查通过，4 项续聊正例及 1 项含两个场景的旧格式拒绝测试通过。Mac 两架构 CI、冻结包和发布资产核对尚未完成，当前公开仍为 preview.8；构建结果更新至 MACOS-QA.md 后才能发布。
+- 本机 92 项共享/格式/原生分页、26 项界面及 5 项续聊检查通过。Mac 两架构各 87 项共享、8 项原生分页/续聊及四类冻结检查通过；发布包取 `38691055276 / attempt 2`，源码标签固定 `12391ab6431a9f2cbc77b5650aec51ad9bc925c2`。独立发布核验 `38693214923` 下载并逐个比对原 CI 与草稿的全部 11 个文件、大小和 SHA-256，通过后公开 preview.9（发布 ID `413485163`）。首轮 ARM 更新后页面未加载的失败报告保留，未发布失败产物；细节及真机验收边界见下文。
 - Windows 普通 Chat 搬出问题仍仅记录，不重发 Windows 安装包；本轮未更改更新请求频率或 GitHub 限流机制。
+
+[公开下载 preview.9](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.9)，2026-10-15 06:35:55 UTC 公开。[两架构原生构建及完整复测](https://github.com/feifeigong/ai-first-tools/actions/runs/38691055276/attempts/2) · [独立下载发布核验](https://github.com/feifeigong/ai-first-tools/actions/runs/38693214923) · [Windows 源码回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38691055256)。冻结检查包括资源 7 项、Cocoa 窗口/桥/自动提醒 7 项、HTTPS 3 项、更新替换与原生重开 4 项；不是在用户的真实 Mac 上操作。
+
+| preview.9 文件后缀 | 大小（字节） | SHA-256 |
+|---|---:|---|
+| macos-arm64.dmg | 23,116,104 | `92946d3950eed4bb2fee1916a9dd9c10222f2f3282c48bfbd4d1882c0284be16` |
+| macos-x86_64.dmg | 24,767,927 | `f6c4ce49834feee1ec96c9d793e0304b2f9b182ea33b2be71a30b4345b08975e` |
+
+**保留失败记录：** 原构建首轮 ARM 更新后原生重开超时，`windowShown=true / pageLoaded=false / bridgeInjectionStarted=false / localPageStatus=200 / localPageBytes=5610`；首次窗口、分页、续聊和网络检查通过，更新检查保留失败，未生成或发布 ARM DMG。Intel 首轮通过，但公开包只取同源码完整第二轮两架构的成功产物，不混合轮次。没有修改 UI、延长超时或放宽断言来让此项通过，不据完整复测断言既有偶发 WebKit 启动失败已全部消除。
+
+发布核验与应用构建分开：本地下载构建产物超时，新增独立的 CI 下载比对步骤，读取原构建的两架构产物及草稿全部资产，核对轻量标签源码、四类原生报告、精确文件名、大小和 SHA-256。`38693088630` 首轮核验在草稿按标签查询时失败（GitHub 此接口未返回未公开草稿），草稿未公开；改为认证发布列表中精确匹配唯一标签后，`38693214923` 完整核验通过。此流程修订不重做运行包，不移动源码标签；11 个发布文件均来自上述第二轮构建。
+
+公开后，无认证生产选择逻辑在两个架构从 preview.1–8 均选到 preview.9，同版不提示；实际下载公开 SHA 清单并核对其摘要。Windows v0.3.8 的三项原资产仍在，Mac 版本不附 Windows 安装包。未测试用户真实设备的完整公网升级、界面手动翻页或账号发送下一条；不得把本机模拟 Responses 续聊说成在线模型验收。旧副本须重新搬入为新副本，升级不会自动改写原历史。
