@@ -137,3 +137,5 @@ Mac preview.7 构建增加固定校验值的官方 Codex 0.162.1 测试引擎，
 参考：[Apple WKWebView](https://developer.apple.com/documentation/webkit/wkwebview)；具体框架顺序以锁定版本的 Cocoa 源码和本轮原生报告为准。
 
 28f808d 的 38726399032 中，ARM 八步准备通过，但首次更新重开仍 pageLoaded=false，因此提前挂载视图不足以解决，不公开此产物。Intel 的只读原生分页断言已完成，退出清理却遇到默认插件后台 git clone 的写入竞争；测试启动显式禁用 plugins，不更改用户 Codex 配置。后续重开统一交给 macOS LaunchServices（open -n -W，精确 APP 路径和参数），保留独立冻结环境；open 的返回码不代表应用通过，仍必须读取真实窗口桥接报告，两次打开均通过才放行。当前修订等待新的两架构原生结果。
+
+上述 LaunchServices 尝试在 fcc4742 的 ARM 仍失败，已撤回，不保留无效启动方式。cf80b47 的隔离导航诊断取得 NSURLErrorDomain/-1001：WebKit 本机页面请求超时，导航策略已正常返回，脚本尚未注入，Python 读取同页仍 200。后续直接通过 Cocoa loadFileURL:allowingReadAccessToURL: 读取包内静态页面，范围限定 ui 目录，不启动页面 HTTP 服务，保留原生 Python 桥和全部更新 HTTPS。具体失败及待验证状态见 MACOS-QA.md；不把这项原生测试的诊断冒充用户 Mac 的校验阻塞根因。

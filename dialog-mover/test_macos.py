@@ -248,7 +248,7 @@ class MacUpdatesTests(unittest.TestCase):
 
 
 class MacResourceTests(unittest.TestCase):
-    def test_cocoa_content_is_attached_before_navigation_without_signalling_loaded(self):
+    def test_cocoa_reads_only_bundled_ui_before_navigation_without_signalling_loaded(self):
         import entry
         from types import SimpleNamespace
 
@@ -258,10 +258,19 @@ class MacResourceTests(unittest.TestCase):
         view.window.side_effect = [None, native]
         host = SimpleNamespace(window=native, webview=view)
         cocoa = SimpleNamespace(BrowserView=SimpleNamespace(instances={window.uid: host}))
-        with patch.dict(sys.modules, {"webview.platforms.cocoa": cocoa}):
-            entry.attach_cocoa_content(window)
+        helper = Mock(callAfter=lambda call: call())
+        urls = SimpleNamespace(fileURLWithPath_=lambda path: path)
+        with patch.dict(sys.modules, {"webview.platforms.cocoa": cocoa, "Foundation": SimpleNamespace(NSURL=urls),
+                                     "PyObjCTools": SimpleNamespace(AppHelper=helper)}):
+            entry.load_bundled_content(window)
+            host.load_url(window.real_url)
+            with self.assertRaises(ValueError):
+                host.load_url("https://example.invalid/untrusted")
         self.assertEqual(native.mock_calls, [unittest.mock.call.setContentView_(view), unittest.mock.call.makeFirstResponder_(view)])
+        ui = (entry.ROOT / "ui").resolve()
+        view.loadFileURL_allowingReadAccessToURL_.assert_called_once_with(str(ui / "index.html"), str(ui))
         self.assertTrue(window._ai_first_content_attached)
+        self.assertTrue(window._ai_first_bundled_file_load)
         window.events.loaded.set.assert_not_called()
         window.run_js.assert_not_called()
 
@@ -326,6 +335,7 @@ class MacResourceTests(unittest.TestCase):
         window = Mock()
         window.events.loaded.wait.return_value = True
         window._ai_first_content_attached = True
+        window._ai_first_bundled_file_load = True
         window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True]
         api = MacApi(smoke=True)
         api._smoke_check_calls = 1

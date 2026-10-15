@@ -218,6 +218,7 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
             if value and value != "null":
                 result = json.loads(value)
                 result["checks"]["nativeContentAttached"] = getattr(window, "_ai_first_content_attached", False) is True
+                result["checks"]["bundledFileNavigation"] = getattr(window, "_ai_first_bundled_file_load", False) is True
                 reminder = window.evaluate_js("!document.getElementById('workspace-download').hidden && document.getElementById('workspace-message').textContent.includes('synthetic-reminder-only')")
                 if reminder:
                     result["checks"]["automaticUpdateReminder"] = api._smoke_check_calls == 1
@@ -267,12 +268,31 @@ def signal_bridge_ready(window) -> None:
     window.run_js("window.__AI_FIRST_BRIDGE_READY__=true;window.dispatchEvent(new CustomEvent('ai-first-ready'));")
 
 
-def attach_cocoa_content(window) -> None:
-    # before_show is synchronous on Cocoa's UI thread. Attach the view before navigation,
-    # rather than depending on didFinishNavigation to make it part of the window.
+def load_bundled_content(window) -> None:
+    # The UI is static bundled content. Cocoa can read it directly, with read access
+    # limited to the UI directory, rather than using a loopback HTTP navigation.
+    from Foundation import NSURL
+    from PyObjCTools import AppHelper
     from webview.platforms.cocoa import BrowserView
 
     host = BrowserView.instances[window.uid]
+    ui = (ROOT / "ui").resolve()
+    page = ui / "index.html"
+    url = page.as_uri()
+
+    def load_file(requested):
+        if requested != url:
+            raise ValueError("Only the bundled workspace page can use this loader")
+
+        def navigate():
+            host.webview.loadFileURL_allowingReadAccessToURL_(NSURL.fileURLWithPath_(str(page)),
+                                                             NSURL.fileURLWithPath_(str(ui)))
+            window._ai_first_bundled_file_load = True
+
+        AppHelper.callAfter(navigate)
+
+    host.load_url = load_file
+    window.real_url = url
     if not host.webview.window():
         host.window.setContentView_(host.webview)
         host.window.makeFirstResponder_(host.webview)
@@ -311,10 +331,10 @@ def run() -> int:
             except BlockingIOError:
                 return 0
             api = MacApi(args.smoke_test)
-            window = webview.create_window("AI一手工具工作台", str((ROOT / "ui" / "index.html").resolve()), js_api=api,
+            window = webview.create_window("AI一手工具工作台", js_api=api,
                                            width=1280, height=820, min_size=(960, 640), background_color="#F6F8FB", text_select=False)
             api.bind(window)
-            window.events.before_show += attach_cocoa_content
+            window.events.before_show += load_bundled_content
             if args.smoke_test:
                 from cocoa_audit import observe_navigation
 
