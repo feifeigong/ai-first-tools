@@ -248,6 +248,23 @@ class MacUpdatesTests(unittest.TestCase):
 
 
 class MacResourceTests(unittest.TestCase):
+    def test_cocoa_content_is_attached_before_navigation_without_signalling_loaded(self):
+        import entry
+        from types import SimpleNamespace
+
+        window = Mock(uid="synthetic")
+        native = Mock()
+        view = Mock()
+        view.window.side_effect = [None, native]
+        host = SimpleNamespace(window=native, webview=view)
+        cocoa = SimpleNamespace(BrowserView=SimpleNamespace(instances={window.uid: host}))
+        with patch.dict(sys.modules, {"webview.platforms.cocoa": cocoa}):
+            entry.attach_cocoa_content(window)
+        self.assertEqual(native.mock_calls, [unittest.mock.call.setContentView_(view), unittest.mock.call.makeFirstResponder_(view)])
+        self.assertTrue(window._ai_first_content_attached)
+        window.events.loaded.set.assert_not_called()
+        window.run_js.assert_not_called()
+
     def test_native_bridge_ready_signal_uses_the_injected_script_channel(self):
         import entry
 
@@ -308,6 +325,7 @@ class MacResourceTests(unittest.TestCase):
 
         window = Mock()
         window.events.loaded.wait.return_value = True
+        window._ai_first_content_attached = True
         window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True]
         api = MacApi(smoke=True)
         api._smoke_check_calls = 1
@@ -317,6 +335,22 @@ class MacResourceTests(unittest.TestCase):
             self.assertTrue(json.loads(report.read_text())["passed"])
         self.assertEqual(window.mock_calls[0], unittest.mock.call.events.loaded.wait(45))
         window.destroy.assert_called_once()
+
+    def test_smoke_rejects_a_ready_bridge_without_native_content_attachment(self):
+        from entry import MacApi, smoke_check
+
+        window = Mock()
+        window._ai_first_content_attached = False
+        window.events.loaded.wait.return_value = True
+        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True]
+        api = MacApi(smoke=True)
+        api._smoke_check_calls = 1
+        with tempfile.TemporaryDirectory() as temporary:
+            report = Path(temporary) / "smoke.json"
+            smoke_check(window, api, report)
+            result = json.loads(report.read_text())
+            self.assertFalse(result["passed"])
+            self.assertFalse(result["checks"]["nativeContentAttached"])
 
     def test_unloaded_cocoa_window_fails_without_evaluating_javascript(self):
         from entry import MacApi, smoke_check

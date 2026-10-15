@@ -580,7 +580,20 @@ def audit_update(app: Path, report: Path) -> None:
         receipt = root / "isolated-state/updates/result.json"
         outcome = json.loads(receipt.read_text()) if receipt.is_file() else {}
         relaunched = json.loads((directory / "relaunch.json").read_text()) if (directory / "relaunch.json").is_file() else {}
+        repeat = {}
+        if worker.returncode == 0 and outcome.get("success") is True:
+            repeated_report = directory / "repeat-relaunch.json"
+            repeated_process = start_app(target, ("--smoke-test", "--report", str(repeated_report)))
+            try:
+                repeated_process.wait(timeout=120)
+                repeat = json.loads(repeated_report.read_text()) if repeated_report.is_file() else {}
+                repeat["processPassed"] = repeated_process.returncode == 0
+            except subprocess.TimeoutExpired:
+                repeated_process.terminate()
+                repeated_process.wait(timeout=15)
+                repeat = {"passed": False, "error": "TimeoutError"}
         checks = {"preparationStages": phases == ["mounting", "checking_current", "checking_package", "copying", "preparing_helper", "verifying", "fingerprinting", "unmounting"],
+                  "repeatNativeRelaunch": repeat.get("passed") is True and repeat.get("processPassed") is True,
                   "replacement": worker.returncode == 0 and outcome.get("success") is True, "nativeRelaunch": relaunched.get("passed") is True,
                   "backupPreserved": (directory / "backup.app").is_dir(),
                   "version": json.loads((target / "Contents/Resources/version.json").read_text())["release"] == version}
@@ -588,5 +601,5 @@ def audit_update(app: Path, report: Path) -> None:
                                       "diagnostics": {"phase": outcome.get("phase"), "errorCode": outcome.get("errorCode"), "helperReturnCode": worker.returncode,
                                                       "preflightReport": (directory / "probe.json").is_file(), "receipt": receipt.is_file(),
                                                       "relaunchChecks": relaunched.get("checks"), "relaunchError": relaunched.get("error"),
-                                                      "relaunchDiagnostics": relaunched.get("diagnostics")},
+                                                      "relaunchDiagnostics": relaunched.get("diagnostics"), "repeatRelaunch": repeat},
                                       "architecture": platform.machine(), "scope": "frozen helper, isolated app copies, atomic replacement and Cocoa relaunch; no installed app or real records"}, indent=2))

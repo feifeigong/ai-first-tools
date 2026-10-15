@@ -217,6 +217,7 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
             value = window.evaluate_js("JSON.stringify(window.__AI_FIRST_SMOKE__ || null)")
             if value and value != "null":
                 result = json.loads(value)
+                result["checks"]["nativeContentAttached"] = getattr(window, "_ai_first_content_attached", False) is True
                 reminder = window.evaluate_js("!document.getElementById('workspace-download').hidden && document.getElementById('workspace-message').textContent.includes('synthetic-reminder-only')")
                 if reminder:
                     result["checks"]["automaticUpdateReminder"] = api._smoke_check_calls == 1
@@ -264,6 +265,18 @@ def signal_bridge_ready(window) -> None:
     window.run_js("window.__AI_FIRST_BRIDGE_READY__=true;window.dispatchEvent(new CustomEvent('ai-first-ready'));")
 
 
+def attach_cocoa_content(window) -> None:
+    # before_show is synchronous on Cocoa's UI thread. Attach the view before navigation,
+    # rather than depending on didFinishNavigation to make it part of the window.
+    from webview.platforms.cocoa import BrowserView
+
+    host = BrowserView.instances[window.uid]
+    if not host.webview.window():
+        host.window.setContentView_(host.webview)
+        host.window.makeFirstResponder_(host.webview)
+    window._ai_first_content_attached = host.webview.window() is not None
+
+
 def run() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
@@ -299,6 +312,7 @@ def run() -> int:
             window = webview.create_window("AI一手工具工作台", str((ROOT / "ui" / "index.html").resolve()), js_api=api,
                                            width=1280, height=820, min_size=(960, 640), background_color="#F6F8FB", text_select=False)
             api.bind(window)
+            window.events.before_show += attach_cocoa_content
             window.events.loaded += signal_bridge_ready
             window.events.closing += lambda: window.evaluate_js("window.aiFirstBusyNotice && window.aiFirstBusyNotice()") if not api.can_close() else None
             worker = (lambda: smoke_check(window, api, args.report)) if args.smoke_test else None
