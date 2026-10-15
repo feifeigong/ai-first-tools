@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -61,6 +63,63 @@ class CodexHistoryTests(unittest.TestCase):
         self.assertEqual([entry["content_items"][0]["text"] for entry in tools], [f"result {index}" for index in range(3)])
         self.assertTrue(all(entry["status"] == "completed" for entry in tools))
 
+    def test_replayed_tool_identifiers_are_bounded_paired_unique_and_losslessly_annotated(self):
+        records = [self.meta, message("user", "Synthetic question " * 100)]
+        names = ["mcp__" + "shared_" * 11 + suffix for suffix in ("first", "second")]
+        names.extend(["invalid.name", "invalid/name", "n" * 64, "n" * 65, "工具" * 45])
+        for index, name in enumerate(names):
+            records.extend([record("response_item", {"type": "function_call", "name": name, "arguments": json.dumps({"text": "full arguments " * 500}), "call_id": "call_" + "a" * 80}),
+                            record("response_item", {"type": "function_call_output", "call_id": "call_" + "a" * 80, "output": "full output " * 500})])
+        original = copy.deepcopy(records)
+        converted = codex_import.paginated_history(records, self.imported_id)
+        responses = [entry for entry in converted if entry["type"] == "response_item"]
+        calls = [entry for entry in responses if entry["payload"]["type"] == "function_call"]
+        results = [entry for entry in responses if entry["payload"]["type"] == "function_call_output"]
+        self.assertEqual(records, original)
+        self.assertEqual(converted, codex_import.paginated_history(records, self.imported_id))
+        self.assertEqual(len({entry["payload"]["call_id"] for entry in calls}), len(names))
+        self.assertEqual(len({entry["payload"]["name"] for entry in calls}), len(names))
+        for index, (call, result) in enumerate(zip(calls, results)):
+            for field in ("name", "call_id"):
+                self.assertRegex(call["payload"][field], re.compile(r"^[A-Za-z0-9_-]{1,64}$"))
+            self.assertEqual(call["payload"]["call_id"], result["payload"]["call_id"])
+            self.assertEqual(call["payload"]["arguments"], original[2 + index * 2]["payload"]["arguments"])
+            self.assertEqual(result["payload"]["output"], original[3 + index * 2]["payload"]["output"])
+            self.assertEqual(call.get("dialog_mover_original", {}).get("name", call["payload"]["name"]), names[index])
+            self.assertEqual(call["dialog_mover_original"]["call_id"], "call_" + "a" * 80)
+
+    def test_custom_tool_call_and_result_share_the_same_bounded_identifier(self):
+        records = [self.meta, message("user", "Synthetic patch history"),
+                   record("response_item", {"type": "custom_tool_call", "name": "apply_patch", "call_id": "c" * 85, "input": "*** Begin Patch\n*** End Patch"}),
+                   record("response_item", {"type": "custom_tool_call_output", "call_id": "c" * 85, "output": "synthetic output"})]
+        converted = codex_import.paginated_history(records, self.imported_id)
+        calls = [entry["payload"] for entry in converted if entry["type"] == "response_item" and "call_id" in entry["payload"]]
+        self.assertEqual(calls[0]["call_id"], calls[1]["call_id"])
+        self.assertLessEqual(len(calls[0]["call_id"]), 64)
+        self.assertEqual(calls[0]["input"], "*** Begin Patch\n*** End Patch")
+
+    def test_identifier_boundary_preserves_legal_values_and_resolves_alias_collisions(self):
+        long_name = "mcp__" + "n" * 80
+        alias = long_name[:31] + "_" + uuid.uuid5(uuid.NAMESPACE_URL, "0:" + long_name).hex
+        records = [self.meta, message("user", "boundary question")]
+        for index, name in enumerate((long_name, alias, "s" * 64)):
+            call_id = ("id" + str(index)).ljust(64, "x")
+            records.extend([record("response_item", {"type": "function_call", "name": name, "call_id": call_id, "arguments": "{}"}),
+                            record("response_item", {"type": "function_call_output", "call_id": call_id, "output": "result"})])
+        converted = codex_import.paginated_history(records, self.imported_id)
+        calls = [entry["payload"] for entry in converted if entry["type"] == "response_item" and entry["payload"]["type"] == "function_call"]
+        self.assertNotEqual(calls[0]["name"], alias)
+        self.assertEqual(calls[1]["name"], alias)
+        self.assertEqual(calls[2]["name"], "s" * 64)
+        self.assertEqual([item["call_id"] for item in calls], [("id" + str(index)).ljust(64, "x") for index in range(3)])
+
+    def test_unpaired_or_mismatched_tool_history_is_rejected_before_reporting_success(self):
+        call = record("response_item", {"type": "function_call", "name": "fixture", "call_id": "call-fixture", "arguments": "{}"})
+        for entries in ([call], [record("response_item", {"type": "function_call_output", "call_id": "missing", "output": "orphan"})],
+                        [call, record("response_item", {"type": "custom_tool_call_output", "call_id": "call-fixture", "output": "wrong type"})]):
+            with self.subTest(entries=entries), self.assertRaisesRegex(ValueError, "配对"):
+                codex_import.paginated_history([self.meta, message("user", "question"), *entries], self.imported_id)
+
     def test_unknown_payload_is_rejected_not_silently_omitted(self):
         with self.assertRaisesRegex(ValueError, "未支持"):
             codex_import.paginated_history([self.meta, record("response_item", {"type": "new_unhandled_body"})], self.imported_id)
@@ -83,6 +142,8 @@ class CodexHistoryTests(unittest.TestCase):
             key = mover.history_key("cursor_desktop", source_id, "chatgpt_work", scratch)
             history.write_text(json.dumps({key: 123}))
             with patch.object(mover, "_history_file", return_value=history):
+                self.assertFalse(mover.already_moved("cursor_desktop", source_id, "chatgpt_work", scratch))
+                history.write_text(json.dumps({key: {"time": 123, "format": "paginated-import-v1"}}))
                 self.assertFalse(mover.already_moved("cursor_desktop", source_id, "chatgpt_work", scratch))
                 mover._record_move("cursor_desktop", source_id, "chatgpt_work", scratch)
                 self.assertTrue(mover.already_moved("cursor_desktop", source_id, "chatgpt_work", scratch))

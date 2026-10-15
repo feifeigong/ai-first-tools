@@ -63,9 +63,9 @@ jobs:
           python -m unittest test_chatgpt test_close_safety test_doubao test_macos test_macos_updater test_macos_native test_codex_history -v
       - name: Prepare checksum-pinned native history reader for tests only
         run: python scripts/prepare_native_history_audit.py --architecture '${{ matrix.architecture }}'
-      - name: Native Cursor to Work history pagination without model requests
+      - name: Native pagination and loopback-only continuation without model requests
         working-directory: dialog-mover
-        run: python -m unittest test_codex_native -v
+        run: python -m unittest test_codex_native test_codex_replay -v
       - name: Package and test actual Cocoa app and DMG
         env:
           AI_FIRST_CI_UPDATE_TOKEN: ${{ github.token }}

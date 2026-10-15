@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import copy
 import json
+import re
 import sqlite3
 import time
 import uuid
+from collections import defaultdict, deque
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,7 +14,67 @@ from pathlib import Path
 from .chatgpt import _norm
 
 
-HISTORY_FORMAT = "paginated-import-v1"
+HISTORY_FORMAT = "paginated-import-v2"
+REPLAY_IDENTIFIER = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
+
+
+def _replay_safe_records(records: list[dict], imported_id: str) -> list[dict]:
+    """Keep historical calls replayable without changing their arguments or results."""
+    namespace = uuid.UUID(imported_id)
+    converted = copy.deepcopy(records)
+    pending = defaultdict(deque)
+    used_ids = set()
+    name_aliases = {}
+    # Reserve legal source names so a generated alias cannot steal a later tool's name.
+    used_names = {entry["payload"]["name"]: entry["payload"]["name"] for entry in converted
+                  if entry.get("type") == "response_item" and entry.get("payload", {}).get("type") in ("function_call", "custom_tool_call")
+                  and isinstance(entry["payload"].get("name"), str) and REPLAY_IDENTIFIER.fullmatch(entry["payload"]["name"])}
+
+    def replace(entry: dict, field: str, value: str) -> None:
+        previous = entry["payload"].get(field)
+        if previous != value:
+            entry.setdefault("dialog_mover_original", {})[field] = previous
+            entry["payload"][field] = value
+
+    for index, entry in enumerate(converted):
+        if entry.get("type") != "response_item":
+            continue
+        payload = entry["payload"]
+        kind = payload.get("type")
+        if kind in ("function_call", "custom_tool_call"):
+            original_id = payload.get("call_id")
+            name = payload.get("name")
+            if not isinstance(original_id, str) or not original_id or not isinstance(name, str):
+                raise ValueError("历史工具调用的编号或名称不完整，无法安全配对；未登记搬运成功。")
+            if name not in name_aliases:
+                alias = name
+                attempt = 0
+                while not REPLAY_IDENTIFIER.fullmatch(alias) or used_names.get(alias, name) != name:
+                    prefix = re.sub(r"[^A-Za-z0-9_-]", "_", name[:31]) or "tool"
+                    alias = prefix + "_" + uuid.uuid5(uuid.NAMESPACE_URL, f"{attempt}:{name}").hex
+                    attempt += 1
+                name_aliases[name] = alias
+                used_names[alias] = name
+            replace(entry, "name", name_aliases[name])
+            alias = original_id
+            attempt = 0
+            while not REPLAY_IDENTIFIER.fullmatch(alias) or alias in used_ids:
+                alias = "call_dm_" + uuid.uuid5(namespace, f"{index}:{attempt}:{original_id}").hex
+                attempt += 1
+            used_ids.add(alias)
+            pending[original_id].append((kind, alias))
+            replace(entry, "call_id", alias)
+        elif kind in ("function_call_output", "custom_tool_call_output"):
+            original_id = payload.get("call_id")
+            if not isinstance(original_id, str) or not pending.get(original_id):
+                raise ValueError("历史工具结果没有可配对的调用，已停止导入；原记录不变。")
+            called_kind, alias = pending[original_id].popleft()
+            if kind != called_kind + "_output":
+                raise ValueError("历史工具调用与结果格式无法配对，已停止导入；原记录不变。")
+            replace(entry, "call_id", alias)
+    if any(pending.values()):
+        raise ValueError("历史工具调用缺少配对结果，已停止导入；请待来源任务完成后重试，原记录不变。")
+    return converted
 
 
 def verify_body(document: dict, reread: dict) -> None:
@@ -47,6 +110,7 @@ def verify_body(document: dict, reread: dict) -> None:
 
 
 def paginated_history(records: list[dict], imported_id: str) -> list[dict]:
+    records = _replay_safe_records(records, imported_id)
     namespace = uuid.UUID(imported_id)
     output = [records[0]]
     turn_id = None
@@ -203,7 +267,7 @@ def register(path: Path, imported_id: str, document: dict, target: str, env: dic
     title = str(document.get("title") or _first_user_text(document)[:120] or "搬入的对话")
     metadata = records[0]["payload"]
     metadata.update({"source": "vscode", "thread_source": "user", "originator": originator, "cwd": directory,
-                     "timestamp": timestamp, "history_mode": "paginated"})
+                     "timestamp": timestamp, "history_mode": "paginated", "dialog_mover_import_format": HISTORY_FORMAT})
     records[0]["timestamp"] = timestamp
     records = paginated_history(records, imported_id)
     temporary = path.with_suffix(".importing")
