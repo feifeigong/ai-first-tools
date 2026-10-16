@@ -49,7 +49,7 @@ class Controller:
         return value
 
     def watchers(self):
-        result=subprocess.run(['/bin/ps','-ax','-o','pid=,args='],capture_output=True,text=True,check=True,timeout=10)
+        result=subprocess.run(['/bin/ps','-axww','-o','pid=,args='],capture_output=True,text=True,check=True,timeout=10)
         expected={str(self.executable)+' '+WATCH,str(self.executable)+' '+WATCH+' --manual'}
         found=[]
         for line in result.stdout.splitlines():
