@@ -1,5 +1,7 @@
 # Copilot Desktop 对话搬家
 
+Windows 搬入与列表修正版已公开 [v0.3.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.13)，构建与独立下载核验通过。Mac 搬入与列表修正版已公开 [preview.15](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.15)，两架构构建与全部资产独立下载核验通过；下文早期版本保留为历史。
+
 已随 [Windows v0.3.10](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.10)、[Mac preview.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.13) 公开。已有支持一键更新的版本可检查更新；更早版本下载完整安装包。构建与独立资产核验见 [Windows QA](UPDATER-QA.md)、[Mac QA](MACOS-QA.md)。
 
 当前支持 GitHub Copilot 独立桌面 App 的本机历史搬出和搬入：在「对话搬家」中选择 GitHub Copilot，按标题或文件夹搜索、勾选记录、选择现有目标和文件夹。支持刷新重新发现记录。搬入后登记到 Desktop 的 Chats（聊天）列表。VS Code 自身的 chatSessions 不在本轮范围。

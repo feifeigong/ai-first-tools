@@ -1,5 +1,19 @@
 # Windows 更新功能验收
 
+## 2026-10-16：Windows v0.3.13 已发布，Copilot Desktop 搬入与列表对应
+
+[公开版本](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.13)，2026-10-16 13:26:02 UTC 发布，安装包及不可变标签源码 `30b0f6be7677edeb82d00d3b4fe02c35dbb2f98d`。修正共享 session-state 混列、空目录凑数、内部聊天沙箱误作项目；新增 ChatGPT 等来源搬入 Copilot Desktop Chats，完整正文与思考保留，工具/系统/附件信息作为历史说明。只新建副本和登记，不改已有行，不迁移认证或权限。当前索引形状以 Desktop 1.1.29 为依据，变化时停止写入。
+
+[Windows 源码回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38905927704) 通过 134 项后端（没有引擎时 1 项明确跳过）、1 项固定官方 Copilot 1.0.98 原生完整读取/严格恢复、34 项界面、54 项续跑回归、3 项资产检查、WPF 构建与外壳自检。带实际迁移引擎的[完整运行包构建](https://github.com/feifeigong/ai-first-tools/actions/runs/38905951090) 又执行全部 18 项 Copilot 来源和 9 项目标检查、原生 Copilot 读取/严格恢复、冻结后台、真实安装/覆盖/卸载及后台恢复/清理，全部通过。保留 v0.3.12 单包内置续跑。
+
+[独立发布核验](https://github.com/feifeigong/ai-first-tools/actions/runs/38907601763) 下载原构建与草稿三个资产，精确名称、字节、SHA-256、源码标签、安装和后台报告一致后公开（发布 ID `414990189`）。匿名公开 latest 确认为 v0.3.13，全部资产摘要匹配，实际下载校验清单并验证摘要。未替换用户电脑上的软件，也未通过真实账户发送下一轮；原生读取与严格恢复不代替所有桌面人工显示/付费续聊验收。
+
+| 资产 | 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| 安装包 | 165622085 | `266dec75004321f44dfd6f944b12b76bd8c2e343687a28bb9872187c68556b75` |
+| 免安装包 | 249603739 | `537609afbfd338af8871861bf19ad03e583f61719e7fa72abd9c6f9dcdf02305` |
+
+
 ## 2026-10-16 v0.3.12：单个工作台安装包内置自动续跑
 
 已公开 [v0.3.12](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.12)。安装包与不可变轻量标签源码固定 `4b60c28b77a7b2785d9aa1894ac471a3e56ff9e2`，完整内置续跑后台、Python 与锁定校验的 OpenAI 原生 Codex 组件，接收者无需另装独立后台、Python、Node 或 Codex CLI。只有一个工作台入口和卸载项。保留 v0.3.11 自动更新修复及现有搬家功能。
