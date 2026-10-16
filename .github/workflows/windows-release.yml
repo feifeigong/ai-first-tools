@@ -107,7 +107,10 @@ jobs:
           $setup=Resolve-Path "artifacts/release/AI-First-Tools-Setup-$version.exe"
           $target=Join-Path $env:LOCALAPPDATA 'Programs/AI First Tools'
           if (Test-Path -LiteralPath $target) { throw 'Audit requires an unused installation directory' }
-          $install=Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
+          # Start-Process -Wait also waits for descendants, including the intentionally
+          # restored background. Wait only for the installer itself to exit.
+          $install=Start-Process -FilePath $setup -ArgumentList '/S' -PassThru -WindowStyle Hidden
+          $install.WaitForExit()
           if ($install.ExitCode -ne 0) { throw 'Silent installation failed' }
           $app=Join-Path $target 'AI一手工具工作台.exe'
           $report=Join-Path $PWD 'artifacts/windows/installed-self-test.json'
@@ -121,11 +124,13 @@ jobs:
           if ($LASTEXITCODE) { throw 'Installed background lifecycle checks failed' }
           $extra=Join-Path $target 'synthetic-user-note.txt'
           Set-Content -LiteralPath $extra -Value 'synthetic extra file must survive'
-          $reinstall=Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
+          $reinstall=Start-Process -FilePath $setup -ArgumentList '/S' -PassThru -WindowStyle Hidden
+          $reinstall.WaitForExit()
           if ($reinstall.ExitCode -ne 0 -or (Get-Content -LiteralPath $extra -Raw).Trim() -ne 'synthetic extra file must survive') { throw 'Silent reinstall or extra-file protection failed' }
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json --stage reinstall
           if ($LASTEXITCODE) { throw 'Reinstallation did not restore the running background' }
-          $uninstall=Start-Process -FilePath (Join-Path $target 'Uninstall.exe') -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
+          $uninstall=Start-Process -FilePath (Join-Path $target 'Uninstall.exe') -ArgumentList '/S' -PassThru -WindowStyle Hidden
+          $uninstall.WaitForExit()
           $deadline=(Get-Date).AddSeconds(30)
           while ((Test-Path -LiteralPath $app) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 250 }
           if ($uninstall.ExitCode -ne 0 -or (Test-Path -LiteralPath $app) -or !(Test-Path -LiteralPath $extra)) { throw 'Uninstall protection failed' }
