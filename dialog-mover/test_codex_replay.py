@@ -79,7 +79,7 @@ class LoopbackResponses:
         endpoint = f"http://127.0.0.1:{self.server.server_port}/v1"
         config = '\n'.join(['model = "gpt-5.1-codex-mini"', 'model_provider = "loopback_audit"',
                             'cli_auth_credentials_store = "file"', 'approval_policy = "never"', 'sandbox_mode = "read-only"',
-                            '[analytics]', 'enabled = false', '[feedback]', 'enabled = false',
+                            '[features]', 'plugins = false', '[analytics]', 'enabled = false', '[feedback]', 'enabled = false',
                             '[model_providers.loopback_audit]', 'name = "Synthetic local-only audit"',
                             'base_url = ' + json.dumps(endpoint), 'wire_api = "responses"', 'requires_openai_auth = false',
                             'supports_websockets = false', 'request_max_retries = 0', 'stream_max_retries = 0'])
@@ -96,7 +96,8 @@ class LoopbackResponses:
 
 
 class NativeReplayTests(unittest.TestCase):
-    def check_cursor_continuation(self, tool_name: str, call_id: str, repetitions: int = 1, legacy: bool = False):
+    def check_cursor_continuation(self, tool_name: str, call_id: str, repetitions: int = 1, legacy: bool = False,
+                                  missing_outputs: bool = False, missing_indexes: set[int] | None = None):
         binary = native_binary()
         if binary is None:
             self.skipTest("Native engine unavailable; the Mac CI supplies a checksum-pinned executable")
@@ -114,10 +115,12 @@ class NativeReplayTests(unittest.TestCase):
             if tool_name == "ApplyPatch":
                 arguments = {"patch": "*** Begin Patch\n*** Add File: must-not-execute.txt\n+synthetic only\n*** End Patch", "files": ["must-not-execute.txt"]}
             messages = [{"role": "user", "content": "Synthetic first question"}]
+            missing = set(range(repetitions)) if missing_outputs else set(missing_indexes or ())
+            source_call_ids = [f"{call_id}_{index}" if missing_indexes is not None else call_id for index in range(repetitions)]
             for index in range(repetitions):
-                messages.extend([
-                    {"role": "assistant", "content": [{"type": "tool_use", "id": call_id, "name": tool_name, "input": arguments}]},
-                    {"role": "user", "content": [{"type": "tool_result", "tool_use_id": call_id, "content": f"Synthetic complete tool output {index}"}]}])
+                messages.append({"role": "assistant", "content": [{"type": "tool_use", "id": source_call_ids[index], "name": tool_name, "input": arguments}]})
+                if index not in missing:
+                    messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": source_call_ids[index], "content": f"Synthetic complete tool output {index}"}]})
             messages.append({"role": "assistant", "content": "Synthetic last answer"})
             document = {"id": str(uuid.uuid4()), "cwd": str(directory), "messages": messages}
             source = base / "source.json"
@@ -141,6 +144,31 @@ class NativeReplayTests(unittest.TestCase):
                         result = mover.move_one("cursor_desktop", {"id": seeded["importedId"], "title": "Synthetic long identifiers"}, "chatgpt_work", str(directory), details)
                     self.assertEqual(result[0], "ok", result)
                     self.assertEqual(hashlib.sha256(database.read_bytes()).hexdigest(), before)
+                if missing:
+                    self.assertEqual(details["historicalToolNotes"], len(missing))
+                    self.assertIn("未补写执行结果", result[1])
+                    archived_records = [json.loads(line) for line in Path(details["location"]).read_text(encoding="utf-8").splitlines()]
+                    expected_notes = [entry["payload"]["content"][0]["text"] for entry in archived_records
+                                      if entry.get("dialog_mover_original", {}).get("reason") == "missing_tool_result"]
+                    native.request("thread/resume", {"threadId": details["importedId"], "cwd": str(directory),
+                                                       "excludeTurns": True, "sandbox": "read-only", "approvalPolicy": "on-request"})
+                    items = []
+                    cursor = None
+                    for page_number in range(50):
+                        params = {"threadId": details["importedId"], "limit": 2, "sortDirection": "asc"}
+                        if cursor:
+                            params["cursor"] = cursor
+                        page = native.request("thread/items/list", params)
+                        items.extend(page["data"])
+                        cursor = page.get("nextCursor")
+                        if not cursor:
+                            break
+                    self.assertIsNone(cursor)
+                    self.assertGreater(page_number, 0)
+                    self.assertEqual([entry["item"]["type"] for entry in items], ["userMessage"] +
+                                     ["agentMessage" if index in missing else "dynamicToolCall" for index in range(repetitions)] + ["agentMessage"])
+                    self.assertEqual([items[1 + index]["item"]["text"] for index in sorted(missing)], expected_notes)
+                    self.assertEqual(items[-1]["item"]["text"], "Synthetic last answer")
             finally:
                 native.close()
             with LoopbackResponses() as fixture:
@@ -158,10 +186,26 @@ class NativeReplayTests(unittest.TestCase):
                 kind = "custom_tool_call" if tool_name == "ApplyPatch" else "function_call"
                 calls = [item for item in history if item.get("type") == kind]
                 outputs = [item for item in history if item.get("type") == kind + "_output"]
-                self.assertEqual(len(calls), repetitions)
-                self.assertEqual(len(outputs), repetitions)
-                self.assertEqual(len({item["call_id"] for item in calls}), repetitions)
-                for index, (call, output) in enumerate(zip(calls, outputs)):
+                self.assertEqual(len(calls), repetitions - len(missing))
+                self.assertEqual(len(outputs), repetitions - len(missing))
+                self.assertEqual(len({item["call_id"] for item in calls}), repetitions - len(missing))
+                if missing:
+                    transcript = json.dumps(history, ensure_ascii=False)
+                    self.assertIn("来源未提供工具结果", transcript)
+                    wire_notes = [part["text"] for item in history if item.get("type") == "message"
+                                  for part in item.get("content", []) if isinstance(part, dict)
+                                  and part.get("text", "").startswith("[迁入的历史工具日志：")]
+                    self.assertEqual(wire_notes, expected_notes)
+                    rollouts = [json.loads(line) for line in Path(details["location"]).read_text(encoding="utf-8").splitlines()]
+                    notes = [entry["dialog_mover_original"]["response_item"] for entry in rollouts
+                             if entry.get("dialog_mover_original", {}).get("reason") == "missing_tool_result"]
+                    self.assertEqual([note["call_id"] for note in notes], [source_call_ids[index] for index in sorted(missing)])
+                    for note in notes:
+                        if kind == "custom_tool_call":
+                            self.assertEqual(note["input"], arguments["patch"])
+                        else:
+                            self.assertEqual(json.loads(note["arguments"]), arguments)
+                for index, call, output in zip((index for index in range(repetitions) if index not in missing), calls, outputs):
                     self.assertEqual(call["call_id"], output["call_id"])
                     if kind == "custom_tool_call":
                         self.assertEqual(call["input"], arguments["patch"])
@@ -190,6 +234,14 @@ class NativeReplayTests(unittest.TestCase):
 
     def test_reused_historical_ids_are_unique_and_paired_in_the_actual_request(self):
         self.check_cursor_continuation("fixture", "reused-call", repetitions=3)
+
+    def test_cursor_history_without_a_tool_result_imports_pages_and_continues_without_replaying_it(self):
+        for name in ("mcp__" + "u" * 80, "ApplyPatch"):
+            with self.subTest(name=name):
+                self.check_cursor_continuation(name, "unfinished_" + "i" * 74, missing_outputs=True)
+
+    def test_mixed_complete_and_interrupted_cursor_tools_preserve_order_and_all_outputs(self):
+        self.check_cursor_continuation("mcp__" + "m" * 80, "mixed_" + "c" * 79, repetitions=4, missing_indexes={1, 3})
 
 
 if __name__ == "__main__":

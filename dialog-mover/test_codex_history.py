@@ -113,12 +113,50 @@ class CodexHistoryTests(unittest.TestCase):
         self.assertEqual(calls[2]["name"], "s" * 64)
         self.assertEqual([item["call_id"] for item in calls], [("id" + str(index)).ljust(64, "x") for index in range(3)])
 
-    def test_unpaired_or_mismatched_tool_history_is_rejected_before_reporting_success(self):
+    def test_mismatched_tool_types_are_still_rejected_before_reporting_success(self):
         call = record("response_item", {"type": "function_call", "name": "fixture", "call_id": "call-fixture", "arguments": "{}"})
-        for entries in ([call], [record("response_item", {"type": "function_call_output", "call_id": "missing", "output": "orphan"})],
-                        [call, record("response_item", {"type": "custom_tool_call_output", "call_id": "call-fixture", "output": "wrong type"})]):
-            with self.subTest(entries=entries), self.assertRaisesRegex(ValueError, "配对"):
-                codex_import.paginated_history([self.meta, message("user", "question"), *entries], self.imported_id)
+        with self.assertRaisesRegex(ValueError, "配对"):
+            codex_import.paginated_history([self.meta, message("user", "question"), call,
+                record("response_item", {"type": "custom_tool_call_output", "call_id": "call-fixture", "output": "wrong type"})], self.imported_id)
+
+    def test_unpaired_logs_are_lossless_explicit_notes_and_never_fabricated_pairs(self):
+        call = record("response_item", {"type": "function_call", "name": "mcp__" + "x" * 80,
+                                       "call_id": "call_" + "c" * 80, "arguments": json.dumps({"full": "参数\n" * 1000})})
+        result = record("response_item", {"type": "function_call_output", "call_id": "orphan", "output": "原始结果\n" * 1000})
+        records = [self.meta, message("user", "prefix"), call, result, message("assistant", "tail")]
+        original = copy.deepcopy(records)
+        converted = codex_import.paginated_history(records, self.imported_id)
+        self.assertEqual(records, original)
+        responses = [entry for entry in converted if entry["type"] == "response_item"]
+        self.assertTrue(all(entry["payload"]["type"] == "message" for entry in responses))
+        for note, source, reason in ((responses[1], call, "missing_tool_result"), (responses[2], result, "missing_tool_call")):
+            self.assertEqual(note["dialog_mover_original"]["response_item"], source["payload"])
+            self.assertEqual(note["dialog_mover_original"]["reason"], reason)
+            self.assertEqual(json.loads(note["payload"]["content"][0]["text"].split("\n", 1)[1]), source["payload"])
+            self.assertIn("不代表执行成功", note["payload"]["content"][0]["text"])
+        self.assertEqual(sum(entry.get("payload", {}).get("type") == "task_started" for entry in converted), 1)
+
+    def test_interrupted_call_cannot_steal_a_reused_id_from_a_later_user_turn(self):
+        call = record("response_item", {"type": "function_call", "name": "fixture", "call_id": "reused", "arguments": "{}"})
+        records = [self.meta, message("user", "first"), call, message("assistant", "interrupted"),
+                   message("user", "second"), call,
+                   record("response_item", {"type": "function_call_output", "call_id": "reused", "output": "second result"})]
+        converted = codex_import.paginated_history(records, self.imported_id)
+        notes = [entry for entry in converted if entry.get("dialog_mover_original", {}).get("reason") == "missing_tool_result"]
+        self.assertEqual(len(notes), 1)
+        tools = [entry["payload"]["item"] for entry in converted if entry.get("payload", {}).get("type") == "item_completed"
+                 and entry["payload"]["item"]["type"] == "DynamicToolCall"]
+        self.assertEqual(len(tools), 1)
+        self.assertEqual(tools[0]["content_items"], [{"type": "inputText", "text": "second result"}])
+        self.assertEqual(sum(entry.get("payload", {}).get("type") == "task_started" for entry in converted), 2)
+
+    def test_overlapping_reused_ids_are_preserved_without_guessing_the_pairing(self):
+        calls = [record("response_item", {"type": "function_call", "name": "fixture", "call_id": "ambiguous", "arguments": str(index)}) for index in range(2)]
+        results = [record("response_item", {"type": "function_call_output", "call_id": "ambiguous", "output": str(index)}) for index in range(2)]
+        converted = codex_import.paginated_history([self.meta, message("user", "question"), *calls, *results], self.imported_id)
+        notes = [entry for entry in converted if entry.get("dialog_mover_original", {}).get("reason") == "ambiguous_tool_id"]
+        self.assertEqual([entry["dialog_mover_original"]["response_item"] for entry in notes], [entry["payload"] for entry in [*calls, *results]])
+        self.assertFalse(any(entry.get("payload", {}).get("type") in ("function_call", "function_call_output") for entry in converted))
 
     def test_unknown_payload_is_rejected_not_silently_omitted(self):
         with self.assertRaisesRegex(ValueError, "未支持"):
@@ -143,8 +181,9 @@ class CodexHistoryTests(unittest.TestCase):
             history.write_text(json.dumps({key: 123}))
             with patch.object(mover, "_history_file", return_value=history):
                 self.assertFalse(mover.already_moved("cursor_desktop", source_id, "chatgpt_work", scratch))
-                history.write_text(json.dumps({key: {"time": 123, "format": "paginated-import-v1"}}))
-                self.assertFalse(mover.already_moved("cursor_desktop", source_id, "chatgpt_work", scratch))
+                for previous in ("paginated-import-v1", "paginated-import-v2"):
+                    history.write_text(json.dumps({key: {"time": 123, "format": previous}}))
+                    self.assertFalse(mover.already_moved("cursor_desktop", source_id, "chatgpt_work", scratch))
                 mover._record_move("cursor_desktop", source_id, "chatgpt_work", scratch)
                 self.assertTrue(mover.already_moved("cursor_desktop", source_id, "chatgpt_work", scratch))
                 mover._record_move("cursor_desktop", source_id, "workbuddy_ai", scratch)

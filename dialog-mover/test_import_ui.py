@@ -148,6 +148,39 @@ class ImportUiTests(unittest.TestCase):
             finally:
                 browser.close()
 
+    def test_failed_copy_and_archived_tool_notices_are_explicit_and_readable(self):
+        capabilities = Api().agents()
+        for ok, text in ((0, "历史工具调用缺少配对结果，已停止导入。" * 20),
+                         (1, "已搬好；2 条未能完整配对的工具日志已作为历史说明保留，未补写执行结果。")):
+            with self.subTest(ok=ok), sync_playwright() as runtime:
+                browser = runtime.chromium.launch(channel="msedge", headless=True)
+                try:
+                    page = browser.new_page(viewport={"width": 960, "height": 740})
+                    page.set_default_timeout(5000)
+                    status = {"finished": True, "total": 1, "done": 1, "ok": ok, "failed": 1 - ok, "skipped": 0,
+                              "items": [{"id": "fixture", "title": "合成记录", "state": "ok" if ok else "failed", "message": text}]}
+                    page.add_init_script("""
+window.pywebview={api:{agents:async()=>(CAPABILITIES),
+sessions:async()=>({groups:[{title:'项目',kind:'folder',path:'/synthetic',sessions:[{id:'fixture',title:'合成记录',movable:true,folder:'/synthetic',ts:1}]}],total:1,movable:1}),
+folders:async()=>[{name:'synthetic',path:'/synthetic'}],start_move:async()=>({ok:true,total:1}),move_status:async()=>(STATUS)}};
+window.addEventListener('DOMContentLoaded',()=>window.dispatchEvent(new Event('pywebviewready')));
+""".replace("CAPABILITIES", json.dumps(capabilities)).replace("STATUS", json.dumps(status)))
+                    page.goto((Path(__file__).parent / "ui/index.html").as_uri())
+                    page.locator(".row").first.click()
+                    page.locator("#bar-go").click()
+                    page.locator('[data-product="chatgpt"]').click()
+                    page.locator('[data-target="chatgpt_work"]').click()
+                    page.locator("[data-path]").first.click()
+                    page.locator("#next").click()
+                    page.locator("#go").click()
+                    page.get_by_role("heading", name="记录已复制" if ok else "这次没有复制成功", exact=True).wait_for()
+                    self.assertEqual(page.locator(".result .m").inner_text(), text)
+                    self.assertTrue(page.locator(".result").evaluate("el=>el.scrollWidth<=el.clientWidth+1"))
+                    self.assertEqual(page.locator("[data-verification-scope]").count(), ok)
+                    self.assertTrue(page.locator("#finish").is_visible())
+                finally:
+                    browser.close()
+
     def test_slow_native_bridge_never_shows_fake_agents_or_conversations(self):
         capabilities = Api().agents()
         with sync_playwright() as runtime:

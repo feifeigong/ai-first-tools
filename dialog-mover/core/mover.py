@@ -230,9 +230,10 @@ def _import_document(path: Path, document: dict, target: str, details: dict | No
             Path(location).unlink(missing_ok=True)
             Path(location).with_suffix(".txcript.json").unlink(missing_ok=True)
             raise
+    historical_tool_notes = 0
     if target in ("codex", "chatgpt_work"):
         try:
-            codex_import.register(Path(location), imported_id, document, target, environment)
+            historical_tool_notes = codex_import.register(Path(location), imported_id, document, target, environment)
         except Exception:
             Path(location).unlink(missing_ok=True)
             raise
@@ -251,7 +252,12 @@ def _import_document(path: Path, document: dict, target: str, details: dict | No
         if target in ("codex", "chatgpt_work"):
             # ChatGPT reads its local list only at start-up; this link makes it open the thread by id
             details["openUrl"] = f"codex://threads/{imported_id}"
-    return "ok", "已写入本地记录文件" if TARGETS[target]["mode"] == "trajectory" else "已搬好"
+    message = "已写入本地记录文件" if TARGETS[target]["mode"] == "trajectory" else "已搬好"
+    if isinstance(historical_tool_notes, int) and historical_tool_notes > 0:
+        message += f"；{historical_tool_notes} 条未能完整配对的工具日志已作为历史说明保留，未补写执行结果。"
+        if details is not None:
+            details["historicalToolNotes"] = historical_tool_notes
+    return "ok", message
 
 
 def _move_cached_claude(session: dict, target: str, directory: str, details: dict | None = None) -> tuple[str, str]:

@@ -14,17 +14,66 @@ from pathlib import Path
 from .chatgpt import _norm
 
 
-HISTORY_FORMAT = "paginated-import-v2"
+HISTORY_FORMAT = "paginated-import-v3"
 REPLAY_IDENTIFIER = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
 
 
 def _replay_safe_records(records: list[dict], imported_id: str) -> list[dict]:
-    """Keep historical calls replayable without changing their arguments or results."""
+    """Replay complete pairs; preserve incomplete history as explicit, lossless notes."""
     namespace = uuid.UUID(imported_id)
-    converted = copy.deepcopy(records)
+    converted = [copy.deepcopy(entry) for entry in records]
     pending = defaultdict(deque)
+    ambiguous = set()
+    notes = {}
+    pairs = {}
+
+    def finish_pending():
+        for indexes in pending.values():
+            for index in indexes:
+                notes.setdefault(index, "missing_tool_result")
+        pending.clear()
+        ambiguous.clear()
+
+    # First establish unambiguous pairs inside each actual user turn. Cursor can
+    # retain calls that were interrupted years ago; a later result must not be
+    # invented or assigned to an earlier call simply to satisfy the wire schema.
+    for index, entry in enumerate(records):
+        if entry.get("type") != "response_item":
+            continue
+        payload = entry["payload"]
+        kind = payload.get("type")
+        if kind == "message" and payload.get("role") == "user":
+            finish_pending()
+        elif kind in ("function_call", "custom_tool_call"):
+            original_id = payload.get("call_id")
+            if not isinstance(original_id, str) or not original_id or not isinstance(payload.get("name"), str):
+                raise ValueError("历史工具调用的编号或名称不完整，无法安全配对；未登记搬运成功。")
+            pending[original_id].append(index)
+            if len(pending[original_id]) > 1:
+                ambiguous.add(original_id)
+                for called in pending[original_id]:
+                    notes[called] = "ambiguous_tool_id"
+        elif kind in ("function_call_output", "custom_tool_call_output"):
+            original_id = payload.get("call_id")
+            if not isinstance(original_id, str) or not original_id:
+                raise ValueError("历史工具结果的编号不完整，无法安全配对；未登记搬运成功。")
+            if not pending.get(original_id):
+                notes[index] = "missing_tool_call"
+                continue
+            called = pending[original_id].popleft()
+            if original_id in ambiguous:
+                notes[index] = "ambiguous_tool_id"
+                if not pending[original_id]:
+                    ambiguous.remove(original_id)
+            elif kind != records[called]["payload"]["type"] + "_output":
+                raise ValueError("历史工具调用与结果格式无法配对，已停止导入；原记录不变。")
+            else:
+                pairs[index] = called
+    finish_pending()
+
     used_ids = set()
     name_aliases = {}
+    call_aliases = {}
     # Reserve legal source names so a generated alias cannot steal a later tool's name.
     used_names = {entry["payload"]["name"]: entry["payload"]["name"] for entry in converted
                   if entry.get("type") == "response_item" and entry.get("payload", {}).get("type") in ("function_call", "custom_tool_call")
@@ -41,6 +90,18 @@ def _replay_safe_records(records: list[dict], imported_id: str) -> list[dict]:
             continue
         payload = entry["payload"]
         kind = payload.get("type")
+        if index in notes:
+            reason = notes[index]
+            label = {"missing_tool_result": "来源未提供工具结果",
+                     "missing_tool_call": "来源未提供对应的工具调用",
+                     "ambiguous_tool_id": "来源工具编号重用，无法确定配对"}[reason]
+            original = copy.deepcopy(records[index]["payload"])
+            entry.setdefault("dialog_mover_original", {}).update({"response_item": original, "reason": reason})
+            text = f"[迁入的历史工具日志：{label}。以下仅为历史内容，不代表执行成功，也不是待执行请求。]\n"
+            text += json.dumps(original, ensure_ascii=False)
+            entry["payload"] = {"type": "message", "role": "assistant", "phase": "commentary",
+                                "content": [{"type": "output_text", "text": text}]}
+            continue
         if kind in ("function_call", "custom_tool_call"):
             original_id = payload.get("call_id")
             name = payload.get("name")
@@ -62,18 +123,10 @@ def _replay_safe_records(records: list[dict], imported_id: str) -> list[dict]:
                 alias = "call_dm_" + uuid.uuid5(namespace, f"{index}:{attempt}:{original_id}").hex
                 attempt += 1
             used_ids.add(alias)
-            pending[original_id].append((kind, alias))
+            call_aliases[index] = alias
             replace(entry, "call_id", alias)
         elif kind in ("function_call_output", "custom_tool_call_output"):
-            original_id = payload.get("call_id")
-            if not isinstance(original_id, str) or not pending.get(original_id):
-                raise ValueError("历史工具结果没有可配对的调用，已停止导入；原记录不变。")
-            called_kind, alias = pending[original_id].popleft()
-            if kind != called_kind + "_output":
-                raise ValueError("历史工具调用与结果格式无法配对，已停止导入；原记录不变。")
-            replace(entry, "call_id", alias)
-    if any(pending.values()):
-        raise ValueError("历史工具调用缺少配对结果，已停止导入；请待来源任务完成后重试，原记录不变。")
+            replace(entry, "call_id", call_aliases[pairs[index]])
     return converted
 
 
@@ -251,7 +304,7 @@ def _project(connection: sqlite3.Connection, directory: str, stamp: int) -> str:
     return project_id
 
 
-def register(path: Path, imported_id: str, document: dict, target: str, env: dict) -> None:
+def register(path: Path, imported_id: str, document: dict, target: str, env: dict) -> int:
     root = Path(env["CODEX_HOME"])
     database = root / "state_5.sqlite"
     validate(database)
@@ -270,6 +323,8 @@ def register(path: Path, imported_id: str, document: dict, target: str, env: dic
                      "timestamp": timestamp, "history_mode": "paginated", "dialog_mover_import_format": HISTORY_FORMAT})
     records[0]["timestamp"] = timestamp
     records = paginated_history(records, imported_id)
+    historical_tool_notes = sum(bool(entry.get("dialog_mover_original", {}).get("reason")) for entry in records)
+    records[0]["payload"]["dialog_mover_history_notes"] = historical_tool_notes
     temporary = path.with_suffix(".importing")
     try:
         temporary.write_text("".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records), encoding="utf-8")
@@ -299,3 +354,4 @@ def register(path: Path, imported_id: str, document: dict, target: str, env: dic
             stored = connection.execute("SELECT name,cwd,originator,project_id FROM threads WHERE id=?", (imported_id,)).fetchone()
             if stored != (title, directory, originator, project_id):
                 raise ValueError("ChatGPT 本机登记校验失败，已回滚。")
+    return historical_tool_notes

@@ -567,7 +567,7 @@
     const bad = status.failed > 0;
     const hint = target.resultHint || "已写入目标软件的本机记录。";
     body.innerHTML = `<div class="done-mark ${bad ? "warn" : ""}">${bad ? ICON.dash.replace(/13/g, "26") : ICON.tick.replace(/13/g, "26")}</div>
-      <h2>${bad ? "复制完成，有几条没成功" : "记录已复制"}</h2>
+      <h2>${bad ? (status.ok ? "部分记录未复制成功" : "这次没有复制成功") : "记录已复制"}</h2>
       <p class="lead">成功 ${status.ok} 条${status.skipped ? `，已搬过 ${status.skipped} 条` : ""}${bad ? `，没成功 ${status.failed} 条` : ""}。${status.ok ? hint : ""}</p>
       ${status.ok ? '<p class="hint" data-verification-scope>已确认记录写入后能够重新读取；目标软件是否显示、能否继续对话，仍需在对应软件确认。项目文件、附件和运行环境不会一起复制。</p>' : ""}
       ${status.items.length ? `<div class="results">${status.items.map((item, index) => `<div class="result ${item.state}"><div class="result-heading"><span class="t">${esc(item.title)}</span><span class="m">${esc(item.message)}</span></div>
