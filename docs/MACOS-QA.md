@@ -15,6 +15,22 @@
 | Apple / arm64 | 149834502 | `9a809823df779778f21052bcde7ce1c58794906c4d8d6e964cc4ed5b49f55627` |
 | Intel / x86_64 | 163003083 | `b7ad50738d150e0298b3d5b1c12ad3d655806274745f099fb9c218f1bfe793a8` |
 
+## 2026-10-16：preview.15 已发布，Copilot Desktop 搬入与列表修正
+
+[公开版本](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.15)，2026-10-16 13:46:39 UTC 发布，标签和运行包源码 `dcdf5adad1f309d538ef795c51525c041476ce43`。修正共享存储/空目录混列、内部聊天目录误作项目，新增 ChatGPT 等来源搬入 Desktop Chats。正文/思考完整回读后登记，只新建副本，不迁移认证或权限，范围见 COPILOT.md。
+
+[两架构原生构建](https://github.com/feifeigong/ai-first-tools/actions/runs/38908258217) 的 arm64、x86_64 各通过 131 项共享/来源/目标检查、1 项官方 Copilot 1.0.98 完整分页读取与严格恢复、10 项既有原生历史/本机模拟续聊检查；冻结资源 7、Cocoa 窗口/桥 9、系统 HTTPS 3、完整更新 9 项全通过。Copilot 测试使用隔离空账户和 125 轮合成正文，不登录、不发下一轮，逐字段核对恢复后的全部事件，包括 reasoningText。
+
+首轮主分支 `38905927761` 因所有目标测试未初始化新增 Copilot 测试库而失败；补齐夹具后的 `38906556595` ARM 通过，Intel 被同时开发的主分支推送取消，未发布失败包。最终用隔离发布分支，额外核对本仓库精确源码已合入 master、两种原生任务和全部关键检查成功。随后原样执行既有 stage_macos_release.py / verify_macos_release.py，分别下载原 CI 与草稿所有 11 资产，名称、字节、SHA-256、不可变标签和原生报告一致后公开（发布 ID `415010334`）。[机器可读核验记录](COPILOT-RELEASE-VERIFICATION.json) 保留来源和各资产摘要，未改宽数据或发布校验器。
+
+匿名公开查询与实际校验清单下载通过。核验时较新的 preview.16 已公开，两个芯片从 preview.12 正确选到 preview.16，同版不提示；已确认 preview.16 源码包含本轮提交，四份 Copilot 适配文件与 preview.15 相同。Windows latest 保持 v0.3.13。本次未升级、重开用户工作台或在其安装内导入合成聊天，用户使用自动更新自行升级。原生恢复不等于用户桌面人工显示/滚动和付费下一轮全部验收。
+
+| 架构 | DMG 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| arm64 | 23460919 | `a88b5be282a713d99f2fadc348bb41e8a01ffb82b83cd673cec58eb281128b4a` |
+| x86_64 | 24856078 | `b308d842af482a1764edf4546633a8659476a58eaefc118c14f11a1fb62fa3ff` |
+
+
 ## 2026-10-16：preview.14 已发布，自动检查无返回恢复
 
 用户实际版本为 preview.12，要求无需点击检查就提示下载。匿名公开查询与严格安装包选择能从 preview.12 识别当时的 preview.13，不能把用户现象直接归因于错误版本或发布未完成。旧 UI 对一直不返回的 workspace_info/check_update 无超时，初始化/检查标记会一直占用；两个新增合成桥测试在旧脚本均失败。preview.14 增加 10/30 秒恢复并沿用失败退避，迟到响应不能撤掉新提示。修复后本机 20 项 Mac 界面、56 项路径/更新单测全通过。

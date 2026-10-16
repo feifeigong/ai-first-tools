@@ -1,0 +1,142 @@
+{
+  "windows": {
+    "passed": true,
+    "version": "0.3.13",
+    "source": "30b0f6be7677edeb82d00d3b4fe02c35dbb2f98d",
+    "releaseId": 414990189,
+    "scope": "independent CI and draft downloads, installer and workspace reports, immutable source tag, exact names, bytes and SHA-256",
+    "installerChecks": {
+      "safeUninstall": true,
+      "installedSelfChecks": true,
+      "bundledControls": true,
+      "extraFilePreserved": true,
+      "backgroundUninstall": true,
+      "bundledRuntime": true,
+      "installedVersion": true,
+      "silentInstall": true,
+      "silentReinstall": true,
+      "backgroundUpgrade": true
+    },
+    "assets": [
+      {
+        "name": "AI-First-Tools-Setup-0.3.13.exe",
+        "bytes": 165622085,
+        "sha256": "266dec75004321f44dfd6f944b12b76bd8c2e343687a28bb9872187c68556b75"
+      },
+      {
+        "name": "AI-First-Tools-Portable-0.3.13-win-x64.zip",
+        "bytes": 249603739,
+        "sha256": "537609afbfd338af8871861bf19ad03e583f61719e7fa72abd9c6f9dcdf02305"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "bytes": 209,
+        "sha256": "e7597560461890927cbe34d28de005eff4ad88ca65f0b37f0aba29090073de21"
+      }
+    ]
+  },
+  "windowsPublic": {
+    "passed": true,
+    "version": "v0.3.13",
+    "latest": true,
+    "anonymousPublicAssetsMatched": true,
+    "checksumDownloaded": true,
+    "publishedAt": "2026-10-16T13:26:02Z"
+  },
+  "macBuild": {
+    "passed": true,
+    "runId": "38908258217",
+    "source": "dcdf5adad1f309d538ef795c51525c041476ce43",
+    "sourceAlreadyInMaster": true,
+    "releaseBranch": "codex/copilot-desktop-release",
+    "nativeBuilds": [
+      "build (macos-15-intel, x86_64)",
+      "build (macos-15, arm64)"
+    ],
+    "scope": "Exact known master commit on isolated release branch; both native builds and complete Copilot read/resume plus frozen app audits required"
+  },
+  "mac": {
+    "passed": true,
+    "release": "0.4.0-macos-preview.15",
+    "source": "dcdf5adad1f309d538ef795c51525c041476ce43",
+    "releaseId": 415010334,
+    "scope": "separately downloaded original CI artifacts and draft assets; native reports, exact names, bytes and SHA-256",
+    "assets": [
+      {
+        "name": "self-test-arm64.json",
+        "bytes": 424,
+        "sha256": "48b37370f674fc3aa7df8cebe15e768b0edca5580b913fe2ba8bb72a1ef8b968"
+      },
+      {
+        "name": "smoke-test-arm64.json",
+        "bytes": 603,
+        "sha256": "ef711c4de77e3481934a136464a68acdae944919be79db5db8f76c8c1b4dc3d7"
+      },
+      {
+        "name": "network-test-arm64.json",
+        "bytes": 381,
+        "sha256": "e23e7c2d57c8feb952807f1c1916922e81f46c1045895834e651dd3c453a6bcf"
+      },
+      {
+        "name": "update-test-arm64.json",
+        "bytes": 2192,
+        "sha256": "aed9ffdc5a8b19fe3e07bb5883178f7959221101d0cf9b6d801beb45f28978b2"
+      },
+      {
+        "name": "AI-First-Tools-0.4.0-macos-preview.15-macos-arm64.dmg",
+        "bytes": 23460919,
+        "sha256": "a88b5be282a713d99f2fadc348bb41e8a01ffb82b83cd673cec58eb281128b4a"
+      },
+      {
+        "name": "self-test-x86_64.json",
+        "bytes": 425,
+        "sha256": "bb9d536b646645d64bab40aaac086577d9656d51ff3c4dc9017d4f48aab98a4f"
+      },
+      {
+        "name": "smoke-test-x86_64.json",
+        "bytes": 603,
+        "sha256": "ef711c4de77e3481934a136464a68acdae944919be79db5db8f76c8c1b4dc3d7"
+      },
+      {
+        "name": "network-test-x86_64.json",
+        "bytes": 382,
+        "sha256": "9ef0e894c26910990c122f6c999f03b171b13c317adbcdd743f3d88d40fea040"
+      },
+      {
+        "name": "update-test-x86_64.json",
+        "bytes": 2193,
+        "sha256": "55432bcf94e20e664eed724dec4ad115bbdb26a14585a90155c30782a09d71ba"
+      },
+      {
+        "name": "AI-First-Tools-0.4.0-macos-preview.15-macos-x86_64.dmg",
+        "bytes": 24856078,
+        "sha256": "b308d842af482a1764edf4546633a8659476a58eaefc118c14f11a1fb62fa3ff"
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "bytes": 241,
+        "sha256": "28734e80f944507e21b68d86e33557ce566a551b7b4a69e61b4ce19e1828e96d"
+      }
+    ]
+  },
+  "macPublic": {
+    "passed": true,
+    "releaseId": 415010334,
+    "version": "v0.4.0-macos-preview.15",
+    "anonymousPublicAssetsMatched": true,
+    "checksumDownloaded": true,
+    "fromPreview12": {
+      "arm64": "0.4.0-macos-preview.16",
+      "x86_64": "0.4.0-macos-preview.16"
+    },
+    "sameVersionNoPrompt": true,
+    "windowsLatest": "v0.3.13",
+    "publishedAt": "2026-10-16T13:46:39Z"
+  },
+  "newerMac": {
+    "version": "0.4.0-macos-preview.16",
+    "source": "f6efcc44ae34e2505c79a41754439f862587e49a",
+    "containsCopilotSource": true,
+    "fourCopilotAdapterFilesIdenticalToPreview15": true
+  }
+}

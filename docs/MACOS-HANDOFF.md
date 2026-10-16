@@ -2,7 +2,9 @@
 
 当前公开 [preview.16](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.16)，安装包源码 `f6efcc44ae34e2505c79a41754439f862587e49a`。同一个工作台 APP 完整内置自动续跑页、Python 后台与按芯片校验的原生运行组件，不要求用户安装额外工具。两架构原生资源/页面/HTTPS/更新/续跑分别 11/10/3/9/8 项全通过，13 个资产独立下载核验通过，公开更新选择正常；源码与构建证据见 MACOS-QA.md。后台关闭防拉起、实际 launchd 自启、重复入口单实例、更新状态恢复、隔离 APP 移除后的退出与自启清理已验证。没有操作用户真实 Mac 或测试付费模型请求。下文为历史交接记录。
 
-当前公开 [preview.14](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.14)，安装包源码 `9a4626188bab5a7f63750ce7352de1a2384554a4`。自动检查无回复时增加 10/30 秒超时恢复与迟到响应隔离；旧脚本两项失败，修复后 20 项界面检查通过。两架构原生 7/9/3/9 项冻结检查、全部 11 资产独立核验通过，匿名选择确认 preview.12 能选到 preview.14。用户 Mac 实机根因和提示仍未验收；不要把“公开接口能选到”说成“其设备已经自动提示”。Windows v0.3.11 同源码修复六小时负缓存，原开发目录另一项内置续跑工作未覆盖。证据见 MACOS-QA.md、UPDATER-QA.md；下文为历史记录。
+Copilot Desktop 搬入与列表修正已随 [preview.15](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.15) 公开，源码 dcdf5ad，两架构 131+1+10 项及 7/9/3/9 项冻结检查、全部 11 资产独立下载核验通过。当前更新入口选择较新的 preview.16，并确认保留相同 Copilot 适配；Windows 对应 v0.3.13。用户要求只提交和发布，由用户使用自动更新，不替其升级或重开本机。证据见 COPILOT.md、MACOS-QA.md。
+
+此前公开 [preview.14](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.14)，安装包源码 `9a4626188bab5a7f63750ce7352de1a2384554a4`。自动检查无回复时增加 10/30 秒超时恢复与迟到响应隔离；旧脚本两项失败，修复后 20 项界面检查通过。两架构原生 7/9/3/9 项冻结检查、全部 11 资产独立核验通过，匿名选择确认 preview.12 能选到 preview.14。用户 Mac 实机根因和提示仍未验收；不要把“公开接口能选到”说成“其设备已经自动提示”。Windows v0.3.11 同源码修复六小时负缓存，原开发目录另一项内置续跑工作未覆盖。证据见 MACOS-QA.md、UPDATER-QA.md；下文为历史记录。
 
 此前公开 [preview.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.13)，安装包源码 `249684ec97e651ec7f47267df266f20fd0434eed`，新增 Copilot Desktop 本机历史搬出。两架构各 120+10 项及 7/9/3/9 项冻结检查通过，11 个原资产独立下载核对后公开；匿名更新选择与公开校验清单核对通过。范围、共享会话标签和未验收边界见 [COPILOT.md](COPILOT.md)、[MACOS-QA.md](MACOS-QA.md)。
 
