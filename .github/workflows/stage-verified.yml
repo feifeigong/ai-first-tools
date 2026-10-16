@@ -93,4 +93,15 @@ jobs:
         with:
           name: macos-release-verification
           path: artifacts/release-verification.json
+      - name: Independently download and compare every staged Windows asset
+        if: inputs.platform == 'windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ steps.build.outputs.source }}
+        run: python3 scripts/verify_windows_release.py --artifacts artifacts --commit "$SOURCE" --report artifacts/windows-release-verification.json
+      - uses: actions/upload-artifact@v4
+        if: inputs.platform == 'windows'
+        with:
+          name: windows-release-verification
+          path: artifacts/windows-release-verification.json
           if-no-files-found: error
