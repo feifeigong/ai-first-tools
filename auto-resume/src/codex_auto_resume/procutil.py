@@ -26,6 +26,8 @@ def hidden_kwargs() -> dict[str, Any]:
 
 def hidden_popen(args: list[str], **kwargs: Any) -> subprocess.Popen:
     merged = hidden_kwargs()
+    if sys.platform == 'darwin':
+        merged['start_new_session'] = True
     merged.update(kwargs)
     return subprocess.Popen(args, **merged)
 

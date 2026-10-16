@@ -25,13 +25,18 @@ def validated_assets(directory: Path, release: str) -> list[Path]:
         expected = f"{digest}  {name}"
         if (source / f"SHA256SUMS-{architecture}.txt").read_text().strip() != expected:
             raise ValueError("DMG digest mismatch")
-        for kind in ("self", "smoke", "network", "update"):
+        kinds = ("self", "smoke", "network", "update", 'resume') if int(release.rsplit('.',1)[1]) >= 15 else ("self", "smoke", "network", "update")
+        for kind in kinds:
             report = source / f"{kind}-test.json"
             result = json.loads(report.read_text())
             if result.get("passed") is not True or not result.get("checks") or not all(value is True for value in result["checks"].values()):
                 raise ValueError("Native app checks did not pass")
             if kind == "update" and not {"nativeUpdateClick", "bridgeDrained", "nativeParentExit"}.issubset(result["checks"]):
                 raise ValueError("Native update click and bridge handoff checks are required")
+            if kind == 'resume' and not {'nativeRuntimeWithoutExternalInstallation','singlePackagedWatcher','startupSwitchIndependent','stopBlocksStartupRelaunch','updateRestoresRunningAndStartup','realLaunchAgentStopsWithoutRelaunch','finderRemovalCleansBackgroundAndStartup','cleanupPreservesUserSettings'} <= set(result['checks']):
+                raise ValueError('Actual bundled auto-resume lifecycle checks are required')
+            if kind=='smoke' and int(release.rsplit('.',1)[1])>=15 and result['checks'].get('autoResumeControlBridge') is not True:
+                raise ValueError('Native auto-resume page and bridge check is required')
             if kind != "smoke" and (result.get("architecture") != architecture or result.get("version", {}).get("release") != release):
                 raise ValueError("Native report version or architecture mismatch")
             target = directory / f"{kind}-test-{architecture}.json"

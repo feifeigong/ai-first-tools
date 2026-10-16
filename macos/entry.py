@@ -16,6 +16,10 @@ if "--apply-update" in sys.argv:
 
     raise SystemExit(updater.helper_main())
 
+if '--auto-resume-watch' in sys.argv:
+    import auto_resume
+    raise SystemExit(auto_resume.background_main(sys.argv[1:]))
+
 PROJECT = Path(__file__).resolve().parent.parent
 if not getattr(sys, "frozen", False):
     sys.path.insert(0, str(PROJECT / "dialog-mover"))
@@ -28,6 +32,7 @@ from core.common import appdata, open_external
 from main import Api
 import updates
 import updater
+import auto_resume
 
 ROOT = Path(getattr(sys, "_MEIPASS", PROJECT / "artifacts" / "macos" / "resources"))
 
@@ -37,6 +42,24 @@ def version_info() -> dict:
 
 
 class MacApi(Api):
+    def auto_resume_control(self, operation: str = 'status') -> dict:
+        if self._smoke:
+            if not hasattr(self,'_resume_fixture'): self._resume_fixture={'installed':True,'running':False,'autostart':False,'watcherCount':0,'error':''}
+            value=self._resume_fixture
+            if operation=='start': value['running']=True
+            elif operation=='stop': value.update(running=False,autostart=False)
+            elif operation in ('autostart-on','autostart-off'): value['autostart']=operation=='autostart-on'
+            value['watcherCount']=int(value['running'])
+            return dict(value)
+        if not getattr(sys,'frozen',False): return {'error':'请使用完整工作台安装包中的自动续跑功能。'}
+        self._resume_busy=True
+        try:
+            return auto_resume.Controller().action(operation)
+        except Exception as error:
+            return {'error':str(error) if isinstance(error,auto_resume.ControlError) else '操作没有完成，请刷新确认运行状态。'}
+        finally:
+            self._resume_busy=False
+
     def __init__(self, smoke: bool = False) -> None:
         super().__init__()
         self._smoke = smoke
@@ -230,6 +253,7 @@ class MacApi(Api):
                     pass
 
     def can_close(self) -> bool:
+        if getattr(self,'_resume_busy',False): return False
         permitted = super().can_close()
         with self._update_gate:
             if self._handing_off:
@@ -241,8 +265,10 @@ class MacApi(Api):
 
 def self_check(report: Path) -> bool:
     info = version_info()
-    required = ("ui/index.html", "ui/app.js", "ui/workspace.js", "ui/workspace.css", "ui/assets/ai-first.png", "bin/txcript")
+    required = ("ui/index.html", "ui/app.js", "ui/workspace.js", "ui/workspace.css", "ui/assets/ai-first.png", "bin/txcript", 'ui/auto-resume.js','auto-resume-native/LICENSE','auto-resume-native/NOTICE')
     checks = {name: (ROOT / name).is_file() for name in required}
+    from codex_auto_resume.paths import bundled_codex
+    checks['bundledAutoResumeRuntime'] = bundled_codex().is_file()
     result = subprocess.run([str(ROOT / "bin" / "txcript"), "--version"], capture_output=True, text=True, timeout=30)
     checks["native_engine"] = result.returncode == 0 and "txcript" in result.stdout
     report.parent.mkdir(parents=True, exist_ok=True)
@@ -288,6 +314,20 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                 if reminder:
                     result["checks"]["automaticUpdateReminder"] = api._smoke_check_calls == 1
                     result["checks"]["noUnrequestedDownload"] = api.update_status()["phase"] == "idle"
+                    window.evaluate_js('''(async()=>{
+                      const poll=async(fn)=>{for(let i=0;i<200;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('resume_ui_timeout');};
+                      const run=document.getElementById('resume-running'),boot=document.getElementById('resume-startup');
+                      document.getElementById('workspace-resume').click();await poll(()=>!run.disabled);
+                      run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='true');
+                      boot.click();await poll(()=>!boot.disabled&&boot.getAttribute('aria-checked')==='true');
+                      run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='false'&&boot.getAttribute('aria-checked')==='false');
+                      document.getElementById('workspace-mover').click();window.__RESUME_SMOKE__=true;
+                    })().catch(()=>window.__RESUME_SMOKE__=false);''')
+                    for _ in range(80):
+                        resume_ui=window.evaluate_js('window.__RESUME_SMOKE__===true')
+                        if resume_ui: break
+                        time.sleep(.25)
+                    result['checks']['autoResumeControlBridge']=bool(resume_ui)
                     result["passed"] = all(result["checks"].values())
                     break
             time.sleep(0.25)
@@ -382,15 +422,19 @@ def run() -> int:
     parser.add_argument("--smoke-test", action="store_true")
     parser.add_argument("--network-test", action="store_true")
     parser.add_argument("--update-test", action="store_true")
+    parser.add_argument('--resume-test', action='store_true')
     parser.add_argument("--update-ui-audit", type=Path)
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("This entry point runs on macOS. Windows uses workspace/AIFirst.Workspace.csproj.")
-    if (args.self_test or args.smoke_test or args.network_test or args.update_test or args.update_ui_audit) and args.report is None:
+    if (args.self_test or args.smoke_test or args.network_test or args.update_test or args.resume_test or args.update_ui_audit) and args.report is None:
         parser.error("Tests require --report")
     if args.self_test:
         return 0 if self_check(args.report) else 1
+    if args.resume_test:
+        from auto_resume_audit import audit
+        return audit(args.report)
     if args.network_test:
         return 0 if network_check(args.report) else 1
     if args.update_test:
@@ -417,6 +461,8 @@ def run() -> int:
             except BlockingIOError:
                 return 0
             api = MacApi(args.smoke_test)
+            if getattr(sys,'frozen',False) and not args.smoke_test and not fixture:
+                api.auto_resume_control('finish-update')
             if fixture:
                 update_audit.configure(api, fixture)
             window = webview.create_window("AI一手工具工作台", js_api=api,

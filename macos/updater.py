@@ -454,6 +454,9 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
         if json.loads(probe.read_text()).get("passed") is not True:
             raise UpdateError("新版启动自检未通过。")
         phase = "replacement"
+        if (target / 'Contents/Resources/auto-resume-native').exists():
+            import auto_resume
+            auto_resume.Controller(target).action('prepare-update')
         atomic_swap(target, candidate)
         moved = True
         phase = "backup"
@@ -461,6 +464,9 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
         previous = backup
         write_json(receipt, {"success": True, "version": data["version"], "message": f"已更新到 {data['version']}，原来的对话与设置保留。"})
         phase = "relaunch"
+        if (target / 'Contents/Resources/auto-resume-native').exists():
+            import auto_resume
+            auto_resume.Controller(target).action('finish-update')
         (relaunch or relaunch_app)(target)
         return True
     except Exception as error:
@@ -479,6 +485,9 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
                              "message": "更新没有完成，已恢复旧版。" if restored else "更新没有完成，旧版或备份仍保留。请检查文件权限后重试。"})
         if not moved or restored:
             try:
+                if (target / 'Contents/Resources/auto-resume-native').exists():
+                    import auto_resume
+                    auto_resume.Controller(target).action('finish-update')
                 (relaunch or relaunch_app)(target)
             except (OSError, subprocess.SubprocessError):
                 pass

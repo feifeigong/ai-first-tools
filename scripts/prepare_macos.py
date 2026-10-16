@@ -26,16 +26,17 @@ def prepare(destination: Path) -> Path:
     </header>
     <div class="workspace-body">
       <nav id="workspace-nav" class="workspace-nav" aria-label="AI一手工具"><p>工具</p>
-        <button class="workspace-tool" aria-current="page"><img src="assets/dialog-mover.png" alt="" width="32" height="32">对话搬家</button>
+        <button id="workspace-mover" class="workspace-tool" aria-current="page"><img src="assets/dialog-mover.png" alt="" width="32" height="32">对话搬家</button>
+        <button id="workspace-resume" class="workspace-tool"><svg viewBox="0 0 28 28" width="32" height="32" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#e7f1fc"/><path d="M20 10A7 7 0 0 0 7 11M7 7v4h4M8 18a7 7 0 0 0 13-1m0 4v-4h-4" fill="none" stroke="#0073e6" stroke-width="1.8"/></svg>Codex 自动续跑</button>
       </nav>'''
-    ending = '''</div><div id="workspace-notice" class="workspace-notice" role="status" aria-live="polite" hidden>
+    ending = (ROOT / 'macos/ui/auto-resume.html').read_text(encoding='utf-8') + '''</div><div id="workspace-notice" class="workspace-notice" role="status" aria-live="polite" hidden>
       <div class="workspace-update-detail"><span id="workspace-message"></span><progress id="workspace-progress" max="100" aria-label="更新下载进度" hidden></progress></div>
       <button id="workspace-dismiss" class="workspace-button" aria-label="关闭提示">×</button></div>'''
     html = html.replace("<title>对话搬家</title>", "<title>AI一手工具工作台</title>")
     html = html.replace("</head>", '<link rel="stylesheet" href="workspace.css">\n</head>')
     html = html.replace("<body>", "<body>\n" + header, 1)
     html = html.replace('  <div id="bar"', ending + '\n  <div id="bar"', 1)
-    html = html.replace("</body>", '<script src="workspace.js"></script>\n</body>')
+    html = html.replace("</body>", '<script src="workspace.js"></script>\n<script src="auto-resume.js"></script>\n</body>')
     (ui / "index.html").write_text(html, encoding="utf-8")
     return destination
 

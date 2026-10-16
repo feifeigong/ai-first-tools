@@ -18,6 +18,25 @@
 .workspace-nav p { color: var(--muted); font-size: 12px; padding: 0 12px; margin: 0 0 12px; }
 .workspace-tool { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; border: 1px solid #d5e6fb; border-radius: 10px; background: var(--accent-soft); color: #125d9f; font-size: 14px; font-weight: 600; }
 .workspace-tool img { width: 32px; height: 32px; }
+.workspace-tool { margin-bottom: 8px; text-align: left; }
+.workspace-tool:not([aria-current]) { background: transparent; border-color: transparent; color: var(--ink-2); }
+.workspace-tool svg { flex-shrink: 0; }
+.workspace-body > .app[hidden], .resume-page[hidden], .show-resume .bar { display: none !important; }
+.resume-page { flex: 1; min-width: 0; overflow-y: auto; padding: 36px; }
+.resume-inner { max-width: 840px; margin: 0 auto; }
+.resume-inner h1 { font-size: 26px; margin: 0 0 10px; }
+.resume-inner h2 { font-size: 17px; margin: 0 0 8px; }
+.resume-muted { color: var(--muted); line-height: 1.7; font-size: 13px; }
+.resume-state { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 22px; background: #f3f7fc; border-radius: 10px; margin: 28px 0; }
+.resume-option { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 0 0 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+.resume-switch { width: 54px; height: 30px; border-radius: 15px; background: #cbd2db; border: 0; padding: 4px; flex-shrink: 0; }
+.resume-switch::after { content: ''; display: block; width: 22px; height: 22px; border-radius: 50%; background: white; }
+.resume-switch[aria-checked="true"] { background: #0073e6; }
+.resume-switch[aria-checked="true"]::after { margin-left: 24px; }
+.resume-switch:disabled { opacity: .45; }
+.resume-switch:focus-visible { outline: 2px solid #0073e6; outline-offset: 3px; }
+.resume-help { background: #f8fafc; padding: 20px; border-radius: 9px; }
+.resume-error { background: #fff6e8; color: #836337; padding: 14px; border-radius: 8px; }
 .workspace-tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .workspace-body > .app { height: 100%; flex: 1; min-width: 0; }
 body.workspace-collapsed { --workspace-rail: 0px; }

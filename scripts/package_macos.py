@@ -12,6 +12,7 @@ from pathlib import Path
 
 from prepare_macos import ROOT, prepare
 from collect_licenses import collect_python
+from prepare_macos_auto_resume import prepare as prepare_resume
 
 
 def main() -> None:
@@ -21,6 +22,7 @@ def main() -> None:
     if sys.platform != "darwin" or platform.machine() != args.architecture:
         parser.error("Build on a real macOS runner with the matching CPU architecture")
     resources = prepare(ROOT / "artifacts" / "macos" / "resources")
+    prepare_resume(args.architecture)
     from PIL import Image
 
     with Image.open(ROOT / "workspace" / "assets" / "ai-first-app-icon.png") as image:
@@ -41,13 +43,13 @@ def main() -> None:
     subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app)], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     launcher = app / "Contents" / "MacOS" / "AI First Tools"
-    for flag in ("--self-test", "--smoke-test", "--network-test", "--update-test"):
+    for flag in ("--self-test", "--smoke-test", "--network-test", "--update-test", '--resume-test'):
         environment = os.environ.copy()
         if flag == "--network-test":
             environment["SSL_CERT_FILE"] = str(output / "no-host-python-ca.pem")
             environment["SSL_CERT_DIR"] = str(output / "no-host-python-ca")
         subprocess.run([str(launcher), flag, "--report", str(output / (flag.removeprefix("--") + ".json"))],
-                       check=True, timeout=360 if flag == "--update-test" else 120, env=environment)
+                       check=True, timeout=360 if flag in ("--update-test",'--resume-test') else 120, env=environment)
     version = json.loads((ROOT / "macos" / "version.json").read_text(encoding="utf-8"))["release"]
     staging = output / "dmg-content"
     staging.mkdir(exist_ok=True)

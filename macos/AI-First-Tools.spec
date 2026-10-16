@@ -6,15 +6,24 @@ root = Path(SPECPATH).parent
 resources = root / "artifacts" / "macos" / "resources"
 version = json.loads((root / "macos" / "version.json").read_text(encoding="utf-8"))
 engine = root / "dialog-mover" / "bin" / "txcript"
+native = root / 'artifacts/macos/auto-resume-native'
+native_binaries = []
+native_data = []
+for path in native.rglob('*'):
+    if path.is_file():
+        item = (str(path), 'auto-resume-native/' + path.parent.relative_to(native).as_posix())
+        (native_binaries if path.stat().st_mode & 0o111 else native_data).append(item)
+if not native_binaries:
+    raise RuntimeError('Prepare the pinned auto-resume runtime before packaging')
 if not engine.is_file():
     raise RuntimeError("Build the macOS txcript engine first")
 
 analysis = Analysis(
     [str(root / "macos" / "entry.py")],
-    pathex=[str(root / "macos"), str(root / "dialog-mover"), str(root / "dialog-mover" / "vendor")],
-    binaries=[(str(engine), "bin")],
+    pathex=[str(root / "macos"), str(root / "dialog-mover"), str(root / "dialog-mover" / "vendor"), str(root / 'auto-resume/src')],
+    binaries=[(str(engine), "bin"), *native_binaries],
     datas=[(str(resources / "ui"), "ui"), (str(resources / "version.json"), "."),
-           (str(root / "licenses"), "licenses"), (str(root / "LICENSE"), "."), (str(root / "NOTICE"), ".")],
+           (str(root / "licenses"), "licenses"), (str(root / "LICENSE"), "."), (str(root / "NOTICE"), "."), *native_data],
     hiddenimports=["webview.platforms.cocoa", "brotli", "zstd", "ccl_simplesnappy", "Security", "_scproxy", "truststore._macos"] + collect_submodules("ccl_chromium_reader"),
     excludes=["clr", "pythonnet", "webview.platforms.winforms", "webview.platforms.edgechromium"],
 )

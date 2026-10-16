@@ -20,7 +20,7 @@ class WorkbenchBundleTests(unittest.TestCase):
             executable = root / 'bin/vendor/x86_64-pc-windows-msvc/bin/codex.exe'
             executable.parent.mkdir(parents=True)
             executable.write_bytes(b'synthetic fixture')
-            with patch('sys.frozen', True, create=True), patch('sys._MEIPASS', str(root), create=True):
+            with patch('sys.platform','win32'), patch('sys.frozen', True, create=True), patch('sys._MEIPASS', str(root), create=True):
                 self.assertEqual(resolve_codex_command('external-cli-that-must-not-run'), [str(executable)])
 
     def test_frozen_startup_has_separate_preference_from_legacy_service(self):

@@ -168,6 +168,7 @@ class MacSharedLogicTests(unittest.TestCase):
             kwargs = popen.call_args.kwargs
             self.assertNotIn("creationflags", kwargs)
             self.assertNotIn("startupinfo", kwargs)
+            self.assertTrue(kwargs['start_new_session'])
             marker.write_text("ok", encoding="utf-8")
 
 

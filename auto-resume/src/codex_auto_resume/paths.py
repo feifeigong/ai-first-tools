@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import sys
 from pathlib import Path
@@ -41,7 +42,11 @@ def tool_root() -> Path:
 def bundled_codex() -> Path | None:
     if not getattr(sys, "frozen", False):
         return None
-    candidate = Path(sys._MEIPASS) / "bin" / "vendor" / "x86_64-pc-windows-msvc" / "bin" / "codex.exe"
+    if sys.platform == 'darwin':
+        triple = 'aarch64-apple-darwin' if platform.machine() == 'arm64' else 'x86_64-apple-darwin'
+        candidate = Path(sys._MEIPASS) / 'auto-resume-native' / 'vendor' / triple / 'bin/codex'
+    else:
+        candidate = Path(sys._MEIPASS) / "bin" / "vendor" / "x86_64-pc-windows-msvc" / "bin" / "codex.exe"
     if not candidate.is_file():
         raise FileNotFoundError("工作台的续跑组件不完整，请重新安装完整工作台。")
     return candidate

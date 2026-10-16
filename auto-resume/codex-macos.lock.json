@@ -1,0 +1,8 @@
+{
+  "sourceCommit": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+  "notices": {"LICENSE": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc", "NOTICE": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915"},
+  "packages": {
+    "arm64": {"version": "0.153.4-darwin-arm64", "triple": "aarch64-apple-darwin", "integrity": "sha512-B1qhN3fa1ay0R0wGziXqgwSkB5icpYChNKHhtBHff/0UtSTC7z+l8aTtvMlGjH3E8HEvY3+njIJelM9CAAoVWg=="},
+    "x86_64": {"version": "0.153.4-darwin-x64", "triple": "x86_64-apple-darwin", "integrity": "sha512-vnSbbPzfoDZmmyzsxswsDDXQ06IVFBzkQU7/hroB3ji93Ok2utcsq8Psfk2tjF5r9mEx8RWFJhzuTGHG26/NDA=="}
+  }
+}

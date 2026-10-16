@@ -364,7 +364,7 @@ class MacResourceTests(unittest.TestCase):
         window.events.loaded.wait.return_value = True
         window._ai_first_content_attached = True
         window._ai_first_bundled_file_load = True
-        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True]
+        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True, None, True]
         api = MacApi(smoke=True)
         api._smoke_check_calls = 1
         with tempfile.TemporaryDirectory() as temporary:
@@ -380,7 +380,7 @@ class MacResourceTests(unittest.TestCase):
         window = Mock()
         window._ai_first_content_attached = False
         window.events.loaded.wait.return_value = True
-        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True]
+        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True, None, True]
         api = MacApi(smoke=True)
         api._smoke_check_calls = 1
         with tempfile.TemporaryDirectory() as temporary:
