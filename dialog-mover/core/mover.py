@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from .common import appdata, codex_home, localappdata, norm, proxy_env, user_env
-from . import codex_import, copilot_local, doubao, imports
+from . import codex_import, copilot_import, copilot_local, doubao, imports
 
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 SAFE_ID = re.compile(r"^[0-9A-Za-z_-]{6,80}$")
@@ -145,14 +145,17 @@ def already_moved(source: str, session_id: str, target: str, directory: str) -> 
     saved = _load_history().get(history_key(source, session_id, target, directory))
     if target in ("codex", "chatgpt_work"):
         return isinstance(saved, dict) and saved.get("format") == codex_import.HISTORY_FORMAT
+    if target == "copilot_desktop":
+        return isinstance(saved, dict) and saved.get("format") == copilot_import.HISTORY_FORMAT
     return saved is not None
 
 
 def _record_move(source: str, session_id: str, target: str, directory: str) -> None:
     history = _load_history()
     stamp = int(time.time())
-    history[history_key(source, session_id, target, directory)] = (
-        {"time": stamp, "format": codex_import.HISTORY_FORMAT} if target in ("codex", "chatgpt_work") else stamp)
+    history_format = (codex_import.HISTORY_FORMAT if target in ("codex", "chatgpt_work") else
+                      copilot_import.HISTORY_FORMAT if target == "copilot_desktop" else None)
+    history[history_key(source, session_id, target, directory)] = {"time": stamp, "format": history_format} if history_format else stamp
     _save_history(history)
 
 
@@ -173,6 +176,8 @@ def destination_env(target: str) -> dict:
     from . import sources
 
     extra = {"TXCRIPT_IMPORT_REPORT": "1", "NO_COLOR": "1"}
+    if target == "copilot_desktop":
+        extra["COPILOT_HOME"] = str(copilot_local.root())
     if target in ("antigravity", "antigravity_cli"):
         extra["ANTIGRAVITY_DIR"] = str(sources._gemini_root(target))
     if target == "cowork":
@@ -188,6 +193,13 @@ def _import_document(path: Path, document: dict, target: str, details: dict | No
         return "failed", "这条会话没有可搬运的对话正文（为空或仅有工具日志），未写入目标软件。"
     environment = destination_env(target)
     imports.preflight(target, environment)
+    if target == "copilot_desktop":
+        report = copilot_import.import_document(document, Path(environment["COPILOT_HOME"]))
+        if details is not None:
+            details.update({"importedId": report["id"], "location": report["location"], "resumeCommand": "",
+                            "notice": TARGETS[target]["notice"], "mode": "local",
+                            "historicalToolNotes": report["historicalToolNotes"]})
+        return "ok", "已搬好，已登记到 Copilot 的聊天列表"
     moved = _run(["continue", str(path), "--with", TARGETS[target]["harness"], "--no-resume"], environment)
     if moved.returncode != 0:
         detail = (moved.stderr or moved.stdout or "").strip()

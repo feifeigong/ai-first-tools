@@ -1,7 +1,7 @@
 """Read Copilot Desktop's local history without launching Copilot or writing its store.
 
-Desktop and CLI share session-state. Only membership in Desktop's data.db is
-evidence of Desktop use; other records are explicitly labelled shared sessions.
+Desktop and CLI share session-state. Only visible membership in Desktop's data.db
+is listed; CLI records and orphan directories are not Desktop conversations.
 The SDK's persisted event shapes are documented in docs/COPILOT.md.
 """
 
@@ -15,25 +15,25 @@ import sqlite3
 from collections import defaultdict
 from pathlib import Path
 
-from .common import as_millis, finish_groups, folder_name, home, make_group, make_session, norm, read_db
+from .common import as_millis, finish_groups, folder_name, home, make_group, make_session, norm, read_db, user_env
 
 IDENTITY = re.compile(r"^[0-9A-Za-z_-]{6,80}$")
-SHARED = "Copilot 共享会话（Desktop / CLI 共用，来源未确认）"
 INDEX_ERROR = "Copilot 桌面索引暂时无法识别或正被占用，请关闭 Copilot 后刷新；未修改源记录。"
 
 
 def root() -> Path:
-    return home() / ".copilot"
+    configured = user_env("COPILOT_HOME")
+    return Path(configured) if configured and Path(configured).is_absolute() else home() / ".copilot"
 
 
 def installed() -> bool:
     base = root()
-    return (base / "session-state").is_dir() or (base / "data.db").is_file()
+    return (base / "data.db").is_file()
 
 
 def _hidden(row: dict) -> bool:
     return any(row.get(key) not in (None, "", 0, False, "0", "false") for key in (
-        "archived", "is_archived", "archived_at", "deleted", "is_deleted", "deleted_at"))
+        "archived", "is_archived", "archived_at", "deleted", "is_deleted", "deleted_at", "provisional"))
 
 
 def _desktop_index(base: Path) -> dict[str, dict]:
@@ -42,7 +42,8 @@ def _desktop_index(base: Path) -> dict[str, dict]:
     if not path.is_file():
         return {}
     allowed = {"id", "session_id", "title", "name", "cwd", "working_directory", "created_at", "updated_at",
-               "archived", "is_archived", "archived_at", "deleted", "is_deleted", "deleted_at"}
+               "archived", "is_archived", "archived_at", "deleted", "is_deleted", "deleted_at", "session_type",
+               "execution_location", "provisional"}
     result: dict[str, dict] = {}
     try:
         connection = read_db(path)
@@ -62,6 +63,36 @@ def _desktop_index(base: Path) -> dict[str, dict]:
                 sid = row.get("session_id") or row.get("id")
                 if isinstance(sid, str) and IDENTITY.fullmatch(sid):
                     result[sid] = row
+            if "session_deletion_intents" in tables:
+                deletion_columns = {row[1] for row in connection.execute("PRAGMA table_info(session_deletion_intents)")}
+                if "session_id" not in deletion_columns:
+                    raise ValueError(INDEX_ERROR)
+                for value in connection.execute("SELECT session_id FROM session_deletion_intents"):
+                    if value[0] in result:
+                        result[value[0]]["deleted"] = True
+            if "workspaces" in tables:
+                workspace_columns = {row[1] for row in connection.execute("PRAGMA table_info(workspaces)")}
+                selected = sorted(workspace_columns & {"session_id", "name", "project_id", "source_path", "archived_at", "provisional"})
+                if "session_id" not in selected:
+                    raise ValueError(INDEX_ERROR)
+                projects = {}
+                if "projects" in tables:
+                    project_columns = {row[1] for row in connection.execute("PRAGMA table_info(projects)")}
+                    if {"id", "name", "main_repo_path"} <= project_columns:
+                        projects = {value[0]: (value[1], value[2]) for value in connection.execute("SELECT id,name,main_repo_path FROM projects")}
+                query = 'SELECT ' + ','.join(f'"{name}"' for name in selected) + ' FROM workspaces'
+                for value in connection.execute(query):
+                    workspace = dict(value)
+                    if workspace.get("session_id") not in result:
+                        continue
+                    row = result[workspace["session_id"]]
+                    if _hidden(workspace):
+                        row["archived"] = True
+                    project_name, project_path = projects.get(workspace.get("project_id"), ("", ""))
+                    row["cwd"] = workspace.get("source_path") or project_path or row.get("cwd") or ""
+                    row["_project_name"] = project_name
+                    if not row.get("title") and workspace.get("name") not in (None, "", "New session"):
+                        row["title"] = workspace["name"]
         finally:
             connection.close()
     except (sqlite3.Error, OSError) as error:
@@ -262,6 +293,8 @@ def document(sid: str) -> dict:
     base = root()
     path = _event_file(base, sid)
     row = _desktop_index(base).get(sid, {})
+    if (base / "data.db").is_file() and not row:
+        raise ValueError("这条记录未登记在 Copilot Desktop 中，请刷新桌面端列表。")
     if _hidden(row):
         raise ValueError("这条 Copilot 会话已归档或删除，请刷新列表。")
     result = _read(path, sid)
@@ -269,24 +302,30 @@ def document(sid: str) -> dict:
         raise ValueError("这条 Copilot 会话没有可搬运的对话正文。")
     result.pop("_updated", None)
     result.pop("_ignored", None)
+    if row.get("title") or row.get("name"):
+        result["title"] = row.get("title") or row["name"]
+    if row.get("session_type") in ("general_chat", "agent", "side_chat"):
+        result["cwd"] = ""
+    elif row.get("cwd") or row.get("working_directory"):
+        result["cwd"] = row.get("cwd") or row["working_directory"]
     return result
 
 
 def groups() -> list[dict]:
     base = root()
+    if not (base / "data.db").is_file():
+        raise ValueError("请先打开 Copilot Desktop 完成本机初始化；仅命令行共享记录不会列为桌面聊天。")
     index = _desktop_index(base)
-    store = base / "session-state"
-    paths = list(store.iterdir()) if store.is_dir() and not store.is_symlink() else []
-    ids = set(index) | {path.name for path in paths if path.is_dir() and IDENTITY.fullmatch(path.name)}
     folders: dict[str, list[dict]] = defaultdict(list)
-    for sid in sorted(ids):
+    for sid in sorted(index):
         row = index.get(sid, {})
-        if _hidden(row):
+        if _hidden(row) or row.get("session_type") == "cli_session":
             continue
         title = str(row.get("title") or row.get("name") or "")
         cwd = str(row.get("cwd") or row.get("working_directory") or "")
         updated = as_millis(row.get("updated_at") or row.get("created_at"))
-        label = "Copilot Desktop" if sid in index else SHARED
+        is_chat = row.get("session_type") in ("general_chat", "agent", "side_chat")
+        label = "Copilot Desktop"
         note = label
         movable = False
         try:
@@ -299,9 +338,15 @@ def groups() -> list[dict]:
                 note += "；没有可搬运的对话正文"
         except ValueError as error:
             note += "；" + str(error)
+        if is_chat:
+            cwd = ""  # Desktop's .copilot/chats/... directory is an internal sandbox, not a project.
         session = make_session(sid, title, updated, cwd, movable=movable, note=note)
         session["sourceLabel"] = label
-        folders[norm(cwd) if cwd else ""].append(session)
-    return finish_groups([make_group(folder_name(items[0]["folder"]) if key else "没有目录",
-                                    "folder" if key else "none", items, items[0]["folder"])
-                          for key, items in folders.items()])
+        session["_project_name"] = row.get("_project_name", "")
+        folders["__chats__" if is_chat else norm(cwd) if cwd else ""].append(session)
+    groups = []
+    for key, items in folders.items():
+        is_chat = key == "__chats__"
+        title = "聊天" if is_chat else items[0].get("_project_name") or (folder_name(items[0]["folder"]) if key else "没有目录")
+        groups.append(make_group(title, "recent" if is_chat else "folder" if key else "none", items, items[0]["folder"]))
+    return finish_groups(groups)

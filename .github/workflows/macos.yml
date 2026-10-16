@@ -60,7 +60,12 @@ jobs:
       - name: Shared safety, Mac paths and isolated native imports
         working-directory: dialog-mover
         run: |
-          python -m unittest test_chatgpt test_close_safety test_doubao test_copilot test_macos test_macos_updater test_macos_native test_codex_history -v
+          python -m unittest test_chatgpt test_close_safety test_doubao test_copilot test_copilot_import test_macos test_macos_updater test_macos_native test_codex_history -v
+      - name: Prepare official Copilot test runtime with pinned integrity
+        run: python scripts/prepare_copilot_audit.py
+      - name: Native Copilot full history and strict resume without model requests
+        working-directory: dialog-mover
+        run: python -m unittest test_copilot_native -v
       - name: Prepare checksum-pinned native history reader for tests only
         run: python scripts/prepare_native_history_audit.py --architecture '${{ matrix.architecture }}'
       - name: Native pagination and loopback-only continuation without model requests

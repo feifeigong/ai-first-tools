@@ -52,13 +52,16 @@ class CopilotFixture(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in
                                  (records if records is not None else conversation(sid, str(self.directory)))) + "\n", encoding="utf-8")
+        if sid == self.sid and not (self.root / "data.db").is_file():
+            self.index([(sid, None, str(self.directory), "2026-10-16T09:00:00Z", None, None)])
         return path
 
     def index(self, rows):
         self.root.mkdir(parents=True, exist_ok=True)
         database = self.root / "data.db"
         with closing(sqlite3.connect(database)) as connection, connection:
-            connection.execute("CREATE TABLE sessions(id TEXT PRIMARY KEY,title TEXT,cwd TEXT,updated_at TEXT,archived_at TEXT,deleted_at TEXT)")
+            connection.execute("CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,title TEXT,cwd TEXT,updated_at TEXT,archived_at TEXT,deleted_at TEXT)")
+            connection.execute("DELETE FROM sessions")
             connection.executemany("INSERT INTO sessions VALUES(?,?,?,?,?,?)", rows)
         return database
 
@@ -74,11 +77,11 @@ class CopilotTests(CopilotFixture):
         database = self.index([(self.sid, "桌面端标题", str(self.directory), "2026-10-16T09:00:00Z", None, None)])
         before = {path: path.read_bytes() for path in (source, shared, database)}
         rows = self.sessions()
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 1)
         by_id = {row["id"]: row for row in rows}
         self.assertEqual(by_id[self.sid]["title"], "桌面端标题")
         self.assertEqual(by_id[self.sid]["sourceLabel"], "Copilot Desktop")
-        self.assertEqual(by_id[other]["sourceLabel"], copilot_local.SHARED)
+        self.assertNotIn(other, by_id)
         self.assertTrue(all(row["movable"] for row in rows))
         self.assertEqual(rows[0]["id"], self.sid)
         for path, content in before.items():
@@ -95,6 +98,7 @@ class CopilotTests(CopilotFixture):
                 (self.root / "session-state" / self.sid / "events.jsonl").unlink()
                 (self.root / "session-state" / self.sid).rmdir()
                 (self.root / "session-state").rmdir()
+                (self.root / "data.db").unlink()
 
     def test_long_history_and_completed_events_keep_full_body_without_stream_duplicates(self):
         records = conversation(self.sid, str(self.directory), 125)
@@ -212,6 +216,7 @@ class CopilotTests(CopilotFixture):
     def test_metadata_schema_change_does_not_resurrect_all_records_as_shared(self):
         self.write()
         with closing(sqlite3.connect(self.root / "data.db")) as connection, connection:
+            connection.execute("DROP TABLE sessions")
             connection.execute("CREATE TABLE new_unknown_schema(secret TEXT)")
         with self.assertRaisesRegex(ValueError, "索引"):
             copilot_local.groups()
@@ -229,21 +234,60 @@ class CopilotTests(CopilotFixture):
             with self.subTest(sid=sid), self.assertRaises(ValueError):
                 copilot_local.document(sid)
 
-    def test_api_refresh_registration_and_read_only_target(self):
+    def test_api_refresh_registration_and_writable_target(self):
         self.write()
         api = Api()
         self.assertIn("copilot_desktop", {agent["id"] for agent in AGENTS})
         with patch.object(sources, "installed", side_effect=lambda aid: aid == "copilot_desktop"):
             data = api.agents()
         self.assertEqual([agent["id"] for agent in data["agents"]], ["copilot_desktop"])
-        self.assertFalse(data["targets"][0]["canTarget"])
-        self.assertIn("暂不支持搬入", data["targets"][0]["readOnlyReason"])
-        self.assertNotIn("copilot_desktop", mover.TARGETS)
+        self.assertTrue(data["targets"][0]["canTarget"])
+        self.assertIn("copilot_desktop", mover.TARGETS)
         self.assertEqual(api.sessions("copilot_desktop")["total"], 1)
         other = str(uuid.uuid4())
         self.write(conversation(other), other)
         self.assertEqual(api.sessions("copilot_desktop")["total"], 1)
+        self.assertEqual(api.sessions("copilot_desktop", refresh=True)["total"], 1)
+        self.index([(self.sid, "桌面聊天", str(self.directory), "2026-10-16T09:00:00Z", None, None),
+                    (other, "另一个桌面聊天", str(self.directory), "2026-10-16T09:00:00Z", None, None)])
         self.assertEqual(api.sessions("copilot_desktop", refresh=True)["total"], 2)
+
+    def test_desktop_list_excludes_cli_orphans_and_empty_provisional_sessions(self):
+        internal = self.root / "chats" / "2026-10-15" / ("file-c-users-encoded-" + self.sid[:8])
+        self.write(conversation(self.sid, str(internal)))
+        for _ in range(16):
+            (self.root / "session-state" / str(uuid.uuid4())).mkdir()
+        shared = str(uuid.uuid4())
+        self.write(conversation(shared), shared)
+        empty = str(uuid.uuid4())
+        with closing(sqlite3.connect(self.root / "data.db")) as connection, connection:
+            connection.execute("ALTER TABLE sessions ADD COLUMN session_type TEXT DEFAULT 'general_chat'")
+            connection.execute("ALTER TABLE sessions ADD COLUMN provisional INTEGER DEFAULT 0")
+            connection.execute("INSERT INTO sessions(id,provisional) VALUES(?,1)", (empty,))
+        groups = copilot_local.groups()
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0]["title"], "聊天")
+        self.assertEqual(groups[0]["path"], "")
+        self.assertEqual([row["id"] for row in groups[0]["sessions"]], [self.sid])
+        self.assertEqual(groups[0]["sessions"][0]["folder"], "")
+        with self.assertRaisesRegex(ValueError, "未登记"):
+            copilot_local.document(shared)
+
+    def test_workspace_project_metadata_and_archive_match_desktop(self):
+        self.write()
+        with closing(sqlite3.connect(self.root / "data.db")) as connection, connection:
+            connection.executescript("CREATE TABLE projects(id TEXT,name TEXT,main_repo_path TEXT);"
+                                     "CREATE TABLE workspaces(session_id TEXT,project_id TEXT,name TEXT,source_path TEXT,archived_at TEXT,provisional INTEGER);")
+            connection.execute("INSERT INTO projects VALUES('p','真正的项目',?)", (str(self.directory),))
+            connection.execute("INSERT INTO workspaces VALUES(?,'p','项目会话',NULL,NULL,0)", (self.sid,))
+        groups = copilot_local.groups()
+        self.assertEqual(groups[0]["title"], "真正的项目")
+        self.assertEqual(groups[0]["path"], str(self.directory))
+        with closing(sqlite3.connect(self.root / "data.db")) as connection, connection:
+            connection.execute("UPDATE workspaces SET archived_at='2026-10-16T00:00:00Z'")
+        self.assertEqual(copilot_local.groups(), [])
+        with self.assertRaisesRegex(ValueError, "归档"):
+            copilot_local.document(self.sid)
 
 
 @unittest.skipUnless(mover.txcript_path(), "Requires the project's built migration engine")

@@ -1,16 +1,26 @@
-# Copilot Desktop 历史搬出
+# Copilot Desktop 对话搬家
 
 已随 [Windows v0.3.10](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.10)、[Mac preview.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.13) 公开。已有支持一键更新的版本可检查更新；更早版本下载完整安装包。构建与独立资产核验见 [Windows QA](UPDATER-QA.md)、[Mac QA](MACOS-QA.md)。
 
-本轮先支持 GitHub Copilot 独立桌面 App 的本机历史：在「对话搬家」中选择 GitHub Copilot，按标题或文件夹搜索、勾选记录、选择现有目标和文件夹。支持刷新重新发现记录。暂不提供搬入 Copilot；VS Code 自身的 chatSessions 不在本轮范围。
+当前支持 GitHub Copilot 独立桌面 App 的本机历史搬出和搬入：在「对话搬家」中选择 GitHub Copilot，按标题或文件夹搜索、勾选记录、选择现有目标和文件夹。支持刷新重新发现记录。搬入后登记到 Desktop 的 Chats（聊天）列表。VS Code 自身的 chatSessions 不在本轮范围。
 
 ## 来源和识别
 
 Windows 和 Mac 都读取用户目录下 `.copilot/session-state/<会话编号>/events.jsonl`。只读取这一层已知会话路径，不扫描电脑，不读取 Cookie、登录配置、凭据、工作文件或附件，也不启动 Copilot、SDK 服务或模型。
 
-Desktop 与 CLI 共用上述存储，目录本身不能证明是 Desktop 创建的。存在 `.copilot/data.db` 时，只以只读连接读取 `sessions` 表中白名单内的标题、目录、时间、编号和归档/删除标记；不读取 `app_state` 等其他内容。有该桌面索引成员关系的记录标为 `Copilot Desktop`，意思是桌面端记录过它，不保证最初由桌面端创建。其他本机记录明确显示「Copilot 共享会话（Desktop / CLI 共用，来源未确认）」，同一编号只出现一次。
+Desktop 与 CLI 共用上述存储，不能把所有 `session-state` 文件夹都当成桌面聊天。列表只枚举 `data.db/sessions` 已登记且未归档、未删除、非临时占位的桌面会话；命令行独有记录、未登记目录不再混入。只查询白名单会话字段以及工作区/项目的名称与位置，不读取认证、账户或配置内容。初始化过 Desktop 才显示入口，只有 CLI 不算安装 Desktop。
 
-已知归档/删除标记会过滤，搬运前重新检查。桌面索引存在但结构不识别或被占用时会停止列表读取，不把全部记录降级成共享会话。只有索引、没有本机正文的记录显示为不可搬运；不会请求云端补齐。没有桌面索引时只能显示共享存储，不能据此确认原客户端的侧栏或归档状态。
+普通聊天统一归入「聊天」，不把 `.copilot/chats/…/file-c-users-…` 内部沙箱目录当作项目。项目会话用 `workspaces/projects` 的登记名称和路径分组。只有索引、没有本机正文的正式会话仍显示为不可搬运；临时占位和孤立空目录不会凑数。搬运前重新检查归档、删除及索引成员关系，未知结构或占用直接报错，不回退到混列共享目录。
+
+2026-10-16 用户截图中的「Image-text alignment fix」与 Desktop 登记对应；原界面的 19 条包含共享存储中其他客户端的会话和无正文孤立目录，不能代表 Desktop 的 19 条聊天。截图中的内部路径编码不是项目名。当前修订把列表来源收紧为 Desktop 登记；运行中的新会话数量仍可随用户使用改变，不固定为某个数字。
+
+## 搬入 Copilot Desktop
+
+在来源（包括 ChatGPT 普通聊天、本机 Work/Codex）选择已有完整正文的记录，目标选 GitHub Copilot，选择工作文件夹后确认。每条创建一个新的 UUID 聊天副本并登记为 `general_chat`，出现在 Desktop 的 Chats，而非自动新建项目或 worktree。Desktop 已打开时可能需在当前任务结束后重新打开才能刷新外部新增登记。
+
+这是对本机格式的适配，不是 GitHub 官方提供的跨软件历史导入 API。先检查会话表字段和必填项；格式变化、数据库占用、未知正文块时停止。消息转换为版本 1 的连续事件：原用户/助手角色与完整文字、时间保留；思考通过 `assistant.message.reasoningText` 保留，因为原生恢复会过滤独立 `assistant.reasoning` 事件。工具调用/结果、系统说明和附件信息转为明确标注的历史参考文字，不作为可执行工具或新系统指令。附件文件和原项目环境不迁移。
+
+写入新目录并在同一 SQLite 事务内登记、比较完整消息后提交；失败只撤销本次新行和仍与本次写入一致的文件，已有行及目录不覆盖。不复制认证、不创建自动批准或远程权限，不启动 Copilot 或模型。SQLite 写入授权只允许本次新增会话，并识别原生的条件 agent 触发器；未知触发器不能修改其他表或额外插入会话。格式版本参与去重。
 
 ## 转换和完整性
 
@@ -30,9 +40,13 @@ Desktop 与 CLI 共用上述存储，目录本身不能证明是 Desktop 创建�
 
 ## 开发验证
 
-`python -m unittest test_copilot -v` 使用隔离目录和合成事件。覆盖 Windows/Mac 路径、桌面/共享来源区分、长正文、工具配对、中断调用、子任务交错、损坏与变化、未知结构、归档删除、仅云端索引、刷新和只读目标。引擎存在时额外实际搬入 Cursor、Codex、本机 Work、Claude Code、WorkBuddy 国内/海外版并回读，验证源文件字节不变及重复搬运。
+`python -m unittest test_copilot -v` 使用隔离目录和合成事件。覆盖 Windows/Mac 路径、桌面/共享来源区分、长正文、工具配对、中断调用、子任务交错、损坏与变化、未知结构、归档删除、仅云端索引、刷新和可搬入目标。引擎存在时额外实际搬入 Cursor、Codex、本机 Work、Claude Code、WorkBuddy 国内/海外版并回读，验证源文件字节不变及重复搬运。
 
-`test_import_ui` 新增 Copilot 搜索、选择、刷新、共享标记、损坏记录禁选和只读目的地检查；`test_agent_icons` 校验随包原版图标和来源摘要。Windows 检查、Windows 打包和两种 Mac 架构的 CI 已纳入上述测试。CI 结果和安装包状态以实际运行报告为准；未对用户的真实 Copilot 数据或付费模型续聊作自动验收。
+`test_import_ui` 新增 Copilot 搜索、选择、刷新、桌面标记、损坏记录禁选、ChatGPT → Copilot 文件夹选择/确认/结果检查；`test_agent_icons` 校验随包原版图标和来源摘要。Windows 检查、Windows 打包和两种 Mac 架构的 CI 已纳入上述测试。CI 结果和安装包状态以实际运行报告为准；未对用户的真实 Copilot 数据或付费模型续聊作自动验收。
+
+`test_copilot_import` 覆盖 125 轮完整正文、Desktop 登记、工具历史说明、ChatGPT 导出接线及去重、未知结构/触发器、失败回滚和已有目录保护。`test_copilot_native` 在独立空账户目录启动校验值固定的官方 Copilot 1.0.98 测试组件，完整分页读取全部事件，禁止修复地恢复会话，再逐字段比较所有原始事件，包括思考和长工具说明。请求白名单不含发送消息、登录、工具执行；测试组件不打包给用户。Windows、两种 Mac 架构均执行该原生检查。当前依据 Desktop 1.1.29 的索引形状，其他版本需通过同样的结构检查。
+
+原生历史读取和严格恢复不等于已在用户 Desktop 上逐条人工滚动或发送付费下一轮。没有对用户安装做合成导入或升级操作。实际构建与发布验收见两份 QA。
 
 图标提取自已安装 GitHub Copilot App 的程序资源，未重画、未改色，随软件打包，运行时不联网获取。资源来源与 SHA-256 见 `dialog-mover/ui/assets/agents/sources.json`。
 

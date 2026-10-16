@@ -17,12 +17,12 @@ class ImportUiTests(unittest.TestCase):
         self.enterContext(patch.object(sources, "unsupported_found", return_value=[]))
         self.enterContext(patch.object(mover, "txcript_path", return_value=Path("fixture/txcript.exe")))
 
-    def test_copilot_source_search_selection_refresh_and_read_only_destination(self):
+    def test_copilot_source_search_selection_refresh_and_destination(self):
         capabilities = Api().agents()
         capabilities["agents"] = [item for item in capabilities["agents"] if item["id"] == "copilot_desktop"]
         source = {"groups": [{"title": "合成项目", "kind": "folder", "path": "/synthetic/project", "sessions": [
             {"id": "desktop-session", "title": "Copilot 桌面长对话", "movable": True, "ts": 2, "when": "刚刚", "note": "Copilot Desktop"},
-            {"id": "shared-session", "title": "Copilot 共享示例", "movable": True, "ts": 1, "when": "昨天", "note": "Copilot 共享会话（Desktop / CLI 共用，来源未确认）"},
+            {"id": "shared-session", "title": "Copilot 桌面示例", "movable": True, "ts": 1, "when": "昨天", "note": "Copilot Desktop"},
             {"id": "broken-session", "title": "不完整记录", "movable": False, "ts": 0, "note": "记录不完整，请刷新"}]}], "total": 3, "movable": 2}
         bootstrap = """
         window._refreshes = 0;
@@ -43,7 +43,7 @@ class ImportUiTests(unittest.TestCase):
                 logo = page.locator('[data-agent="copilot_desktop"] img')
                 self.assertEqual(logo.get_attribute("src"), "assets/agents/copilot.png")
                 page.wait_for_function("document.querySelector('[data-agent=\"copilot_desktop\"] img').naturalWidth > 0")
-                self.assertIn("来源未确认", page.locator('[data-id="shared-session"]').inner_text())
+                self.assertIn("Copilot Desktop", page.locator('[data-id="shared-session"]').inner_text())
                 page.locator("#search").fill("长对话")
                 self.assertEqual(page.locator(".row").count(), 1)
                 page.locator("#search").fill("")
@@ -55,8 +55,8 @@ class ImportUiTests(unittest.TestCase):
                 self.assertEqual(page.locator("#bar-count").inner_text(), "2")
                 page.locator("#bar-go").click()
                 destination = page.locator('[data-target="copilot_desktop"]')
-                self.assertFalse(destination.is_enabled())
-                self.assertIn("暂不支持搬入", destination.inner_text())
+                self.assertTrue(destination.is_enabled())
+                self.assertIn("本机聊天", destination.inner_text())
             finally:
                 browser.close()
 
@@ -149,6 +149,41 @@ class ImportUiTests(unittest.TestCase):
                     page.locator("#finish").click()
                 self.assertEqual(failures, [])
                 self.assertTrue(set(imports.TARGETS) <= {item["id"] for item in capabilities["targets"]})
+            finally:
+                browser.close()
+
+    def test_chatgpt_to_copilot_chat_folder_confirmation_and_result(self):
+        capabilities = Api().agents()
+        capabilities["agents"] = [item for item in capabilities["agents"] if item["id"] == "chatgpt"]
+        bootstrap = """
+        window._moves=[];
+        window.pywebview={api:{
+          agents:async()=>(CAPABILITIES),
+          sessions:async()=>({groups:[{title:'聊天',kind:'recent',path:'',sessions:[{id:'synthetic-chatgpt',title:'ChatGPT 合成聊天',movable:true,ts:1}]}],total:1,movable:1}),
+          folders:async()=>[{name:'合成项目',path:'D:/synthetic/project'}],
+          start_move:async(...args)=>{window._moves.push(args);return {ok:true,total:1};},
+          move_status:async()=>({finished:true,total:1,done:1,ok:1,failed:0,skipped:0,items:[{id:'synthetic-chatgpt',title:'ChatGPT 合成聊天',state:'ok',message:'已登记到 Copilot 的聊天列表',resumeCommand:''}]})
+        }};
+        window.addEventListener('DOMContentLoaded',()=>window.dispatchEvent(new Event('pywebviewready')));
+        """.replace("CAPABILITIES", json.dumps(capabilities))
+        with sync_playwright() as runtime:
+            browser = runtime.chromium.launch(channel="msedge", headless=True)
+            try:
+                page = browser.new_page(viewport={"width": 1180, "height": 780})
+                page.add_init_script(bootstrap)
+                page.goto((Path(__file__).parent / "ui/index.html").as_uri())
+                page.locator(".row").first.click()
+                page.locator("#bar-go").click()
+                page.locator('[data-target="copilot_desktop"]').click()
+                self.assertIn("Copilot 的 Chats", page.locator("#sheet-body").inner_text())
+                page.locator("[data-path]").first.click()
+                page.locator("#next").click()
+                self.assertIn("GitHub Copilot", page.locator("#sheet-body").inner_text())
+                page.locator("#go").click()
+                page.locator("#finish").wait_for()
+                self.assertIn("已登记到 Copilot 的聊天列表", page.locator("#sheet-body").inner_text())
+                self.assertEqual(page.evaluate("window._moves[0]"), ["chatgpt", ["synthetic-chatgpt"], "copilot_desktop", "D:/synthetic/project"])
+                self.assertEqual(page.locator('[aria-label="续聊命令"]').count(), 0)
             finally:
                 browser.close()
 
