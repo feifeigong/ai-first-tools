@@ -27,11 +27,21 @@ def validated_assets(root: Path, version: str) -> list[Path]:
     installation = json.loads((root / "windows/installer-test.json").read_text(encoding="utf-8-sig"))
     workspace = json.loads((root / "windows/installed-self-test.json").read_text(encoding="utf-8-sig"))
     required = {"silentInstall", "silentReinstall", "installedSelfChecks", "installedVersion", "extraFilePreserved", "safeUninstall"}
+    if tuple(map(int, version.split('.'))) >= (0,3,12):
+        required |= {"bundledRuntime", "bundledControls", "backgroundUpgrade", "backgroundUninstall"}
     checks = installation.get("checks") or {}
     if installation.get("passed") is not True or installation.get("version") != version \
             or not required <= set(checks) or any(checks[name] is not True for name in required) \
             or workspace.get("failed") != 0 or workspace.get("passed", 0) < 62:
         raise ValueError("Windows installation and workspace reports did not pass")
+    if tuple(map(int, version.split('.'))) >= (0,3,12):
+        try:
+            runtime = json.loads((root / "windows/resume-runtime-test.json").read_text(encoding="utf-8-sig"))
+            background = json.loads((root / "windows/resume-control-test.json").read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as error:
+            raise ValueError('Bundled auto-resume reports did not pass') from error
+        if runtime.get('failed') != 0 or runtime.get('passed',0) < 4 or background.get('passed') is not True or len(background.get('checks',{})) < 5 or not all(value is True for value in background['checks'].values()):
+            raise ValueError('Bundled auto-resume reports did not pass')
     assets = [root / "release" / f"AI-First-Tools-Setup-{version}.exe",
               root / "release" / f"AI-First-Tools-Portable-{version}-win-x64.zip"]
     sums = root / "release/SHA256SUMS.txt"

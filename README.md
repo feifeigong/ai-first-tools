@@ -4,7 +4,7 @@
 
 当前内置 **对话搬家**：把支持的 AI 软件中的对话记录复制到另一个软件，原记录保留。
 
-Windows 另含 **Codex 自动续跑** 控制页，连接本机已有续跑工具，控制运行和开机自启。Copilot Desktop 历史搬出已随 Windows v0.3.10、Mac preview.13 发布。
+Windows 内置 **Codex 自动续跑**：额度恢复后继续原来的对话，运行与开机自启都在工作台里控制。后台、Python 和 Codex 原生运行组件随同一个安装包提供，不需要再安装独立续跑程序、Python、Node 或 Codex CLI。使用电脑上已登录的 Codex 账号与本机会话。
 
 ![对话搬家界面](docs/assets/dialog-mover.png)
 
@@ -30,7 +30,7 @@ Windows 另含 **Codex 自动续跑** 控制页，连接本机已有续跑工具
 
 ### 推荐：Windows 安装版
 
-**[⬇ 下载 Windows 安装包 v0.3.11](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.11/AI-First-Tools-Setup-0.3.11.exe)**
+**[⬇ 下载 Windows 安装包 v0.3.12](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.12/AI-First-Tools-Setup-0.3.12.exe)**
 
 1. 下载上面的安装包，双击打开。
 2. 点击「安装」，等它完成。
@@ -42,11 +42,17 @@ Windows 另含 **Codex 自动续跑** 控制页，连接本机已有续跑工具
 
 ### 可选：Windows 免安装版
 
-**[⬇ 下载免安装压缩包 v0.3.11](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.11/AI-First-Tools-Portable-0.3.11-win-x64.zip)**
+**[⬇ 下载免安装压缩包 v0.3.12](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.12/AI-First-Tools-Portable-0.3.12-win-x64.zip)**
 
 解压**整个压缩包**，进入文件夹，双击「AI一手工具工作台.exe」。不能只拿走一个 EXE，也不要直接在压缩包里面运行。可以给这个 EXE 创建桌面快捷方式，以后不用再找文件夹。
 
 如果电脑没有 WebView2，优先使用上面的安装版。
+
+## 自动续跑怎么用
+
+自动续跑的使用方式：打开工作台 → 点左边「Codex 自动续跑」→ 打开「自动续跑」。需要登录电脑后自己运行，再打开「开机自动开启」。后台组件已经内置，用户不用打开命令行或寻找其他软件目录。
+
+关闭工作台窗口后，续跑后台继续工作；关闭页面里的自动续跑开关，才会停止，并同时取消开机自启。更新会先暂停并恢复原后台，卸载会清理对应后台与开机入口。首次使用默认关闭，由用户自己开启。
 
 ## 怎么搬对话
 

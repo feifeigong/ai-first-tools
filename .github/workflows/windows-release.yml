@@ -44,7 +44,29 @@ jobs:
         run: python -m unittest test_copilot test_windows_release -v
       - name: Isolated auto-resume control checks
         shell: powershell
-        run: ./workspace/tests/AutoResumeControl.Tests.ps1
+        run: |
+          ./workspace/tests/AutoResumeControl.Tests.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./workspace/tests/AutoResumeBundled.Tests.ps1
+      - name: Bundled auto-resume engine regression
+        working-directory: auto-resume
+        env:
+          PYTHONPATH: src
+        run: python -m unittest discover -s tests -v
+      - name: Freeze and verify internal auto-resume runtime
+        shell: pwsh
+        run: |
+          python scripts/prepare_auto_resume.py
+          if ($LASTEXITCODE) { throw 'Pinned Codex runtime validation failed' }
+          Push-Location auto-resume
+          python -m PyInstaller --noconfirm --distpath ../artifacts/windows/auto-resume --workpath ../artifacts/windows/auto-resume-build AI一手续跑后台.spec
+          if ($LASTEXITCODE) { throw 'Auto-resume freezing failed' }
+          Pop-Location
+          $backend=Join-Path $PWD 'artifacts/windows/auto-resume/AI一手续跑后台/AI一手续跑后台.exe'
+          $report=Join-Path $PWD 'artifacts/windows/resume-runtime-test.json'
+          $test=Start-Process -FilePath $backend -ArgumentList @('--runtime-self-test',$report) -Wait -PassThru -WindowStyle Hidden
+          $checks=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          if ($test.ExitCode -ne 0 -or $checks.failed -ne 0 -or $checks.passed -ne 4) { throw 'Frozen background runtime checks failed' }
       - name: Get official installer tools
         shell: python
         run: |
@@ -77,7 +99,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'Mover freezing failed' }
           Pop-Location
           $version=([xml](Get-Content workspace/AIFirst.Workspace.csproj -Raw)).Project.PropertyGroup.Version
-          ./scripts/package.ps1 -Version $version -Python python -MoverPackage (Join-Path $PWD 'artifacts/windows/mover/对话搬家') -AnalysisToc (Join-Path $PWD 'artifacts/windows/build/对话搬家/Analysis-00.toc') -NsisDirectory (Join-Path $PWD 'artifacts/build-tools/nsis/nsis-3.12') -WebViewBootstrapper (Join-Path $PWD 'artifacts/build-tools/MicrosoftEdgeWebview2Setup.exe')
+          ./scripts/package.ps1 -Version $version -Python python -MoverPackage (Join-Path $PWD 'artifacts/windows/mover/对话搬家') -ResumePackage (Join-Path $PWD 'artifacts/windows/auto-resume/AI一手续跑后台') -AnalysisToc (Join-Path $PWD 'artifacts/windows/build/对话搬家/Analysis-00.toc') -NsisDirectory (Join-Path $PWD 'artifacts/build-tools/nsis/nsis-3.12') -WebViewBootstrapper (Join-Path $PWD 'artifacts/build-tools/MicrosoftEdgeWebview2Setup.exe')
       - name: Audit silent install, reinstall, self checks and safe uninstall
         shell: pwsh
         run: |
@@ -95,15 +117,21 @@ jobs:
           $manifest=Get-Content (Join-Path $target 'update-manifest.json') -Raw | ConvertFrom-Json
           if ($manifest.version -ne $version) { throw 'Installed manifest version mismatch' }
           if ((Get-ItemProperty 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/AIFirstTools').DisplayVersion -ne $version) { throw 'Installation registry version mismatch' }
+          python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json
+          if ($LASTEXITCODE) { throw 'Installed background lifecycle checks failed' }
           $extra=Join-Path $target 'synthetic-user-note.txt'
           Set-Content -LiteralPath $extra -Value 'synthetic extra file must survive'
           $reinstall=Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
           if ($reinstall.ExitCode -ne 0 -or (Get-Content -LiteralPath $extra -Raw).Trim() -ne 'synthetic extra file must survive') { throw 'Silent reinstall or extra-file protection failed' }
+          python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json --stage reinstall
+          if ($LASTEXITCODE) { throw 'Reinstallation did not restore the running background' }
           $uninstall=Start-Process -FilePath (Join-Path $target 'Uninstall.exe') -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
           $deadline=(Get-Date).AddSeconds(30)
           while ((Test-Path -LiteralPath $app) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 250 }
           if ($uninstall.ExitCode -ne 0 -or (Test-Path -LiteralPath $app) -or !(Test-Path -LiteralPath $extra)) { throw 'Uninstall protection failed' }
-          @{ passed=$true; checks=@{ silentInstall=$true; silentReinstall=$true; installedSelfChecks=$true; installedVersion=$true; extraFilePreserved=$true; safeUninstall=$true }; version=$version; scope='Clean GitHub Windows runner, real installer, synthetic extra file; no user installation or Agent data' } | ConvertTo-Json -Depth 4 | Set-Content artifacts/windows/installer-test.json
+          python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json --stage uninstall
+          if ($LASTEXITCODE) { throw 'Uninstall left background processes or startup behind' }
+          @{ passed=$true; checks=@{ silentInstall=$true; silentReinstall=$true; installedSelfChecks=$true; installedVersion=$true; extraFilePreserved=$true; safeUninstall=$true; bundledRuntime=$true; bundledControls=$true; backgroundUpgrade=$true; backgroundUninstall=$true }; version=$version; scope='Clean GitHub Windows runner, real installer and bundled background, synthetic disabled workload; no user installation or Agent data' } | ConvertTo-Json -Depth 4 | Set-Content artifacts/windows/installer-test.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

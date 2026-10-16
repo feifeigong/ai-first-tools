@@ -102,6 +102,16 @@ Section "安装"
       Abort
     ${EndIf}
   ${EndIf}
+  IfFileExists "$INSTDIR\tools\auto-resume\AI一手续跑后台.exe" 0 ResumePrepared
+    nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\assets\auto-resume-bundled.ps1" -Action prepare-update'
+    Pop $2
+    Pop $3
+    ${If} $2 != 0
+      MessageBox MB_OK|MB_ICONEXCLAMATION "后台续跑暂未停止，尚未替换程序文件。请在工作台关闭自动续跑后重试。" /SD IDOK
+      SetErrorLevel 1603
+      Abort
+    ${EndIf}
+  ResumePrepared:
   SetOutPath "$INSTDIR"
   ClearErrors
   File /r "${PACKAGE}\*"
@@ -124,6 +134,12 @@ Section "安装"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "URLInfoAbout" "https://github.com/feifeigong/ai-first-tools"
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\assets\auto-resume-bundled.ps1" -Action finish-update'
+  Pop $2
+  Pop $3
+  ${If} $2 != 0
+    MessageBox MB_OK|MB_ICONINFORMATION "工作台已安装，后台续跑暂未恢复。打开工作台后，在自动续跑页面重新开启即可。" /SD IDOK
+  ${EndIf}
 SectionEnd
 
 Function un.onInit
@@ -144,6 +160,14 @@ FunctionEnd
 
 Section "Uninstall"
   !insertmacro CheckRunning
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\assets\auto-resume-bundled.ps1" -Action uninstall'
+  Pop $2
+  Pop $3
+  ${If} $2 != 0
+    MessageBox MB_OK|MB_ICONEXCLAMATION "后台续跑暂未停止，尚未删除工作台。请关闭自动续跑后重试。" /SD IDOK
+    SetErrorLevel 1603
+    Abort
+  ${EndIf}
   !include "${UNINSTALL_MANIFEST}"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"

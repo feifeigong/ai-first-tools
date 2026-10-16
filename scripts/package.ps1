@@ -1,7 +1,8 @@
 param(
-    [string]$Version = '0.3.11',
+    [string]$Version = '0.3.12',
     [string]$Python = 'python',
     [string]$MoverPackage,
+    [string]$ResumePackage,
     [string]$AnalysisToc,
     [string]$NsisDirectory,
     [string]$WebViewBootstrapper,
@@ -14,7 +15,7 @@ $artifacts = Join-Path $root 'artifacts'
 $package = Join-Path $artifacts 'package\AI-First-Tools'
 $project = [xml](Get-Content -LiteralPath (Join-Path $root 'workspace\AIFirst.Workspace.csproj') -Raw)
 if ($project.Project.PropertyGroup.Version -ne $Version) { throw 'Package version must match the workspace project version.' }
-if (!$MoverPackage -or !$AnalysisToc -or !$NsisDirectory -or !$WebViewBootstrapper) {
+if (!$MoverPackage -or !$ResumePackage -or !$AnalysisToc -or !$NsisDirectory -or !$WebViewBootstrapper) {
     throw 'Provide the frozen mover package, its Analysis TOC, the portable NSIS directory and Microsoft WebView2 bootstrapper.'
 }
 $signature = Get-AuthenticodeSignature -LiteralPath $WebViewBootstrapper
@@ -30,6 +31,10 @@ $targetMover = Join-Path $package 'tools\dialog-mover-v0.3'
 New-Item -ItemType Directory -Force -Path $targetMover | Out-Null
 Copy-Item -LiteralPath (Join-Path $MoverPackage '对话搬家.exe') -Destination $targetMover -Force
 Copy-Item -LiteralPath (Join-Path $MoverPackage '_internal') -Destination $targetMover -Recurse -Force
+$targetResume = Join-Path $package 'tools\auto-resume'
+New-Item -ItemType Directory -Force -Path $targetResume | Out-Null
+Copy-Item -LiteralPath (Join-Path $ResumePackage 'AI一手续跑后台.exe') -Destination $targetResume -Force
+Copy-Item -LiteralPath (Join-Path $ResumePackage '_internal') -Destination $targetResume -Recurse -Force
 $runtime = Join-Path $targetMover '_internal'
 $engineDirectory = Join-Path $runtime 'bin'
 foreach ($filename in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
@@ -39,6 +44,9 @@ foreach ($filename in @('LICENSE', 'NOTICE', 'README.md')) { Copy-Item -LiteralP
 Copy-Item -LiteralPath (Join-Path $root 'docs') -Destination $package -Recurse -Force
 & $Python (Join-Path $PSScriptRoot 'collect_licenses.py') --toc $AnalysisToc --package $package --nsis $NsisDirectory
 if ($LASTEXITCODE) { throw 'License collection failed.' }
+Copy-Item -LiteralPath (Join-Path $root 'auto-resume\bin\LICENSE') -Destination (Join-Path $package 'THIRD-PARTY-LICENSES\Codex-LICENSE.txt') -Force
+Copy-Item -LiteralPath (Join-Path $root 'auto-resume\bin\NOTICE') -Destination (Join-Path $package 'THIRD-PARTY-LICENSES\Codex-NOTICE.txt') -Force
+Copy-Item -LiteralPath (Join-Path $root 'auto-resume\codex-runtime.lock.json') -Destination (Join-Path $package 'THIRD-PARTY-LICENSES\Codex-runtime.json') -Force
 if (!$CargoMetadata) {
     $CargoMetadata = Join-Path $artifacts 'cargo-metadata.json'
     & cargo metadata --manifest-path (Join-Path $root 'txcript\Cargo.toml') --locked --format-version 1 --filter-platform x86_64-pc-windows-msvc | Set-Content -LiteralPath $CargoMetadata -Encoding utf8

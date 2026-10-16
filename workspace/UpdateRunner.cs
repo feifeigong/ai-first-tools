@@ -154,6 +154,7 @@ internal static class UpdateRunner
             window.Show();
             await Task.Run(async () =>
             {
+                await AutoResumeRuntime.PrepareAsync(plan.Target);
                 await WaitForFilesAsync(plan.Target);
                 var backup = Path.Combine(job, "backup");
                 if (plan.Installed)
@@ -186,6 +187,7 @@ internal static class UpdateRunner
                     }
                     catch
                     {
+                        await AutoResumeRuntime.PrepareAsync(plan.Target);
                         var paths = old.Files.Select(file => file.Path).Append(UpdatePackage.ManifestName).Append("Uninstall.exe");
                         UpdatePackage.Restore(plan.Target, backup, paths);
                         using var key = Registry.CurrentUser.OpenSubKey(RegistryKey, true);

@@ -36,7 +36,25 @@ class WindowsVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "did not pass"):
             validated_assets(self.root, "0.3.10")
         with self.assertRaisesRegex(ValueError, "did not pass"):
-            validated_assets(self.root, "0.3.11")
+            validated_assets(self.root, "0.3.12")
+
+    def test_bundled_release_requires_actual_runtime_and_lifecycle_reports(self):
+        self.report['version']='0.3.12'
+        self.report['checks'].update(dict.fromkeys(('bundledRuntime','bundledControls','backgroundUpgrade','backgroundUninstall'),True))
+        self.report_path.write_text(json.dumps(self.report))
+        self.assets=[path.rename(path.with_name(path.name.replace('0.3.10','0.3.12'))) for path in self.assets]
+        (self.root / 'release/SHA256SUMS.txt').write_text('\n'.join(f'{digest(path)}  {path.name}' for path in self.assets)+'\n')
+        with self.assertRaisesRegex(ValueError,'Bundled'):
+            validated_assets(self.root,'0.3.12')
+        (self.root / 'windows/resume-runtime-test.json').write_text(json.dumps({'passed':4,'failed':0}))
+        background={'passed':True,'checks':dict.fromkeys(('start','stop','restart','upgrade','uninstall'),True)}
+        path=self.root / 'windows/resume-control-test.json'
+        path.write_text(json.dumps(background))
+        self.assertEqual(len(validated_assets(self.root,'0.3.12')),3)
+        background['checks']['uninstall']=False
+        path.write_text(json.dumps(background))
+        with self.assertRaisesRegex(ValueError,'Bundled'):
+            validated_assets(self.root,'0.3.12')
 
 
 if __name__ == "__main__":

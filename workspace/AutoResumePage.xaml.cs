@@ -81,8 +81,8 @@ public partial class AutoResumePage : UserControl, IDisposable
     {
         RunningSwitch.IsChecked = value.Running;
         AutostartSwitch.IsChecked = value.Autostart;
-        StateTitle.Text = !value.Installed ? "没有找到已安装的续跑程序" : value.Running ? "自动续跑已开启" : "自动续跑已关闭";
-        StateDescription.Text = !value.Installed ? "请先安装 Codex Auto Resume，再回来刷新状态。" : value.Running ? "后台程序正在运行，额度恢复后会按现有配置继续原对话。" : value.Autostart ? "当前没有运行；下次登录电脑会自动开启。" : "后台程序没有运行，开机也不会自动开启。";
+        StateTitle.Text = !value.Installed ? "内置续跑组件暂时不可用" : value.Running ? "自动续跑已开启" : "自动续跑已关闭";
+        StateDescription.Text = !value.Installed ? "请修复或重新安装完整的 AI一手工具工作台，然后刷新状态。" : value.Running ? "后台程序正在运行，额度恢复后会按现有配置继续原对话。" : value.Autostart ? "当前没有运行；下次登录电脑会自动开启。" : "后台程序没有运行，开机也不会自动开启。";
         StateCard.Background = new SolidColorBrush(value.Running ? Color.FromRgb(239, 248, 244) : Color.FromRgb(243, 247, 252));
     }
 

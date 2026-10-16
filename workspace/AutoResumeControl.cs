@@ -17,9 +17,12 @@ internal interface IAutoResumeControl
 
 internal sealed class AutoResumeControl : IAutoResumeControl
 {
-    public async Task<AutoResumeStatus> ExecuteAsync(string action, CancellationToken cancellation)
+    public Task<AutoResumeStatus> ExecuteAsync(string action, CancellationToken cancellation) => ExecuteAtAsync(AppContext.BaseDirectory, action, cancellation);
+
+    internal static async Task<AutoResumeStatus> ExecuteAtAsync(string directory, string action, CancellationToken cancellation)
     {
-        if (action is not ("status" or "start" or "stop" or "autostart-on" or "autostart-off")) throw new ArgumentException("未知操作。");
+        if (action is not ("status" or "start" or "stop" or "autostart-on" or "autostart-off" or "prepare-update" or "finish-update" or "uninstall")) throw new ArgumentException("未知操作。");
+        var lifecycle = action is "prepare-update" or "finish-update" or "uninstall";
         var start = new ProcessStartInfo
         {
             FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"),
@@ -31,7 +34,7 @@ internal sealed class AutoResumeControl : IAutoResumeControl
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8
         };
-        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(AppContext.BaseDirectory, "assets", "auto-resume-control.ps1"), "-Action", action }) start.ArgumentList.Add(argument);
+        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(directory, "assets", lifecycle ? "auto-resume-bundled.ps1" : "auto-resume-control.ps1"), "-Action", action }) start.ArgumentList.Add(argument);
         using var process = Process.Start(start) ?? throw new IOException("暂时无法连接自动续跑程序。");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         timeout.CancelAfter(TimeSpan.FromSeconds(40));

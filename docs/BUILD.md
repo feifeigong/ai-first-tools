@@ -8,6 +8,7 @@ Mac 构建、完整背景和继续开发步骤见 [Mac 开发交接](MACOS-HANDO
 
 - `workspace/`：WPF 单窗口工作台。
 - `dialog-mover/`：Python / pywebview 对话搬家界面与本机适配。
+- `auto-resume/`：随工作台冻结的续跑后台、原生组件锁定清单及回归测试。
 - `txcript/`：修改后的 Rust 迁移引擎，保留上游许可证与文档。
 - `installer/`：NSIS 当前用户安装程序，不要求管理员权限。
 - `scripts/`：打包、许可证收集、发布包检查。
@@ -37,15 +38,20 @@ dotnet build workspace\AIFirst.Workspace.csproj -c Release
 
 从 [NSIS 官方发布](https://sourceforge.net/projects/nsis/files/NSIS%203/3.12/) 获取便携编译器并解压，从 [微软官方](https://go.microsoft.com/fwlink/p/?LinkId=2124703) 获取 WebView2 bootstrapper。脚本会检查微软签名；不要使用不明来源的文件。
 
+先运行 `python scripts/prepare_auto_resume.py`，按锁定的 OpenAI 官方 npm 发行包和 SHA-512 获取 Codex 原生组件；许可证与 NOTICE 按固定源码提交及 SHA-256 核对。进入 `auto-resume`，以 Python 3.13 执行 `python -m PyInstaller --noconfirm AI一手续跑后台.spec`。不提交 `bin/` 二进制或本机运行数据。冻结后台的 `--runtime-self-test <报告>` 只用隔离未登录目录、禁用工作的合成配置进行原生握手与启停，不请求模型。
+
 ```powershell
 .\scripts\package.ps1 -Python .\.venv\Scripts\python.exe `
   -MoverPackage .\dialog-mover\dist\对话搬家 `
+  -ResumePackage .\auto-resume\dist\AI一手续跑后台 `
   -AnalysisToc .\dialog-mover\build\对话搬家\Analysis-00.toc `
   -NsisDirectory C:\BuildTools\nsis-3.12 `
   -WebViewBootstrapper C:\BuildTools\MicrosoftEdgeWebview2Setup.exe
 ```
 
 生成安装包、免安装 ZIP 与 SHA-256 校验文件，位于 `artifacts/release/`。工作台以自带 .NET 的方式发布，迁移引擎旁也带所需 Visual C++ 运行库；原应用源码和引擎不因打包而改写。
+
+Windows 流水线额外冻结内置续跑后台并执行原生离线检查；干净 runner 实际安装后，通过真实开关验证无外部运行环境时启停、禁止重新常驻、运行中覆盖更新与恢复、卸载后的进程和开机项清理。`audit_bundled_resume.py` 明确拒绝修改非 CI 用户安装；本机原生控制测试使用独立合成配置并隔离旧程序发现和注册表操作。
 
 维护者可准备同版本草稿，手动运行 GitHub Actions 的 Windows release packages。流水线打包，在干净 runner 测静默安装/重复覆盖/自检/卸载和额外文件保护。全部通过后，把同名 lightweight Git 标签指向该次已验证构建提交；已有标签不得移动。暂存检查标签与构建 SHA 一致才上传到草稿，不自动公开。若仅末尾暂存失败，用 Stage verified release assets 输入 windows 与原 run_id，复用通过检查的原资产，不混入另一次构建。必须核对实际资产和日志，绿色但跳过不等于已上传。
 

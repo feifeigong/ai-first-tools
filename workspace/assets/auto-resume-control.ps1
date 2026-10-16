@@ -193,6 +193,11 @@ function Invoke-ResumeAction([string]$RequestedAction) {
 }
 
 if (!$FunctionsOnly) {
+    $bundledExecutable = Join-Path (Split-Path -Parent $PSScriptRoot) 'tools\auto-resume\AI一手续跑后台.exe'
+    if (Test-Path -LiteralPath $bundledExecutable -PathType Leaf) {
+        & (Join-Path $PSScriptRoot 'auto-resume-bundled.ps1') -Action $Action
+        exit $LASTEXITCODE
+    }
     $mutex = [Threading.Mutex]::new($false, ('Local\AI_FIRST_AUTO_RESUME_' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value))
     $locked = $false
     try {

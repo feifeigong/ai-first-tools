@@ -90,6 +90,8 @@ public partial class App : Application
             Shutdown(1);
         };
         window.Show();
+        try { await AutoResumeRuntime.RestoreAsync(AppContext.BaseDirectory); }
+        catch (Exception exception) { Log(exception); window.ShowStatus("后台续跑暂未恢复，请打开“Codex 自动续跑”后重新开启。"); }
     }
 
     internal static string? Option(string[] arguments, string name)

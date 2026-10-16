@@ -21,7 +21,15 @@ jobs:
         run: python -m unittest test_chatgpt test_close_safety test_embedded_startup test_doubao test_copilot test_windows_release test_macos test_macos_updater test_codex_history -v
       - name: Isolated auto-resume control checks
         shell: powershell
-        run: ./workspace/tests/AutoResumeControl.Tests.ps1
+        run: |
+          ./workspace/tests/AutoResumeControl.Tests.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./workspace/tests/AutoResumeBundled.Tests.ps1
+      - name: Bundled auto-resume engine regression
+        working-directory: auto-resume
+        env:
+          PYTHONPATH: src
+        run: python -m unittest discover -s tests -v
       - name: Independent Windows asset validation checks
         run: python -m unittest discover -s scripts -p test_verify_windows_release.py -v
       - name: UI checks with synthetic records

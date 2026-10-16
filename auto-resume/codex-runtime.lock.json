@@ -1,0 +1,12 @@
+{
+  "name": "@openai/codex",
+  "version": "0.153.4-win32-x64",
+  "license": "Apache-2.0",
+  "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.153.4-win32-x64.tgz",
+  "integrity": "sha512-lMkB43kJZH0VFr+hoXc11qqR7QtQIbkr07ALgj4urKL1osNyUyuy1iXd3Vzz2iCYvBUCSw7I0l/W1cEPGx9euQ==",
+  "sourceCommit": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a",
+  "notices": {
+    "LICENSE": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc",
+    "NOTICE": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915"
+  }
+}

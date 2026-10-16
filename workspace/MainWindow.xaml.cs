@@ -132,7 +132,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ShowStatus(string text)
+    internal void ShowStatus(string text)
     {
         FooterStatus.Text = text;
         StatusBanner.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;

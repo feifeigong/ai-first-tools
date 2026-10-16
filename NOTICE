@@ -18,5 +18,9 @@ dialog-mover/vendor/ccl_chromium_reader/LICENSE and licenses/.
 Third-party runtime license texts are included in release packages under
 THIRD-PARTY-LICENSES. NSIS licenses accompany the installer notice.
 Microsoft runtime components remain subject to their respective licenses.
+The internal auto-resume component incorporates the same author's existing
+codex-auto-resume logic. Its runtime package contains OpenAI Codex 0.153.4
+under Apache-2.0, with pinned distribution provenance and upstream LICENSE
+and NOTICE included under THIRD-PARTY-LICENSES/Codex-*.
 Brand names and logos belong to their respective owners and are not licensed
 under this project's code license. No endorsement is implied.
