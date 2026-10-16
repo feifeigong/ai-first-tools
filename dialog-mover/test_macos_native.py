@@ -12,7 +12,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from audit_import_targets import isolated_env
-from core import doubao, imports, mover, sources
+from core import copilot_local, doubao, imports, mover, sources
+from test_copilot_import import desktop_index
 from test_imports import CODEX_SCHEMA, QWEN_SCHEMA
 
 
@@ -23,6 +24,7 @@ class NativeMacImportTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name)
         self.env = isolated_env(self.base)
+        desktop_index(Path(self.env["COPILOT_HOME"]))
         self.directory = self.base / "项目 with spaces $ and ;"
         self.directory.mkdir()
         for database, schema in ((Path(self.env["CODEX_HOME"]) / "state_5.sqlite", CODEX_SCHEMA), (imports.qwen_db(self.env), QWEN_SCHEMA)):
@@ -50,6 +52,11 @@ class NativeMacImportTests(unittest.TestCase):
                 self.assertNotEqual(details["importedId"], self.document["id"])
                 self.assertTrue(Path(details["location"]).resolve().is_relative_to(self.base.resolve()))
                 self.assertEqual(self.path.read_bytes(), before)
+                if target == "copilot_desktop":
+                    body = copilot_local.document(details["importedId"])
+                    self.assertEqual([message["content"][0]["text"] for message in body["messages"]],
+                                     [message["content"] for message in self.document["messages"]])
+                    self.assertEqual(copilot_local.groups()[0]["sessions"][0]["id"], details["importedId"])
 
     def test_incompatible_codex_database_is_rejected_before_writing_rollout(self):
         database = Path(self.env["CODEX_HOME"]) / "state_5.sqlite"

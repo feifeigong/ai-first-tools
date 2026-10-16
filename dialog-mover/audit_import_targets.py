@@ -30,6 +30,7 @@ def isolated_env(base: Path) -> dict:
         "XDG_STATE_HOME": base / "state",
         "XDG_CACHE_HOME": base / "cache",
         "CODEX_HOME": base / "codex",
+        "COPILOT_HOME": base / "copilot",
         "CLAUDE_CONFIG_DIR": base / "claude",
         "WORKBUDDY_DIR": base / "workbuddy",
         "WORKBUDDY_AI_DIR": base / "workbuddy-ai",
