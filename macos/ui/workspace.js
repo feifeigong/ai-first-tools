@@ -17,6 +17,15 @@
   let installing = false;
   let updating = false;
   let preparingSince = null;
+  let handoffSince = null;
+  let closingUpdate = false;
+  let updateTimer = null;
+  const updateRequests = new Set();
+  const updateCall = (name) => {
+    const request = window.pywebview.api[name]();
+    updateRequests.add(request);
+    return request.finally(() => updateRequests.delete(request));
+  };
   const preparationLabels = {
     mounting: "正在打开安装包（1/8）", checking_current: "正在检查当前应用（2/8）",
     checking_package: "正在检查新版应用（3/8）", copying: "正在复制新版文件（4/8）",
@@ -62,8 +71,8 @@
   dismiss.addEventListener("click", async () => {
     if (updating) {
       dismiss.disabled = true;
-      try { await window.pywebview.api.cancel_update(); }
-      finally { dismiss.disabled = false; }
+      try { await updateCall("cancel_update"); }
+      finally { if (!closingUpdate) dismiss.disabled = false; }
     } else notice.hidden = true;
   });
   window.aiFirstBusyNotice = () => show("正在搬运，请等这一批完成后再退出。不会强制停止或删除原记录。", hasUpdate);
@@ -133,6 +142,8 @@
   const finishUpdate = text => {
     updating = false;
     preparingSince = null;
+    handoffSince = null;
+    clearTimeout(updateTimer);
     checker.disabled = download.disabled = false;
     dismiss.disabled = false;
     progress.hidden = true;
@@ -140,10 +151,29 @@
     dismiss.setAttribute("aria-label", "关闭提示");
     show(text, hasUpdate, installing ? "下载并更新" : "打开下载页");
   };
+  const showHandoff = () => {
+    if (handoffSince === null) handoffSince = Date.now();
+    const elapsed = Math.max(0, Math.floor((Date.now() - handoffSince) / 1000));
+    message.textContent = `正在启动更新程序 · 已用时 ${elapsed} 秒`;
+    dismiss.disabled = true;
+  };
+  window.aiFirstFinishUpdate = async () => {
+    closingUpdate = true;
+    clearTimeout(updateTimer);
+    message.textContent = "正在更新并重新打开，请稍等…";
+    dismiss.disabled = true;
+    await Promise.allSettled([...updateRequests]);
+    return {ready: true, pendingUpdates: updateRequests.size};
+  };
+  window.aiFirstResumeUpdate = () => {
+    closingUpdate = false;
+    finishUpdate("更新重启交接未完成，当前版本未改动。可以重试或打开下载页。");
+  };
   const pollUpdate = async () => {
-    if (!updating) return;
+    if (!updating || closingUpdate) return;
     try {
-      const state = await window.pywebview.api.update_status();
+      const state = await updateCall("update_status");
+      if (closingUpdate) return;
       progress.hidden = false;
       if (state.phase === "downloading") {
         progress.value = Math.min(100, Math.max(0, state.progress || 0));
@@ -157,12 +187,20 @@
         dismiss.disabled = state.cancelRequested === true;
       } else if (state.phase === "ready") {
         progress.value = 100;
-        const result = await window.pywebview.api.apply_update();
+        showHandoff();
+        const result = await updateCall("apply_update");
+        if (closingUpdate) return;
         if (result.error) { finishUpdate(result.error); return; }
-        if (result.waiting) message.textContent = "下载完成，等当前搬运结束后自动更新。";
-        else { message.textContent = "正在更新并重新打开，请稍等…"; dismiss.disabled = true; return; }
+        if (result.waiting) { message.textContent = "下载完成，等当前搬运结束后自动更新。"; dismiss.disabled = false; handoffSince = null; }
+        else if (!result.starting) { message.textContent = "正在更新并重新打开，请稍等…"; dismiss.disabled = true; return; }
+      } else if (state.phase === "starting") {
+        showHandoff();
+      } else if (state.phase === "restarting") {
+        message.textContent = "正在更新并重新打开，请稍等…";
+        dismiss.disabled = true;
+        return;
       } else if (state.phase === "error") { finishUpdate(state.error); return; }
-      setTimeout(pollUpdate, 600);
+      updateTimer = setTimeout(pollUpdate, 600);
     } catch { finishUpdate("更新连接暂时中断，当前版本和备份仍保留。请重新打开软件后查看结果。"); }
   };
   download.addEventListener("click", async () => {
@@ -174,9 +212,10 @@
         if (result.error) show(result.error, true, "打开下载页");
         return;
       }
-      const result = await window.pywebview.api.start_update();
+      const result = await updateCall("start_update");
       if (result.error) { show(result.error, true); return; }
       updating = true;
+      closingUpdate = false;
       checker.disabled = true;
       download.textContent = "正在更新…";
       dismiss.textContent = "取消";

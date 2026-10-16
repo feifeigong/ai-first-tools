@@ -306,6 +306,27 @@ class MacUpdaterTests(unittest.TestCase):
                 updater.start_helper(job)
         self.assertTrue(target.is_dir())
 
+    def test_failed_helper_start_reaps_only_its_own_process_and_resets_libraries(self):
+        target, candidate, job = self.job()
+        process = Mock(poll=Mock(return_value=None))
+        with patch.dict(os.environ, {"DYLD_LIBRARY_PATH": "old-libraries", "DYLD_FRAMEWORK_PATH": "old-frameworks"}), \
+                patch.object(updater.subprocess, "Popen", return_value=process) as launch, \
+                patch.object(updater.time, "monotonic", side_effect=[0, 16]):
+            with self.assertRaises(updater.UpdateError):
+                updater.start_helper(job)
+        process.terminate.assert_called_once()
+        process.wait.assert_called_once_with(timeout=2)
+        self.assertEqual(launch.call_args.kwargs["env"]["PYINSTALLER_RESET_ENVIRONMENT"], "1")
+        self.assertNotIn("DYLD_LIBRARY_PATH", launch.call_args.kwargs["env"])
+        self.assertNotIn("DYLD_FRAMEWORK_PATH", launch.call_args.kwargs["env"])
+        self.assertTrue(target.is_dir())
+
+    def test_update_ui_audit_rejects_paths_outside_its_isolated_fixture(self):
+        from update_audit import load_fixture
+
+        with self.assertRaises(updater.UpdateError):
+            load_fixture(self.root / "fixture.json", self.root / updater.APP_NAME, self.root / "report.json")
+
     def test_relaunch_is_independent_and_does_not_reuse_old_frozen_libraries(self):
         with patch.dict(os.environ, {"DYLD_LIBRARY_PATH": "synthetic-old-libraries"}), patch.object(updater.subprocess, "Popen") as process:
             updater.start_app(self.root / updater.APP_NAME, ("--smoke-test", "--report", "synthetic-report.json"))
@@ -327,14 +348,108 @@ class MacUpdaterTests(unittest.TestCase):
         api = MacApi()
         api._prepared = self.root / "synthetic-job.json"
         api._window = Mock()
+        closed = threading.Event()
+        api._window.events.closed = closed
+        api._window.destroy.side_effect = closed.set
+        api._window.evaluate_js.side_effect = lambda script, callback: callback({"ready": True, "pendingUpdates": 0})
         api._job = Mock(snapshot=Mock(return_value={"finished": False}))
         with patch.object(updater, "start_helper") as process:
             self.assertEqual(api.apply_update(), {"waiting": True})
             process.assert_not_called()
             api._job.snapshot.return_value = {"finished": True}
             self.assertTrue(api.apply_update()["ok"])
+            self.assertTrue(closed.wait(2))
             api._window.destroy.assert_called_once()
             self.assertIn("error", api.start_move("example", [], "example", "example"))
+
+    def test_helper_start_does_not_block_status_or_leave_the_last_preparation_step(self):
+        from entry import MacApi
+
+        api = MacApi()
+        api._prepared = self.root / "synthetic-job.json"
+        api._window = Mock()
+        closed = threading.Event()
+        api._window.events.closed = closed
+        api._window.destroy.side_effect = closed.set
+        api._window.evaluate_js.side_effect = lambda script, callback: callback({"ready": True, "pendingUpdates": 0})
+        api._update_state = {"phase": "ready", "progress": 100}
+        entered, release, returned, status_ready = (threading.Event() for _ in range(4))
+        states = []
+
+        def slow_helper(job):
+            entered.set()
+            release.wait(3)
+            return Mock()
+
+        def apply():
+            api.apply_update()
+            returned.set()
+
+        def status():
+            states.append(api.update_status())
+            status_ready.set()
+
+        with patch.object(updater, "start_helper", side_effect=slow_helper):
+            request = threading.Thread(target=apply, daemon=True)
+            request.start()
+            try:
+                self.assertTrue(entered.wait(1))
+                threading.Thread(target=status, daemon=True).start()
+                self.assertTrue(status_ready.wait(0.3), "helper startup holds the status lock")
+                self.assertTrue(returned.wait(0.3), "bridge call waits for helper startup")
+                self.assertEqual(states[0]["phase"], "starting")
+                self.assertIn("error", api.start_move("example", [], "example", "example"))
+                api._window.destroy.assert_not_called()
+            finally:
+                release.set()
+                request.join(2)
+                self.assertTrue(closed.wait(2))
+
+    def test_native_close_waits_for_the_one_way_bridge_acknowledgement(self):
+        from entry import MacApi
+
+        api = MacApi()
+        api._prepared = self.root / "synthetic-job.json"
+        api._window = Mock()
+        closed, requested = threading.Event(), threading.Event()
+        api._window.events.closed = closed
+        api._window.destroy.side_effect = closed.set
+        callbacks = []
+
+        def evaluate(script, callback):
+            callbacks.append(callback)
+            requested.set()
+
+        api._window.evaluate_js.side_effect = evaluate
+        with patch.object(updater, "start_helper") as helper:
+            self.assertEqual(api.apply_update(), {"ok": True, "starting": True})
+            self.assertTrue(requested.wait(2))
+            api._window.destroy.assert_not_called()
+            self.assertFalse(api.can_close())
+            self.assertEqual(api.update_status()["phase"], "starting")
+            self.assertEqual(api.apply_update(), {"ok": True, "starting": True})
+            helper.assert_called_once()
+            callbacks[0]({"ready": True, "pendingUpdates": 0})
+            self.assertTrue(closed.wait(2))
+            self.assertTrue(api.can_close())
+            self.assertEqual(api.update_status()["phase"], "restarting")
+
+    def test_failed_helper_start_releases_handoff_and_keeps_prepared_update(self):
+        from entry import MacApi
+
+        api = MacApi()
+        api._prepared = self.root / "synthetic-job.json"
+        api._window = Mock()
+        with patch.object(updater, "start_helper", side_effect=updater.UpdateError("synthetic startup failure")):
+            api.apply_update()
+            deadline = time.monotonic() + 2
+            while api.update_status()["phase"] != "error" and time.monotonic() < deadline:
+                time.sleep(0.01)
+        self.assertEqual(api.update_status()["phase"], "error")
+        self.assertFalse(api._handing_off)
+        self.assertIsNotNone(api._prepared)
+        api._window.destroy.assert_not_called()
+        self.assertTrue(api.can_close())
 
 
 if __name__ == "__main__":

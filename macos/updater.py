@@ -366,19 +366,36 @@ def start_helper(job: Path) -> subprocess.Popen:
     data = read_job(job)
     ready = job.parent / "ready.json"
     ready.unlink(missing_ok=True)
-    environment = {**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"}
+    environment = launch_environment()
     process = subprocess.Popen([str(job.parent / "helper.app/Contents/MacOS" / EXECUTABLE), "--apply-update", str(job)],
                                env=environment, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     deadline = time.monotonic() + 15
-    while time.monotonic() < deadline:
-        if ready.is_file():
-            result = json.loads(ready.read_text())
-            if result.get("nonce") == data["nonce"] and result.get("pid") == process.pid:
-                return process
-        if process.poll() is not None:
-            break
-        time.sleep(0.1)
-    raise UpdateError("更新程序还没准备好，旧版不会关闭。请稍后重试。")
+    try:
+        while time.monotonic() < deadline:
+            if ready.is_file():
+                result = json.loads(ready.read_text())
+                if result.get("nonce") == data["nonce"] and result.get("pid") == process.pid:
+                    return process
+            if process.poll() is not None:
+                break
+            time.sleep(0.1)
+        raise UpdateError("更新程序还没准备好，旧版不会关闭。请稍后重试。")
+    except Exception:
+        stop_helper(process)
+        raise
+
+
+def stop_helper(process) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        process.terminate()
+        process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=2)
+    except OSError:
+        pass
 
 
 def atomic_swap(first: Path, second: Path) -> None:
@@ -390,10 +407,15 @@ def atomic_swap(first: Path, second: Path) -> None:
         raise OSError(ctypes.get_errno(), "安全替换应用未完成")
 
 
-def start_app(bundle: Path, arguments=()) -> subprocess.Popen:
+def launch_environment() -> dict:
     environment = {**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"}
     for name in ("DYLD_LIBRARY_PATH", "DYLD_FRAMEWORK_PATH"):
         environment.pop(name, None)
+    return environment
+
+
+def start_app(bundle: Path, arguments=()) -> subprocess.Popen:
+    environment = launch_environment()
     return subprocess.Popen([str(bundle / "Contents/MacOS" / EXECUTABLE), *arguments], env=environment,
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
@@ -488,7 +510,9 @@ def helper_main() -> int:
         except BlockingIOError:
             return 1
         write_json(job.parent / "ready.json", {"nonce": data["nonce"], "pid": os.getpid()})
-        return _wait_and_replace(job, data)
+        result = _wait_and_replace(job, data)
+        write_json(job.parent / "completion.json", {"nonce": data["nonce"], "returnCode": result})
+        return result
 
 
 def _wait_and_replace(job: Path, data: dict) -> int:
@@ -535,71 +559,6 @@ def _wait_and_replace(job: Path, data: dict) -> int:
 
 
 def audit_update(app: Path, report: Path) -> None:
-    with tempfile.TemporaryDirectory(prefix="ai-first-update-audit-") as temporary:
-        root = Path(temporary)
-        target = root / APP_NAME
-        command(["/usr/bin/ditto", str(app), str(target)])
-        version = json.loads((app / "Contents/Resources/version.json").read_text())["release"]
-        metadata = target / "Contents/Resources/version.json"
-        metadata.write_text(json.dumps({"version": "0.4.0", "release": "0.4.0-macos-preview.2"}))
-        command(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(target)])
-        fixture = root / "fixture"
-        fixture.mkdir()
-        command(["/usr/bin/ditto", str(app), str(fixture / APP_NAME)])
-        dmg = root / "fixture.dmg"
-        command(["/usr/bin/hdiutil", "create", "-volname", "AI First Update Audit", "-srcfolder", str(fixture), "-format", "UDZO", str(dmg)])
-        sums = root / "fixture-sums.txt"
-        with dmg.open("rb") as stream:
-            dmg_digest = hashlib.file_digest(stream, "sha256").hexdigest()
-        sums.write_text(f"{dmg_digest}  fixture.dmg\n")
-        package = {"version": version, "architecture": platform.machine(), "dmg": {"name": "fixture.dmg", "digest": dmg_digest}, "sums": {}}
-        phases = []
+    from update_audit import audit_update as audit_native_update
 
-        def fixture_download(asset, destination, progress, cancelled):
-            if not destination.resolve().is_relative_to(root.resolve()):
-                raise UpdateError("隔离检查不能写入真实安装目录。")
-            source = dmg if asset is package["dmg"] else sums
-            shutil.copy2(source, destination)
-            if source == dmg:
-                with destination.open("rb") as stream:
-                    if hashlib.file_digest(stream, "sha256").hexdigest() != dmg_digest:
-                        raise UpdateError("隔离更新包完整性校验失败。")
-            progress(100)
-
-        job = prepare(target, package, "0.4.0-macos-preview.2",
-                      lambda phase, value, step=None: phases.append(step) if step else None,
-                      threading.Event(), download_asset=fixture_download)
-        directory = job.parent
-        data = read_job(job)
-        blocker = subprocess.Popen(["/bin/sleep", "2"])
-        data.update({"parentPid": blocker.pid, "audit": True})
-        write_json(job, data)
-        threading.Thread(target=blocker.wait, daemon=True).start()
-        worker = start_helper(job)
-        worker.wait(timeout=180)
-        receipt = root / "isolated-state/updates/result.json"
-        outcome = json.loads(receipt.read_text()) if receipt.is_file() else {}
-        relaunched = json.loads((directory / "relaunch.json").read_text()) if (directory / "relaunch.json").is_file() else {}
-        repeat = {}
-        if worker.returncode == 0 and outcome.get("success") is True:
-            repeated_report = directory / "repeat-relaunch.json"
-            repeated_process = start_app(target, ("--smoke-test", "--report", str(repeated_report)))
-            try:
-                repeated_process.wait(timeout=120)
-                repeat = json.loads(repeated_report.read_text()) if repeated_report.is_file() else {}
-                repeat["processPassed"] = repeated_process.returncode == 0
-            except subprocess.TimeoutExpired:
-                repeated_process.terminate()
-                repeated_process.wait(timeout=15)
-                repeat = {"passed": False, "error": "TimeoutError"}
-        checks = {"preparationStages": phases == ["mounting", "checking_current", "checking_package", "copying", "preparing_helper", "verifying", "fingerprinting", "unmounting"],
-                  "repeatNativeRelaunch": repeat.get("passed") is True and repeat.get("processPassed") is True,
-                  "replacement": worker.returncode == 0 and outcome.get("success") is True, "nativeRelaunch": relaunched.get("passed") is True,
-                  "backupPreserved": (directory / "backup.app").is_dir(),
-                  "version": json.loads((target / "Contents/Resources/version.json").read_text())["release"] == version}
-        report.write_text(json.dumps({"passed": all(checks.values()), "checks": checks, "version": {"release": version},
-                                      "diagnostics": {"phase": outcome.get("phase"), "errorCode": outcome.get("errorCode"), "helperReturnCode": worker.returncode,
-                                                      "preflightReport": (directory / "probe.json").is_file(), "receipt": receipt.is_file(),
-                                                      "relaunchChecks": relaunched.get("checks"), "relaunchError": relaunched.get("error"),
-                                                      "relaunchDiagnostics": relaunched.get("diagnostics"), "repeatRelaunch": repeat},
-                                      "architecture": platform.machine(), "scope": "frozen helper, isolated app copies, atomic replacement and Cocoa relaunch; no installed app or real records"}, indent=2))
+    audit_native_update(app, report)

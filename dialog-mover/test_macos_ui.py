@@ -18,6 +18,61 @@ BOOT = "window.pywebview={api:{agents:async()=>(INFO),sessions:async()=>(SESSION
 
 
 class MacUiTests(unittest.TestCase):
+    def test_native_close_barrier_drains_the_outstanding_bridge_reply(self):
+        bootstrap = BOOT.replace("({available:false})", "({available:true,version:'0.4.1',canInstall:true})") + """
+window.statusCalls=0;
+window.pywebview.api.start_update=async()=>({ok:true});
+window.pywebview.api.update_status=async()=>{window.statusCalls++;return {phase:'ready',progress:100}};
+window.pywebview.api.apply_update=()=>new Promise(resolve=>{window.finishHandoff=resolve});
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.get_by_role("button", name="下载并更新").click()
+                page.wait_for_function("typeof window.finishHandoff==='function'")
+                page.evaluate("() => { window.aiFirstFinishUpdate().then(result=>{window.closedBarrier=result}); }")
+                self.assertIsNone(page.evaluate("window.closedBarrier"))
+                page.evaluate("window.finishHandoff({ok:true,starting:true})")
+                page.wait_for_function("window.closedBarrier?.ready===true")
+                self.assertEqual(page.evaluate("window.closedBarrier.pendingUpdates"), 0)
+                page.get_by_text("正在更新并重新打开，请稍等…", exact=True).wait_for()
+                page.clock.fast_forward(5000)
+                self.assertEqual(page.evaluate("window.statusCalls"), 1)
+            finally:
+                browser.close()
+
+    def test_ready_step_is_replaced_before_waiting_for_the_handoff_response(self):
+        bootstrap = BOOT.replace("({available:false})", "({available:true,version:'0.4.1',canInstall:true})") + """
+window.updateState={phase:'preparing',step:'unmounting',progress:95};
+window.pywebview.api.start_update=async()=>({ok:true});
+window.pywebview.api.update_status=async()=>window.updateState;
+window.pywebview.api.apply_update=()=>new Promise(resolve=>{window.finishHandoff=resolve});
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.get_by_role("button", name="下载并更新").click()
+                page.get_by_text("正在释放安装包（8/8）", exact=False).wait_for()
+                page.clock.fast_forward(15000)
+                page.evaluate("window.updateState={phase:'ready',progress:100}")
+                page.clock.fast_forward(700)
+                page.wait_for_function("typeof window.finishHandoff==='function'")
+                self.assertIn("正在启动更新程序", page.locator("#workspace-message").inner_text())
+                page.evaluate("window.finishHandoff({error:'合成启动失败，当前版本未改动。'})")
+                page.get_by_text("合成启动失败，当前版本未改动。", exact=True).wait_for()
+            finally:
+                browser.close()
+
     def test_open_workspace_discovers_a_later_release_within_ten_minutes(self):
         bootstrap = BOOT + """
 window.checkCalls=0;

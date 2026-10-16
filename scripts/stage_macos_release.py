@@ -30,6 +30,8 @@ def validated_assets(directory: Path, release: str) -> list[Path]:
             result = json.loads(report.read_text())
             if result.get("passed") is not True or not result.get("checks") or not all(value is True for value in result["checks"].values()):
                 raise ValueError("Native app checks did not pass")
+            if kind == "update" and not {"nativeUpdateClick", "bridgeDrained", "nativeParentExit"}.issubset(result["checks"]):
+                raise ValueError("Native update click and bridge handoff checks are required")
             if kind != "smoke" and (result.get("architecture") != architecture or result.get("version", {}).get("release") != release):
                 raise ValueError("Native report version or architecture mismatch")
             target = directory / f"{kind}-test-{architecture}.json"

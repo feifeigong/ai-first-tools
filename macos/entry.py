@@ -49,6 +49,13 @@ class MacApi(Api):
         self._update_cancel = threading.Event()
         self._update_state = {"phase": "idle", "progress": 0}
         self._handing_off = False
+        self._update_closing = False
+        self._update_download = None
+        self._update_audit = False
+        self._update_trace = []
+        self._update_ui_ready = None
+        self._update_handoff_id = None
+        self._update_failure = None
 
     def workspace_info(self) -> dict:
         message = None
@@ -65,6 +72,8 @@ class MacApi(Api):
                 "smokeAudit": self._smoke, "updateMessage": message}
 
     def check_update(self) -> dict:
+        if self._update_audit:
+            return {"available": True, "version": self._package["version"], "canInstall": True}
         if self._smoke:
             self._smoke_check_calls += 1
             return {"available": True, "version": "synthetic-reminder-only", "canInstall": True}
@@ -102,7 +111,7 @@ class MacApi(Api):
 
     def start_update(self) -> dict:
         with self._update_gate:
-            if self._update_state["phase"] in ("downloading", "preparing", "ready", "restarting"):
+            if self._update_state["phase"] in ("downloading", "preparing", "ready", "starting", "restarting"):
                 return {"ok": True}
             if self._package is None:
                 return {"error": "请先检查更新。此版本没有完整的自动更新包时，可以打开下载页。"}
@@ -121,8 +130,15 @@ class MacApi(Api):
             with self._update_gate:
                 self._update_state = {"phase": phase, "progress": value, "step": step,
                                       "cancelRequested": self._update_cancel.is_set()}
+                if self._update_audit and step:
+                    self._update_trace.append(step)
         try:
-            job = updater.prepare(target, package, version_info()["release"], progress, self._update_cancel)
+            job = updater.prepare(target, package, version_info()["release"], progress, self._update_cancel,
+                                  download_asset=self._update_download)
+            if self._update_audit:
+                data = updater.read_job(job)
+                data["audit"] = True
+                updater.write_json(job, data)
             with self._update_gate:
                 if self._update_cancel.is_set():
                     updater.discard(job)
@@ -153,24 +169,73 @@ class MacApi(Api):
     def apply_update(self) -> dict:
         with self._update_gate:
             if self._handing_off:
-                return {"ok": True}
+                return {"ok": True, "starting": True}
             if self._prepared is None or self._update_cancel.is_set():
                 return {"error": "更新尚未准备好。"}
             if not super().can_close():
                 return {"waiting": True}
-            try:
-                updater.start_helper(self._prepared)
-            except (OSError, ValueError, updater.UpdateError):
-                return {"error": "暂时无法启动更新，当前版本可以继续使用。请稍后重试。"}
             self._handing_off = True
-            self._update_state = {"phase": "restarting", "progress": 100}
-        self._window.destroy()
-        return {"ok": True}
+            self._update_closing = False
+            self._update_ui_ready = None
+            self._update_failure = None
+            self._update_handoff_id = handoff_id = object()
+            self._update_state = {"phase": "starting", "progress": 100}
+            threading.Thread(target=self._launch_update, args=(self._prepared, handoff_id), daemon=True).start()
+        return {"ok": True, "starting": True}
+
+    def _launch_update(self, job: Path, handoff_id) -> None:
+        process = None
+        phase = "starting_helper"
+        acknowledged = threading.Event()
+
+        def close_after_bridge_drains(result):
+            # This is pywebview's one-way async callback: it needs no JS reply
+            # after the window is gone. The page first drains its update calls.
+            if not isinstance(result, dict) or result.get("ready") is not True or result.get("pendingUpdates") != 0:
+                acknowledged.set()
+                return
+            with self._update_gate:
+                if not self._handing_off or self._update_handoff_id is not handoff_id:
+                    return
+                self._update_ui_ready = result
+                self._update_closing = True
+                self._update_state = {"phase": "restarting", "progress": 100}
+            self._window.destroy()
+            acknowledged.set()
+
+        try:
+            process = updater.start_helper(job)
+            phase = "draining_bridge"
+            self._window.evaluate_js("window.aiFirstFinishUpdate()", callback=close_after_bridge_drains)
+            if not acknowledged.wait(10) or not self._update_closing:
+                raise updater.UpdateError("更新窗口未完成重启交接，当前版本未改动。请重试。")
+            phase = "closing_window"
+            if not self._window.events.closed.wait(10):
+                raise updater.UpdateError("窗口尚未安全关闭，当前版本未改动。请重试。")
+        except Exception as error:
+            if process is not None:
+                updater.stop_helper(process)
+            with self._update_gate:
+                if self._update_handoff_id is not handoff_id:
+                    return
+                self._update_handoff_id = None
+                self._update_failure = {"phase": phase, "errorCode": type(error).__name__}
+                self._handing_off = self._update_closing = False
+                self._update_state = {"phase": "error", "progress": 0,
+                                      "error": "更新重启交接未完成，当前版本未改动。可以重试或打开下载页。"}
+            if not self._window.events.closed.is_set():
+                try:
+                    self._window.evaluate_js("window.aiFirstResumeUpdate()")
+                except Exception:
+                    pass
 
     def can_close(self) -> bool:
         permitted = super().can_close()
-        if permitted and not self._handing_off:
-            self._update_cancel.set()
+        with self._update_gate:
+            if self._handing_off:
+                return permitted and self._update_closing
+            if permitted:
+                self._update_cancel.set()
         return permitted
 
 
@@ -317,11 +382,12 @@ def run() -> int:
     parser.add_argument("--smoke-test", action="store_true")
     parser.add_argument("--network-test", action="store_true")
     parser.add_argument("--update-test", action="store_true")
+    parser.add_argument("--update-ui-audit", type=Path)
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("This entry point runs on macOS. Windows uses workspace/AIFirst.Workspace.csproj.")
-    if (args.self_test or args.smoke_test or args.network_test or args.update_test) and args.report is None:
+    if (args.self_test or args.smoke_test or args.network_test or args.update_test or args.update_ui_audit) and args.report is None:
         parser.error("Tests require --report")
     if args.self_test:
         return 0 if self_check(args.report) else 1
@@ -330,12 +396,20 @@ def run() -> int:
     if args.update_test:
         updater.audit_update(updater.running_bundle(), args.report)
         return 0 if json.loads(args.report.read_text()).get("passed") is True else 1
+    fixture = None
+    if args.update_ui_audit:
+        import update_audit
+
+        fixture = update_audit.load_fixture(args.update_ui_audit, updater.running_bundle(), args.report)
     with tempfile.TemporaryDirectory(prefix="ai-first-macos-") as temporary:
-        if args.smoke_test:
+        if args.smoke_test or fixture:
             isolate_profile(Path(temporary))
         import fcntl
 
         state = appdata() / "AI一手工具工作台"
+        if fixture:
+            state = fixture["root"] / "isolated-state"
+            updater._audit_state = state / "updates"
         state.mkdir(parents=True, exist_ok=True)
         with (state / "workspace.lock").open("a") as instance:
             try:
@@ -343,18 +417,24 @@ def run() -> int:
             except BlockingIOError:
                 return 0
             api = MacApi(args.smoke_test)
+            if fixture:
+                update_audit.configure(api, fixture)
             window = webview.create_window("AI一手工具工作台", js_api=api,
                                            width=1280, height=820, min_size=(960, 640), background_color="#F6F8FB", text_select=False)
             api.bind(window)
             window.events.before_show += load_bundled_content
-            if args.smoke_test:
+            if args.smoke_test or fixture:
                 from cocoa_audit import observe_navigation
 
                 window.events.before_show += observe_navigation
             window.events.loaded += signal_bridge_ready
             window.events.closing += lambda: window.evaluate_js("window.aiFirstBusyNotice && window.aiFirstBusyNotice()") if not api.can_close() else None
             worker = (lambda: smoke_check(window, api, args.report)) if args.smoke_test else None
+            if fixture:
+                worker = lambda: update_audit.click_update(window, api, fixture["root"])
             start_cocoa(worker)
+            if fixture:
+                return 0 if update_audit.finish_ui_report(window, api, args.report) else 1
     if args.smoke_test:
         return 0 if args.report.is_file() and json.loads(args.report.read_text(encoding="utf-8")).get("passed") else 1
     return 0

@@ -335,9 +335,20 @@ class MacResourceTests(unittest.TestCase):
                 (source / name).write_bytes(payload)
                 (source / f"SHA256SUMS-{architecture}.txt").write_text(f"{hashlib.sha256(payload).hexdigest()}  {name}\n")
                 for kind in ("self", "smoke", "network", "update"):
-                    (source / f"{kind}-test.json").write_text(json.dumps({"passed": True, "checks": {"synthetic": True},
+                    checks = {"synthetic": True}
+                    if kind == "update":
+                        checks.update({"nativeUpdateClick": True, "bridgeDrained": True, "nativeParentExit": True})
+                    (source / f"{kind}-test.json").write_text(json.dumps({"passed": True, "checks": checks,
                                                                           "architecture": architecture, "version": {"release": release}}))
             self.assertEqual(len(validated_assets(directory, release)), 11)
+            update_report = directory / "macos-arm64/update-test.json"
+            original_update = update_report.read_text()
+            incomplete = json.loads(original_update)
+            incomplete["checks"].pop("bridgeDrained")
+            update_report.write_text(json.dumps(incomplete))
+            with self.assertRaisesRegex(ValueError, "bridge handoff checks are required"):
+                validated_assets(directory, release)
+            update_report.write_text(original_update)
             report = directory / "macos-arm64/network-test.json"
             report.write_text(json.dumps({"passed": False, "checks": {"synthetic": False}}))
             with self.assertRaisesRegex(ValueError, "checks did not pass"):

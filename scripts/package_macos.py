@@ -47,7 +47,7 @@ def main() -> None:
             environment["SSL_CERT_FILE"] = str(output / "no-host-python-ca.pem")
             environment["SSL_CERT_DIR"] = str(output / "no-host-python-ca")
         subprocess.run([str(launcher), flag, "--report", str(output / (flag.removeprefix("--") + ".json"))],
-                       check=True, timeout=240 if flag == "--update-test" else 120, env=environment)
+                       check=True, timeout=360 if flag == "--update-test" else 120, env=environment)
     version = json.loads((ROOT / "macos" / "version.json").read_text(encoding="utf-8"))["release"]
     staging = output / "dmg-content"
     staging.mkdir(exist_ok=True)
