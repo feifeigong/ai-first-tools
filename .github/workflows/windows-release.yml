@@ -129,8 +129,9 @@ jobs:
           if ($reinstall.ExitCode -ne 0 -or (Get-Content -LiteralPath $extra -Raw).Trim() -ne 'synthetic extra file must survive') { throw 'Silent reinstall or extra-file protection failed' }
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json --stage reinstall
           if ($LASTEXITCODE) { throw 'Reinstallation did not restore the running background' }
-          $uninstall=Start-Process -FilePath (Join-Path $target 'Uninstall.exe') -ArgumentList '/S' -PassThru -WindowStyle Hidden
-          $uninstall.WaitForExit()
+          # NSIS uninstallation delegates to a temporary child. This operation
+          # does not restore a background, so wait for the full uninstall tree.
+          $uninstall=Start-Process -FilePath (Join-Path $target 'Uninstall.exe') -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
           $deadline=(Get-Date).AddSeconds(30)
           while ((Test-Path -LiteralPath $app) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 250 }
           if ($uninstall.ExitCode -ne 0 -or (Test-Path -LiteralPath $app) -or !(Test-Path -LiteralPath $extra)) { throw 'Uninstall protection failed' }

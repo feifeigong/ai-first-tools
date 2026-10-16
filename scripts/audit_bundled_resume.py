@@ -87,7 +87,8 @@ def main() -> None:
         require(value['running'] and value['autostart'] and value['watcherCount'] == 1)
         checks['realReinstallRestoredBackground'] = True
     else:
-        require(not binary.exists() and read_run() is None)
+        if binary.exists() or read_run() is not None:
+            raise AssertionError('Uninstall incomplete: ' + json.dumps({'packagedExecutablePresent': binary.exists(), 'startupEntryPresent': read_run() is not None}))
         query = "@(Get-CimInstance Win32_Process -Filter \"Name='AI一手续跑后台.exe'\" | Where-Object { $_.ExecutablePath -eq '" + str(binary).replace("'","''") + "' }).Count"
         result = subprocess.run([str(shell),'-NoProfile','-NonInteractive','-Command',query],capture_output=True,timeout=30)
         require(result.returncode == 0 and result.stdout.strip() == b'0')
