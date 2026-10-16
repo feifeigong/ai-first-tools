@@ -1,16 +1,31 @@
 # Mac 移植验证记录
 
-当前公开为 [preview.11](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.11)，2026-10-16 06:09:43 UTC 发布。新导入回归、源码与资产核验见下方“preview.11 发布证据”；历史失败记录继续保留。
+当前公开为 [preview.12](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.12)，2026-10-16 08:07:50 UTC 发布。本轮窗口交接修复、原生按钮更新与资产核验见下方“preview.12 发布证据”；历史记录继续保留。
 
 2026-10-16 用户再次报告校验转圈后，确认当时实际运行版本仍为 `preview.8`，且无步骤/秒数，原提示已与旧版源码核对。当时尚未确认安装 preview.10，未将此反馈作为新版失败或用户真机已通过的证据，后续请用户手动替换；用户随后确认已安装 preview.10，新的导入回归见下方。旧版当次系统阻塞的具体原因仍未知。
 
-## 2026-10-16 preview.12 候选：8/8 后窗口和取消均无响应
+## 2026-10-16 preview.12 已发布：8/8 后窗口和取消均无响应
 
-用户在从已确认的 preview.10 更新后报告“正在释放安装包（8/8）、已用时 15 秒”不再变化，并确认取消和窗口均卡住。没有取得其系统线程栈，不能断言其当次 hdiutil 阻塞或已确定完整设备根因，更不能重新要求用户证明是否仍为 preview.8。
+用户此前已确认安装 preview.10，本轮软件内更新时报告“正在释放安装包（8/8）、已用时 15 秒”不再变化，并确认取消和窗口均卡住。没有取得其系统线程栈，不能断言其当次 hdiutil 阻塞或已确定完整设备根因，更不能重新要求用户证明是否仍为 preview.8。
 
 在修改前新增两个隔离回归，均失败：慢 helper 启动期间 update_status 被 apply_update 的状态锁阻塞；页面在等待 apply_update 返回时仍显示精确的“8/8、15 秒”。锁定 pywebview 的桥使用单独线程执行 API，再同步 evaluate_js 返回结果；Cocoa 关闭会删除视图，因此 API 自身先关窗再返回还存在返回/关窗竞争。修订为 apply_update 立即发布 starting 状态并返回，由后台启动 helper；不持有状态锁等待进程。页面先显示启动步骤，排空在途更新请求，再通过 pywebview 不需要 JS 回信的异步 callback 关窗。启动失败收回本次 helper、恢复可重试状态；完整性、版本、架构及搬运退出保护保留。
 
-旧冻结审计直接调用 prepare/start_helper，绕过真实窗口点击和父进程退出，覆盖不足。新审计启动隔离签名 APP 的 Cocoa 窗口，经真实 JS/Python 桥点击检查/下载更新，要求八步、请求排空、原生窗口关闭和父进程自然退出，再验证实际 helper、原子替换、备份、新版 Cocoa 重开和再次独立重开。公开暂存也要求三个新增检查，不接受仅有旧六项的报告。下载使用隔离合成 DMG 替身；系统 HTTPS 单独保留。两架构运行结果和独立发布核验仍待完成。
+旧冻结审计直接调用 prepare/start_helper，绕过真实窗口点击和父进程退出，覆盖不足。新审计启动隔离签名 APP 的 Cocoa 窗口，经真实 JS/Python 桥点击检查/下载更新，要求八步、请求排空、原生窗口关闭和父进程自然退出，再验证实际 helper、原子替换、备份、新版 Cocoa 重开和再次独立重开。公开暂存也要求三个新增检查，不接受仅有旧六项的报告。下载使用隔离合成 DMG 替身；系统 HTTPS 单独保留。两架构运行结果和独立发布核验均已通过；隔离原生通过不是用户设备的实际验收。
+
+### preview.12 发布证据
+
+[公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.12)，2026-10-16 08:07:50 UTC 公开。不可变标签和安装包源码为 `553584b7bca40f13c1f0aaee2713fb82ba1d17f6`；后续文档提交不重做二进制。[同批两架构原生构建](https://github.com/feifeigong/ai-first-tools/actions/runs/38861141937) 首轮完成：arm64、x86_64 各 104 项共享/隔离检查、10 项原生分页/本机模拟续聊检查通过，含 preview.11 的缺少工具返回回归。冻结资源 7 项、Cocoa 页面/桥/自动提醒 9 项、系统 HTTPS 3 项、完整窗口更新 9 项均通过。
+
+两份实际 update-test 报告均为 passed=true，九项 preparationStages、nativeUpdateClick、bridgeDrained、nativeParentExit、replacement、nativeRelaunch、backupPreserved、version、repeatNativeRelaunch 全 true，父进程和 helper 返回码均为 0，phase=complete，handoffFailure=null。此次从真实冻结 Cocoa 窗口经 JS/Python 桥点更新，验证八步、消息排空、旧进程退出，再执行 helper 原子交换、备份、新版原生重开及再次独立打开；没有用启动返回码或无窗口的 helper 测试代替交接。
+
+[独立发布核验](https://github.com/feifeigong/ai-first-tools/actions/runs/38871513085) 单独下载原 CI 与草稿的全部 11 个文件，源码标签、名称、大小及 SHA-256 完全一致后公开（发布 ID `414696669`）。本地另下载八份小报告，逐个核对 digest 与检查项。匿名公开入口实测两个芯片从 preview.1–11 均选到 preview.12，同版不提示，公开 SHA 清单一致。[Windows 回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38861141802) 的 106 项后端、30 项界面、WPF 构建及自检全部通过，Windows 公开安装包仍为 v0.3.8。
+
+未读取真实对话/认证，未请求在线模型，也未操控用户实际 Mac。下载传输仍用隔离合成 DMG，系统 HTTPS 检查另行保留；不称为用户公网完整升级。已卡住的旧窗口不能靠发布自动改写，确认无搬运任务后仅关闭工作台，再用完整 DMG 替换到 preview.12。保留源、旧副本、备份与全部历史兼容修复；用户设备的实际恢复仍待新版运行结果。
+
+| preview.12 文件后缀 | 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| `arm64.dmg` | 23309337 | `297709a025e21e3280e4ff4291e6f910fd07001e258f7af9541aaf63039e115d` |
+| `x86_64.dmg` | 24836896 | `50f4c7121fdf9c8f6f256136430157a78438b80858d027ca5be9aa8be6dfd2bd` |
 
 ## 2026-10-16 preview.11 已发布：修正缺少工具返回导致整条导入失败
 
