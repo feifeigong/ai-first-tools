@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -35,7 +37,11 @@ public partial class MainWindow : Window
     private readonly string updateSettings;
     private readonly string? updateConfiguration;
     private readonly string? updateTool;
-    private readonly DispatcherTimer updateTimer = new() { Interval = TimeSpan.FromHours(6) };
+    private readonly DispatcherTimer updateTimer = new() { Interval = TimeSpan.FromSeconds(30) };
+    private readonly UpdateCheckSchedule updateSchedule = new();
+    private readonly Func<DateTimeOffset> updateClock;
+    private string? announcedUpdate;
+    private bool updateFailureShown;
     private CancellationTokenSource? downloading;
     private UpdateRelease? availableUpdate;
     private string? preparedUpdate;
@@ -47,9 +53,10 @@ public partial class MainWindow : Window
 
     public MainWindow(string configuration, string? toolOverride, string? report = null, bool developmentTools = false) : this(configuration, toolOverride, report, developmentTools, new UpdateClient()) { }
 
-    internal MainWindow(string configuration, string? toolOverride, string? report, bool developmentTools, UpdateClient updateClient)
+    internal MainWindow(string configuration, string? toolOverride, string? report, bool developmentTools, UpdateClient updateClient, Func<DateTimeOffset>? updateClock = null)
     {
         updates = updateClient;
+        this.updateClock = updateClock ?? (() => DateTimeOffset.UtcNow);
         updateSettings = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(configuration))!, "updates");
         updateConfiguration = developmentTools ? configuration : null;
         updateTool = toolOverride;
@@ -90,6 +97,9 @@ public partial class MainWindow : Window
         };
         monitor.Tick += MonitorSessions;
         updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
+        Activated += WakeUpdateCheck;
+        NetworkChange.NetworkAvailabilityChanged += NetworkUpdateCheck;
+        Microsoft.Win32.SystemEvents.PowerModeChanged += PowerUpdateCheck;
     }
 
     private void ShowLogo(ImageSource? image)
@@ -317,6 +327,8 @@ public partial class MainWindow : Window
         lifetime.Cancel();
         monitor.Stop();
         updateTimer.Stop();
+        NetworkChange.NetworkAvailabilityChanged -= NetworkUpdateCheck;
+        Microsoft.Win32.SystemEvents.PowerModeChanged -= PowerUpdateCheck;
         downloading?.Cancel();
         updates.Dispose();
         host?.Use(null);
@@ -378,8 +390,26 @@ public partial class MainWindow : Window
 
     private async Task CheckAfterOpeningAsync()
     {
-        try { await Task.Delay(3000, lifetime.Token); await Task.Run(UpdateRunner.CleanupCompletedJobs, lifetime.Token); await CheckUpdatesAsync(false); }
+        try { await Task.Delay(3000, lifetime.Token); await CheckUpdatesAsync(false); }
         catch (OperationCanceledException) { }
+        // Cache housekeeping must not delay or prevent the startup request.
+        try { await Task.Run(UpdateRunner.CleanupCompletedJobs, lifetime.Token); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OperationCanceledException) { if (!released) App.Log(exception); }
+    }
+
+    private void WakeUpdateCheck(object? sender, EventArgs args)
+    {
+        if (IsLoaded && !released && updateSchedule.IsDue(updateClock(), wake: true)) _ = CheckUpdatesAsync(false, true);
+    }
+
+    private void NetworkUpdateCheck(object? sender, NetworkAvailabilityEventArgs args)
+    {
+        if (args.IsAvailable && !released) Dispatcher.BeginInvoke(() => WakeUpdateCheck(null, EventArgs.Empty));
+    }
+
+    private void PowerUpdateCheck(object sender, Microsoft.Win32.PowerModeChangedEventArgs args)
+    {
+        if (args.Mode == Microsoft.Win32.PowerModes.Resume && !released) Dispatcher.BeginInvoke(() => WakeUpdateCheck(null, EventArgs.Empty));
     }
 
     private async void CheckUpdateClick(object sender, RoutedEventArgs args)
@@ -388,44 +418,34 @@ public partial class MainWindow : Window
         else await CheckUpdatesAsync(true);
     }
 
-    private async Task CheckUpdatesAsync(bool manual)
+    internal async Task CheckUpdatesAsync(bool manual, bool wake = false)
     {
         if (released || closing || checkingUpdates || downloading is not null) return;
+        if (!manual && !updateSchedule.IsDue(updateClock(), wake)) return;
         var timestamp = Path.Combine(updateSettings, "checked-at.txt");
-        if (!manual)
-        {
-            try
-            {
-                if (File.Exists(timestamp) && DateTimeOffset.TryParse(File.ReadAllText(timestamp), out var checkedAt) && checkedAt <= DateTimeOffset.UtcNow && DateTimeOffset.UtcNow - checkedAt < TimeSpan.FromHours(6))
-                {
-                    var cachedPath = Path.Combine(updateSettings, "latest-release.json");
-                    if (File.Exists(cachedPath))
-                    {
-                        var cached = System.Text.Json.JsonSerializer.Deserialize<UpdateRelease>(File.ReadAllText(cachedPath), UpdatePackage.Json);
-                        if (cached is not null && UpdateClient.ParseVersion(cached.Version) > UpdateClient.ParseVersion(UpdateClient.CurrentVersion))
-                        {
-                            UpdateClient.ValidateAsset(cached.Installer, cached.Version, "AI-First-Tools-Setup-" + cached.Version + ".exe");
-                            UpdateClient.ValidateAsset(cached.Portable, cached.Version, "AI-First-Tools-Portable-" + cached.Version + "-win-x64.zip");
-                            UpdateClient.ValidateAsset(cached.Checksums, cached.Version, "SHA256SUMS.txt");
-                            availableUpdate = cached;
-                            ShowUpdateOffer();
-                            CheckUpdateButton.Content = "有新版本";
-                        }
-                    }
-                    return;
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or ArgumentException or NullReferenceException) { App.Log(exception); }
-        }
+        updateSchedule.Started(updateClock());
         checkingUpdates = true;
         CheckUpdateButton.IsEnabled = false;
         CheckUpdateButton.Content = "检查中…";
         try
         {
             availableUpdate = await updates.CheckAsync(lifetime.Token);
+            updateSchedule.Succeeded(updateClock());
             if (availableUpdate?.Version != preparedVersion) preparedUpdate = null;
             if (released || closing) return;
-            if (availableUpdate is not null) ShowUpdateOffer();
+            CheckUpdateButton.ToolTip = "已自动检查 · " + DateTime.Now.ToString("HH:mm");
+            if (updateFailureShown && UpdateTitle.Text == "暂时连不上更新服务") UpdateBanner.Visibility = Visibility.Collapsed;
+            updateFailureShown = false;
+            if (availableUpdate is null)
+            {
+                announcedUpdate = null;
+                if (UpdateTitle.Text.StartsWith("发现新版本", StringComparison.Ordinal)) UpdateBanner.Visibility = Visibility.Collapsed;
+            }
+            if (availableUpdate is not null && (manual || announcedUpdate != availableUpdate.Version))
+            {
+                ShowUpdateOffer();
+                announcedUpdate = availableUpdate.Version;
+            }
             else if (manual) ShowUpdateMessage("已是最新版本 · v" + UpdateClient.CurrentVersion, "以后发布新工具或新版本，这里会提醒您。", "知道了");
             try
             {
@@ -437,7 +457,15 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            if (!released && manual) ShowUpdateMessage("暂时连不上更新服务", "可以继续使用。请检查网络，稍后点击右上角再试。", "知道了");
+            var limited = exception is HttpRequestException http && (http.StatusCode == System.Net.HttpStatusCode.Forbidden || (int?)http.StatusCode == 429);
+            updateSchedule.Failed(updateClock(), limited);
+            if (!released && !lifetime.IsCancellationRequested)
+            {
+                CheckUpdateButton.ToolTip = "暂时连不上更新服务，将自动重试";
+                if (manual || !updateFailureShown && availableUpdate is null)
+                    ShowUpdateMessage("暂时连不上更新服务", limited ? "检查次数暂时达到上限，将在一小时后自动重试。" : "将自动重试，恢复连接后会主动提示新版本。可以继续使用。", "知道了");
+                updateFailureShown = true;
+            }
             if (!released && exception is not OperationCanceledException) App.Log(exception);
         }
         finally

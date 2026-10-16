@@ -146,6 +146,87 @@ internal static class UpdateSelfTests
             try { Task.Run(() => client.CheckAsync(CancellationToken.None)).GetAwaiter().GetResult(); } catch (HttpRequestException) { rejected = true; }
             require(rejected);
         });
+        check("Automatic checks repeat after ten minutes and wake checks are throttled", () =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var schedule = new UpdateCheckSchedule();
+            require(schedule.IsDue(now));
+            schedule.Started(now); schedule.Succeeded(now);
+            require(!schedule.IsDue(now.AddMinutes(9)) && schedule.IsDue(now.AddMinutes(10)));
+            require(!schedule.IsDue(now.AddSeconds(119), true) && schedule.IsDue(now.AddMinutes(2), true));
+            require(new UpdateCheckSchedule().IsDue(now.AddSeconds(1)));
+        });
+        check("Automatic failures retry with backoff and wake never bypasses rate limits", () =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var schedule = new UpdateCheckSchedule();
+            foreach (var minutes in new[] { 1, 5, 15, 60, 60 })
+            {
+                schedule.Started(now); schedule.Failed(now, false);
+                require(!schedule.IsDue(now.AddMinutes(minutes).AddSeconds(-1), true));
+                now = now.AddMinutes(minutes);
+                require(schedule.IsDue(now));
+            }
+            schedule.Started(now); schedule.Failed(now, true);
+            require(!schedule.IsDue(now.AddMinutes(59), true) && schedule.IsDue(now.AddHours(1)));
+            schedule.Succeeded(now); schedule.Started(now); schedule.Failed(now, false);
+            require(schedule.IsDue(now.AddMinutes(1)));
+        });
+        void Wait(Task task)
+        {
+            if (!task.IsCompleted)
+            {
+                var frame = new System.Windows.Threading.DispatcherFrame();
+                var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+                _ = task.ContinueWith(_ => dispatcher.BeginInvoke(() => frame.Continue = false));
+                System.Windows.Threading.Dispatcher.PushFrame(frame);
+            }
+            task.GetAwaiter().GetResult();
+        }
+        check("New release published while open shows a download prompt without any check click or stale cache", () =>
+        {
+            var area = Path.Combine(root, "automatic-release");
+            Directory.CreateDirectory(Path.Combine(area, "updates"));
+            var now = DateTimeOffset.UtcNow;
+            File.WriteAllText(Path.Combine(area, "updates", "checked-at.txt"), now.ToString("O"));
+            File.WriteAllText(Path.Combine(area, "updates", "latest-release.json"), "null");
+            var requests = 0;
+            var window = new MainWindow(Path.Combine(area, "tools.json"), null, null, true,
+                new UpdateClient(new FakeHttp(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(++requests == 1 ? "[]" : JsonSerializer.Serialize(new[] { Release("0.3.99") })) })), () => now);
+            try
+            {
+                Wait(window.CheckUpdatesAsync(false));
+                require(requests == 1);
+                now = now.AddMinutes(10);
+                Wait(window.CheckUpdatesAsync(false));
+                require(requests == 2);
+                require(((System.Windows.FrameworkElement)window.FindName("UpdateBanner")).Visibility == System.Windows.Visibility.Visible);
+                require(((System.Windows.Controls.TextBlock)window.FindName("UpdateTitle")).Text == "发现新版本 v0.3.99");
+                require(((System.Windows.Controls.Button)window.FindName("InstallUpdateButton")).Content.ToString() == "下载并更新");
+                ((System.Windows.FrameworkElement)window.FindName("UpdateBanner")).Visibility = System.Windows.Visibility.Collapsed;
+                now = now.AddMinutes(10);
+                Wait(window.CheckUpdatesAsync(false));
+                require(requests == 3 && ((System.Windows.FrameworkElement)window.FindName("UpdateBanner")).Visibility == System.Windows.Visibility.Collapsed);
+            }
+            finally { window.ReleaseTools(); }
+        });
+        check("Automatic network failure recovers and displays the new version without a click", () =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var requests = 0;
+            var window = new MainWindow(Path.Combine(root, "automatic-retry", "tools.json"), null, null, true,
+                new UpdateClient(new FakeHttp(_ => ++requests == 1 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new[] { Release("0.3.99") })) })), () => now);
+            try
+            {
+                Wait(window.CheckUpdatesAsync(false));
+                require(((System.Windows.Controls.TextBlock)window.FindName("UpdateDescription")).Text.Contains("将自动重试"));
+                now = now.AddSeconds(59); Wait(window.CheckUpdatesAsync(false, true)); require(requests == 1);
+                now = now.AddSeconds(2); Wait(window.CheckUpdatesAsync(false));
+                require(requests == 2 && ((System.Windows.Controls.TextBlock)window.FindName("UpdateTitle")).Text == "发现新版本 v0.3.99");
+                require(((System.Windows.Controls.Button)window.FindName("InstallUpdateButton")).IsEnabled);
+            }
+            finally { window.ReleaseTools(); }
+        });
 
         PackageManifest Fixture(string directory, string fixtureVersion, params (string Name, string Text)[] files)
         {

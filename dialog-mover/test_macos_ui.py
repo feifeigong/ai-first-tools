@@ -147,6 +147,60 @@ window.pywebview.api.check_update=async()=>{window.checkCalls++;return {availabl
             finally:
                 browser.close()
 
+    def test_lost_initialization_reply_recovers_without_a_click_and_ignores_late_reply(self):
+        bootstrap = BOOT + """
+window.infoCalls=0;window.checkCalls=0;
+window.pywebview.api.workspace_info=()=>{window.infoCalls++;return window.infoCalls===1?new Promise(resolve=>{window.lateInfo=resolve}):Promise.resolve({version:'0.4.0',automaticChecks:true})};
+window.pywebview.api.check_update=async()=>{window.checkCalls++;return {available:true,version:'0.4.1',canInstall:true}};
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.wait_for_function("window.infoCalls===1")
+                page.clock.fast_forward(10100)
+                page.get_by_text("工作台连接暂未就绪，正在自动重试。您无需点击检查更新。", exact=True).wait_for()
+                page.clock.fast_forward(1100)
+                page.wait_for_function("window.infoCalls===2")
+                page.clock.fast_forward(2100)
+                page.get_by_role("button", name="下载并更新", exact=True).wait_for()
+                page.evaluate("window.lateInfo({version:'obsolete',automaticChecks:false})")
+                self.assertEqual(page.locator("#workspace-version").text_content(), "Mac · v0.4.0")
+                self.assertEqual(page.evaluate("window.checkCalls"), 1)
+            finally:
+                browser.close()
+
+    def test_lost_check_reply_retries_and_ignores_late_negative_result(self):
+        bootstrap = BOOT + """
+window.checkCalls=0;
+window.pywebview.api.check_update=()=>{window.checkCalls++;return window.checkCalls===1?new Promise(resolve=>{window.lateCheck=resolve}):Promise.resolve({available:true,version:'0.4.1',canInstall:true})};
+"""
+        with tempfile.TemporaryDirectory() as temporary, sync_playwright() as runtime:
+            resources = prepare(Path(temporary))
+            browser = runtime.chromium.launch(channel="msedge" if sys.platform == "win32" else None, headless=True)
+            try:
+                page = browser.new_page()
+                page.clock.install()
+                page.add_init_script(bootstrap)
+                page.goto((resources / "ui/index.html").as_uri())
+                page.get_by_text("Mac · v0.4.0", exact=True).wait_for()
+                page.clock.fast_forward(2100)
+                page.wait_for_function("window.checkCalls===1")
+                page.clock.fast_forward(30100)
+                self.assertIn("将自动重试", page.locator("#workspace-message").text_content())
+                page.clock.fast_forward(61000)
+                page.wait_for_function("window.checkCalls===2")
+                page.get_by_role("button", name="下载并更新", exact=True).wait_for()
+                page.evaluate("window.lateCheck({available:false})")
+                self.assertTrue(page.get_by_role("button", name="下载并更新", exact=True).is_visible())
+                self.assertIn("0.4.1", page.locator("#workspace-message").text_content())
+            finally:
+                browser.close()
+
     def test_known_update_survives_transient_failure_without_reopening_dismissed_notice(self):
         bootstrap = BOOT + """
 window.checkCalls=0;
@@ -353,7 +407,7 @@ window.pywebview.api.check_update=()=>{window.checkCalls++;return new Promise(re
                 page.get_by_text("Mac · v0.4.0", exact=True).wait_for()
                 page.clock.fast_forward(2100)
                 page.wait_for_function("window.checkCalls===1")
-                page.clock.fast_forward(121000)
+                page.clock.fast_forward(15000)
                 page.evaluate("window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'))")
                 page.clock.fast_forward(1100)
                 self.assertEqual(page.evaluate("window.checkCalls"), 1)

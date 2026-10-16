@@ -83,7 +83,7 @@ internal sealed class UpdateClient : IDisposable
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromSeconds(20));
         using var response = await GetAsync(new Uri(ReleasesApi), false, deadline.Token);
-        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden || (int)response.StatusCode == 429) throw new HttpRequestException("检查更新太频繁，请稍后再试。");
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden || (int)response.StatusCode == 429) throw new HttpRequestException("检查更新太频繁，请稍后再试。", null, response.StatusCode);
         response.EnsureSuccessStatusCode();
         var bytes = await ReadLimitedAsync(response, 4 * 1024 * 1024, deadline.Token);
         return SelectRelease(Encoding.UTF8.GetString(bytes), CurrentVersion);

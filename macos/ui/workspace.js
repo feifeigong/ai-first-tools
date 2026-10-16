@@ -43,6 +43,14 @@
   const wakeInterval = 2 * 60 * 1000;
   const retryDelays = [60000, 300000, 900000, 3600000];
   const startRetryDelays = [1000, 5000, 30000, 60000];
+  // A lost bridge reply must not leave checking/initializing true indefinitely.
+  const bridgeRead = (name, timeout) => {
+    let timer;
+    return Promise.race([
+      Promise.resolve().then(() => window.pywebview.api[name]()),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("bridge_timeout")), timeout); })
+    ]).finally(() => clearTimeout(timer));
+  };
   const scheduleCheck = delay => {
     if (!automaticChecks) return;
     clearTimeout(checkTimer);
@@ -99,11 +107,11 @@
       announcedVersion = null;
       download.hidden = true;
       if (manual) show(result.error, result.canOpenDownloads, "打开下载页");
-      else if (!failureNotice) show("暂时没能检查更新，将自动重试。您可以继续使用。");
+      else if (!failureNotice) show(`${result.error} 将自动重试，恢复连接后会主动提示新版本。`);
       if (manual || !failureNotice) failureNotice = message.textContent;
     };
     try {
-      const result = await window.pywebview.api.check_update();
+      const result = await bridgeRead("check_update", 30000);
       if (result.error) showFailure(result);
       else {
         retryCount = 0;
@@ -231,7 +239,7 @@
     clearTimeout(startTimer);
     initializing = true;
     try {
-      const info = await window.pywebview.api.workspace_info();
+      const info = await bridgeRead("workspace_info", 10000);
       initialized = true;
       startRetryCount = 0;
       if (initializationNotice && message.textContent === initializationNotice) notice.hidden = true;
