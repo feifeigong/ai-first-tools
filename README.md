@@ -16,11 +16,11 @@ Windows 另含 **Codex 自动续跑** 控制页，连接本机已有续跑工具
 
 ### Mac 版
 
-**[⬇ Mac 预览版下载（preview.13 · Copilot Desktop 历史搬出）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.13)**
+**[⬇ Mac 预览版下载（preview.14 · 自动检查恢复）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.14)**
 
 苹果 M 系列选 `macos-arm64.dmg`，Intel Mac 选 `macos-x86_64.dmg`。打开 DMG，拖到「应用程序」，之后直接打开，不需要源码或开发环境。
 
-有新版会自动出现 **「下载并更新」**，点一次即可下载、校验、更新并重新打开。组件就绪后约两秒检查，持续打开每十分钟补查，返回窗口或网络恢复时也会补查（有节流及失败退避）。初始化暂时失败会自动恢复，已发现的可信更新不会因临时断网消失。preview.1/2 需要最后一次手动替换到本版；preview.3 及之后可软件内升级，旧版没提醒时先点一次「检查更新」。保留完整长对话分页修复。能否连接 GitHub 仍取决于本机网络。
+有新版会自动出现 **「下载并更新」**，点一次即可下载、校验、更新并重新打开。组件就绪后约两秒检查，持续打开每十分钟补查，返回窗口或网络恢复时也会补查（有节流及失败退避）。preview.14 增加初始化与检查一直没有回复时的超时恢复，失败会自动重试，迟到的旧响应不能覆盖新提示。preview.1/2 需要最后一次手动替换到本版；preview.3 及之后可软件内升级，运行中的旧检测如果已卡住，需正常重开才能重新触发启动检查。保留完整长对话分页修复。能否连接 GitHub 仍取决于本机网络。
 
 ![Mac 工作台布局预览](docs/assets/macos-preview.png)
 
@@ -30,7 +30,7 @@ Windows 另含 **Codex 自动续跑** 控制页，连接本机已有续跑工具
 
 ### 推荐：Windows 安装版
 
-**[⬇ 下载 Windows 安装包 v0.3.10](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.10/AI-First-Tools-Setup-0.3.10.exe)**
+**[⬇ 下载 Windows 安装包 v0.3.11](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.11/AI-First-Tools-Setup-0.3.11.exe)**
 
 1. 下载上面的安装包，双击打开。
 2. 点击「安装」，等它完成。
@@ -42,7 +42,7 @@ Windows 另含 **Codex 自动续跑** 控制页，连接本机已有续跑工具
 
 ### 可选：Windows 免安装版
 
-**[⬇ 下载免安装压缩包 v0.3.10](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.10/AI-First-Tools-Portable-0.3.10-win-x64.zip)**
+**[⬇ 下载免安装压缩包 v0.3.11](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.11/AI-First-Tools-Portable-0.3.11-win-x64.zip)**
 
 解压**整个压缩包**，进入文件夹，双击「AI一手工具工作台.exe」。不能只拿走一个 EXE，也不要直接在压缩包里面运行。可以给这个 EXE 创建桌面快捷方式，以后不用再找文件夹。
 

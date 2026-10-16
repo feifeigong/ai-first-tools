@@ -1,6 +1,8 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
-当前公开 [preview.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.13)，安装包源码 `249684ec97e651ec7f47267df266f20fd0434eed`，新增 Copilot Desktop 本机历史搬出。两架构各 120+10 项及 7/9/3/9 项冻结检查通过，11 个原资产独立下载核对后公开；匿名更新选择与公开校验清单核对通过。范围、共享会话标签和未验收边界见 [COPILOT.md](COPILOT.md)、[MACOS-QA.md](MACOS-QA.md)。
+当前公开 [preview.14](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.14)，安装包源码 `9a4626188bab5a7f63750ce7352de1a2384554a4`。自动检查无回复时增加 10/30 秒超时恢复与迟到响应隔离；旧脚本两项失败，修复后 20 项界面检查通过。两架构原生 7/9/3/9 项冻结检查、全部 11 资产独立核验通过，匿名选择确认 preview.12 能选到 preview.14。用户 Mac 实机根因和提示仍未验收；不要把“公开接口能选到”说成“其设备已经自动提示”。Windows v0.3.11 同源码修复六小时负缓存，原开发目录另一项内置续跑工作未覆盖。证据见 MACOS-QA.md、UPDATER-QA.md；下文为历史记录。
+
+此前公开 [preview.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.13)，安装包源码 `249684ec97e651ec7f47267df266f20fd0434eed`，新增 Copilot Desktop 本机历史搬出。两架构各 120+10 项及 7/9/3/9 项冻结检查通过，11 个原资产独立下载核对后公开；匿名更新选择与公开校验清单核对通过。范围、共享会话标签和未验收边界见 [COPILOT.md](COPILOT.md)、[MACOS-QA.md](MACOS-QA.md)。
 
 ## 可直接给新对话的背景
 

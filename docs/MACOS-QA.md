@@ -1,5 +1,20 @@
 # Mac 移植验证记录
 
+## 2026-10-16：preview.14 已发布，自动检查无返回恢复
+
+用户实际版本为 preview.12，要求无需点击检查就提示下载。匿名公开查询与严格安装包选择能从 preview.12 识别当时的 preview.13，不能把用户现象直接归因于错误版本或发布未完成。旧 UI 对一直不返回的 workspace_info/check_update 无超时，初始化/检查标记会一直占用；两个新增合成桥测试在旧脚本均失败。preview.14 增加 10/30 秒恢复并沿用失败退避，迟到响应不能撤掉新提示。修复后本机 20 项 Mac 界面、56 项路径/更新单测全通过。
+
+安装包与标签源码 `9a4626188bab5a7f63750ce7352de1a2384554a4`。[原生构建](https://github.com/feifeigong/ai-first-tools/actions/runs/38896558707) 两架构均通过原有共享与原生历史检查，冻结资源 7、Cocoa 页面/桥/自动提醒 9、系统 HTTPS 3、更新交接 9 项全通过。自动提醒使用合成发布响应，确认无需点击检查即可见下载按钮且未自动下载；更新审计仍验证真实窗口点击、桥排空、父进程自然退出、helper 替换与两次重开。
+
+[独立核验](https://github.com/feifeigong/ai-first-tools/actions/runs/38898129754) 分别下载原构建与草稿全部 11 个资产，名称、字节、SHA-256、不可变标签及原生报告一致后公开 [preview.14](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.14)（发布 ID `414919247`）。本机核对八份原生报告全部通过；匿名公开列表确认两架构 preview.12 选择 preview.14、同版无提示、所有公开 digest 一致，实际下载公开校验清单核对摘要；Windows 最新稳定版仍 v0.3.11。
+
+| 文件后缀 | 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| `arm64.dmg` | 23450742 | `96f1e9dfaedc9b7fda066b7350ab7623e733ea79cbbb44990ebacbca0addb317` |
+| `x86_64.dmg` | 24845419 | `4f4f38904d3cd94c4ab6dff999a4fa610fa2c661fa7d36d91a6ba05f9360da6d` |
+
+未操作用户 Mac，不能断言上述已复现的代码缺口就是其设备根因，或把 CI 自动提醒当作用户 preview.12 的实机验收。新包不会自行修改已卡住的旧程序。没有放宽 TLS、来源、哈希、格式或交接保护，没有读取真实聊天或请求在线模型。
+
 ## 2026-10-16：preview.13 已发布，Copilot Desktop 读取与搬出
 
 新增只读 Python 事件适配，沿用已有原生迁移引擎。Windows 本机 122 项后端检查通过，包含 16 项 Copilot 专项与六个实际目标的 125 轮合成历史导入、完整正文回读、工具结果与源字节不变检查。[Windows CI](https://github.com/feifeigong/ai-first-tools/actions/runs/38880176012) 的 122 项后端（无引擎步骤明确跳过 1 项原生导入）、31 项共享界面、WPF 构建与 62 项外壳自检通过；Copilot 原生导入另已在本机和两种 Mac 架构执行，未将跳过当作通过。

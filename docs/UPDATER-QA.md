@@ -1,5 +1,19 @@
 # Windows 更新功能验收
 
+## 2026-10-16 v0.3.11：自动提醒调度修复
+
+已公开 [v0.3.11](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.11)，安装包与不可变标签源码 `9a4626188bab5a7f63750ce7352de1a2384554a4`。本机旧版检查时间 09:14 UTC、缓存 null，新版于 09:48 UTC 发布；旧六小时负缓存会使重新打开也跳过检查。修复策略见 UPDATES.md，保留 Copilot 和现有续跑控制页。
+
+- [源码回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38896558752)：123 项后端（无引擎步骤明确跳过原生用例，打包时另执行）、33 项界面、10 项隔离控制、2 项发布核验回归、WPF 构建和 71 项自检通过。本机同样 71 项通过；新增 WPF 窗口测试使用合成 HTTP 和受控时间，验证旧负缓存不阻止联网、保持打开时出现后发布的新版本下载提示、错误后无需点击自动恢复及关闭后不重复弹同版。不是用户已安装窗口的视觉验收。
+- [实际打包](https://github.com/feifeigong/ai-first-tools/actions/runs/38896593336)：干净 Windows runner 六项真实安装/覆盖/版本/额外文件保护/卸载验收通过，安装后 71 项自检全通过。
+- [独立核验](https://github.com/feifeigong/ai-first-tools/actions/runs/38897477560)：原构建与草稿三个资产分别下载，源码标签、安装报告、名称、大小及 SHA-256 一致后公开（发布 ID `414914292`）。本机又下载原构建交叉核对摘要及 ZIP 清单版本。
+- 匿名公开列表及 latest 接口确认 v0.3.11。本机正常重开并恢复旧检查缓存的操作被自动审批以“策略阻止”拒绝，命令未执行；旧 v0.3.9 未因此更新或重启。
+
+| 文件 | 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| Setup | 70225066 | `62300e8c4d68ab0de85dc8f9cd6bdb75d019752eb99c4ecc4dfc7f61b1834be5` |
+| Portable ZIP | 97702147 | `315df0c9c17ccafc40e1de8b8bbe4f44e3a8e9bf53d917b5e19dbee8e6607076` |
+
 ## 2026-10-16 v0.3.10：Copilot Desktop 搬出与现有自动续跑控制页合并发布
 
 已公开 [v0.3.10](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.10)，安装包与不可变轻量标签源码固定 `f74f51b9f53026dce8fa035a263cdc365e318050`。保留本机已完成的自动续跑控制页，不重写额度算法、不改用户当前后台或开机状态；此前本机 v0.3.9 可升级到本版。Copilot 源只读、共享会话标注、未知格式拒绝及未支持的撤回/截断范围见 [COPILOT.md](COPILOT.md)。
