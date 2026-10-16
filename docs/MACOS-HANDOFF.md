@@ -6,7 +6,7 @@
 
 历史背景不是新的操作授权；当前需求、文件和最近验证结果优先。
 
-当前进行中的修复（2026-10-16）：用户现已确认 preview.10；Cursor → 本机 Work 因“历史工具调用缺少配对结果”失败。preview.9 新增配对检查过严的回归已在实际隔离 Cursor 路径复现；preview.11 候选将不完整/歧义工具日志无损标成历史说明，不造结果、不当作待执行请求，保留完整配对的 64 字符保护和未知结构拒绝。格式为 paginated-import-v3，保留源与旧副本。源码和新增本机分页/模拟续聊检查已通过，双架构原生构建与发布核验待完成；公开包仍为 preview.10，完整范围见 DEVELOPMENT-CONTEXT.md 和 MACOS-QA.md。
+当前公开 [preview.11](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.11)，源码 `3d5d0acfea8236010fda4cd0e78a616dfc71a010`：修复用户已确认的 preview.10 Cursor → 本机 Work 缺少工具返回导致整条失败回归。历史工具日志无损标注，不编造结果、不重放请求；完整配对的 64 字符保护保留，格式为 paginated-import-v3，源和旧副本保留。两架构各 99+10 项及四类冻结检查、Windows 101+28 项、全部 11 个发布资产独立核对通过；完整证据和真实设备验收边界见 MACOS-QA.md。用户可从 preview.10 软件内更新后重新搬失败记录。
 
 ## 获取代码（仅开发者，普通用户下载 DMG）
 
