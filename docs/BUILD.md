@@ -55,6 +55,8 @@ dotnet build workspace\AIFirst.Workspace.csproj -c Release
 
 v0.3.7 起打包脚本生成 `update-manifest.json`，逐个登记程序文件、大小与 SHA-256。不要在生成清单之后修改程序文件。安装包和 ZIP 均须与同次构建的 `SHA256SUMS.txt` 一起发布；GitHub 上传后还会提供各资产的 SHA-256 digest。发布操作与更新测试见 [UPDATES.md](UPDATES.md)。
 
+Windows 暂存流程现同样执行 `verify_windows_release.py`：独立下载原 CI 和草稿文件，复查原始安装报告、不可变标签、精确文件名、大小及 SHA-256。报告通过后才公开；不混入本机重建文件。GitHub JSON 直接按 UTF-8 字节解析，避免 Windows 默认 codepage 无法读取中文发布说明。
+
 发布前须检查源码和包中没有真实账户、记录、日志和私人截图，核对源程序/引擎哈希，执行安装、启动、更新保护、卸载保护和关键回归。没有 Windows 全新虚拟机验收时，不能宣称已覆盖全新系统。
 
 v0.3.5 / v0.3.6 使用相同的既有已测试引擎，SHA-256：`799b80dff7ba44cb05f1a92ed5f64a4969ffefc5ad7b3566600ed88adaaaacd2`。

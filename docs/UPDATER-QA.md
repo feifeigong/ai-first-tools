@@ -1,5 +1,16 @@
 # Windows 更新功能验收
 
+## 2026-10-16 v0.3.10：Copilot Desktop 搬出与现有自动续跑控制页合并发布
+
+已公开 [v0.3.10](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.10)，安装包与不可变轻量标签源码固定 `f74f51b9f53026dce8fa035a263cdc365e318050`。保留本机已完成的自动续跑控制页，不重写额度算法、不改用户当前后台或开机状态；此前本机 v0.3.9 可升级到本版。Copilot 源只读、共享会话标注、未知格式拒绝及未支持的撤回/截断范围见 [COPILOT.md](COPILOT.md)。
+
+- [源码回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38881877835)：123 项后端、31 项界面、10 项隔离控制检查、WPF 构建和 67 项外壳自检通过。后端任务无引擎时明确跳过 1 项原生导入；实际引擎的搬运检查在本机、两种 Mac 架构及打包任务中另执行，不将跳过当作通过。
+- [实际打包](https://github.com/feifeigong/ai-first-tools/actions/runs/38881881824)：17 项 Copilot/发布检查（包含六个实际目标的长历史导入与完整正文回读）、10 项控制检查；干净 Windows runner 实际静默安装、覆盖安装、安装后 67 项自检、版本核对、用户额外文件保留、安全卸载六项通过。
+- [独立下载核验](https://github.com/feifeigong/ai-first-tools/actions/runs/38882825303)：重新下载原 CI 文件及草稿全部 3 个资产，核对原始安装/自检报告、不可变源码标签、精确名称、大小、GitHub digest 和 SHA-256，完全一致后公开（发布 ID `414784086`）。本机也下载原 CI 文件交叉核对全部摘要，另确认 ZIP 内版本、Copilot 原图标与已完成控制脚本匹配。
+- 无认证请求确认 GitHub 最新稳定版为 v0.3.10，三个公开资产的大小/digest 与核验报告一致，实际下载公开 SHA256SUMS.txt 核对其摘要。未在用户安装上自动执行升级或反复切换真实后台，不把安装/回读测试称为所有目标桌面软件人工显示及付费模型续聊验收。
+
+保留失败记录：先前候选 [38880745662](https://github.com/feifeigong/ai-first-tools/actions/runs/38880745662) 的打包与安装检查通过，但最后暂存读取含中文的 GitHub 发布 JSON 时误用 Windows cp1252 而失败。未覆盖已公开 v0.3.8，也未发布该候选。改为直接以 UTF-8 JSON 字节解析，新增真实子进程 UTF-8 输出/旧 codepage 复现回归；v0.3.10 的新完整构建、暂存和独立核验均通过。新增独立 Windows 核验只读取原 CI 与草稿，不放宽哈希或原生报告门槛，不修改已公开资产。
+
 ## 2026-10-13 v0.3.8（已发布）
 
 [公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.8)。构建源码 `c1f5b97ffbf44b48628bcee5e5ae1b2bbd795c8f`，Git 标签指向此提交；后续发布流程和文档提交未重做本包。

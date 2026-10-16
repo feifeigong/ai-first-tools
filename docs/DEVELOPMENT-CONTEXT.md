@@ -4,7 +4,7 @@
 
 按调研中最后确定的范围实现 Desktop 本机历史搬出，暂不做 VS Code 自身存储或搬入 Copilot。`core/copilot_local.py` 只读解析共享事件和桌面索引，无法确认 Desktop 成员关系时明确标为共享会话；转为 Simple 后沿用现有导入流程，Rust 引擎不变。原版 Logo、搜索/选择/刷新和只读目标已接入。兼容边界、合成测试、原生回读与后续构建结果见 [COPILOT.md](COPILOT.md)。源码开发不代表已安装旧程序自动具有此功能，公开包状态以 Releases 为准。
 
-2026-10-16 本机新增 Windows「Codex 自动续跑」控制页，版本标识 0.3.9；复用电脑已有的自动续跑安装，提供运行与开机自启开关。没有发布新 GitHub 安装包。实现、开关语义及验证范围见 [AUTO-RESUME-CONTROL.md](AUTO-RESUME-CONTROL.md)。下文公开 Windows v0.3.8 的说明继续指公开发布。
+此前本机完成 Windows「Codex 自动续跑」控制页，版本标识 0.3.9；本轮将已完成源码一并保留，并与 Copilot 合并为公开 [Windows v0.3.10](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.10)，源码标签 `f74f51b9f53026dce8fa035a263cdc365e318050`。Mac 已公开 [preview.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.13)，源码标签 `249684ec97e651ec7f47267df266f20fd0434eed`。两平台均完成原生构建及独立发布资产下载核验，匿名公开更新入口通过；原安装不会随源码提交改写。控制页语义见 [AUTO-RESUME-CONTROL.md](AUTO-RESUME-CONTROL.md)，发布证据见 UPDATER-QA.md、MACOS-QA.md；下文历史版本记录保留。
 
 本文件供作者、协作者和新的 AI 编程对话接手使用，记录决策和边界，不把旧设想当成已完成能力。
 

@@ -1,6 +1,6 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
-Copilot Desktop 新增共享的 Python 本机历史读取器，范围见 [COPILOT.md](COPILOT.md)。Mac 路径、共享会话标识与安全失败使用隔离合成记录验证；两架构构建中的 `test_copilot` 会使用本项目原生引擎执行六个目标的导入/回读。此源码修改不代表 preview.12 已有 Copilot 功能，构建与发布状态须核对 CI 和 Releases。
+当前公开 [preview.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.13)，安装包源码 `249684ec97e651ec7f47267df266f20fd0434eed`，新增 Copilot Desktop 本机历史搬出。两架构各 120+10 项及 7/9/3/9 项冻结检查通过，11 个原资产独立下载核对后公开；匿名更新选择与公开校验清单核对通过。范围、共享会话标签和未验收边界见 [COPILOT.md](COPILOT.md)、[MACOS-QA.md](MACOS-QA.md)。
 
 ## 可直接给新对话的背景
 
@@ -8,7 +8,7 @@ Copilot Desktop 新增共享的 Python 本机历史读取器，范围见 [COPILO
 
 历史背景不是新的操作授权；当前需求、文件和最近验证结果优先。
 
-当前公开 [preview.12](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.12)，安装包源码 `553584b7bca40f13c1f0aaee2713fb82ba1d17f6`：修复八步准备完成后的状态锁、桥返回/关窗交接，保留 preview.11 全部 Cursor 历史兼容修复。两架构各 104+10 项、7/9/3/9 项冻结检查和真实窗口按钮更新均通过；独立核对 11 个资产后公开，Windows 106+30 项通过且公开 Windows 包不变。详细证据与用户设备验收边界见 MACOS-QA.md。
+前一版 [preview.12](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.12)，安装包源码 `553584b7bca40f13c1f0aaee2713fb82ba1d17f6`：修复八步准备完成后的状态锁、桥返回/关窗交接，保留 preview.11 全部 Cursor 历史兼容修复。两架构各 104+10 项、7/9/3/9 项冻结检查和真实窗口按钮更新均通过；独立核对 11 个资产后公开，Windows 106+30 项通过且公开 Windows 包不变。详细证据与用户设备验收边界见 MACOS-QA.md。
 
 本轮已发布：用户更新停在“释放安装包（8/8）、15 秒”，并确认窗口/取消均卡住。已复现启动 helper 持有状态锁、页面等待桥返回时保留旧步骤；锁定框架源码还显示关窗先于桥回信的竞争。修订为后台启动和短锁状态，页面排空在途更新请求后用不需回信的异步 callback 关窗，失败只回收本次 helper。新冻结审计实际点窗口更新并要求父进程退出，不再绕过交接。用户已卡住的旧更新器仍需在无搬运任务时关闭，再手动替换 preview.12；不能将本轮归因于旧 preview.8，也不能称已在用户设备验收。
 

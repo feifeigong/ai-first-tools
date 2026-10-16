@@ -1,12 +1,14 @@
 # Mac 移植验证记录
 
-## 2026-10-16：Copilot Desktop 读取与搬出（源码验证）
+## 2026-10-16：preview.13 已发布，Copilot Desktop 读取与搬出
 
-新增只读 Python 事件适配，沿用已有原生迁移引擎。Windows 本机 122 项后端检查通过，包含 16 项 Copilot 专项与六个实际目标的 125 轮合成历史导入、完整正文回读、工具结果与源字节不变检查。31 项共享界面检查中其余 30 项通过后，新增 Copilot 用例的夹具语法已修正并单独通过；未改产品代码以绕过检查。WPF 构建零警告零错误。
+新增只读 Python 事件适配，沿用已有原生迁移引擎。Windows 本机 122 项后端检查通过，包含 16 项 Copilot 专项与六个实际目标的 125 轮合成历史导入、完整正文回读、工具结果与源字节不变检查。[Windows CI](https://github.com/feifeigong/ai-first-tools/actions/runs/38880176012) 的 122 项后端（无引擎步骤明确跳过 1 项原生导入）、31 项共享界面、WPF 构建与 62 项外壳自检通过；Copilot 原生导入另已在本机和两种 Mac 架构执行，未将跳过当作通过。
 
-Mac Windows/Mac 路径分支已在隔离合成数据验证，原生两架构验证尚待 CI 完成；不将 Windows 的原生引擎回读称为 Mac 原生软件人工显示或付费续聊验收。不读取用户真实 Copilot 记录/凭据，不发模型请求。本段为源码候选记录，不代表已发布新版运行包。适配字段和限制见 [COPILOT.md](COPILOT.md)。
+已公开 [preview.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.13)，不可变源码标签固定为 `249684ec97e651ec7f47267df266f20fd0434eed`。[原生构建](https://github.com/feifeigong/ai-first-tools/actions/runs/38880176034) 的 arm64、x86_64 各通过 120 项共享/隔离来源及目标检查、10 项原生分页与本机模拟续聊检查，冻结资源 7 项、Cocoa 窗口与桥 9 项、系统 HTTPS 3 项、完整更新 9 项均通过。[独立核验](https://github.com/feifeigong/ai-first-tools/actions/runs/38881699858) 重新下载同次构建与草稿的全部 11 个文件，精确名称、大小、SHA-256 和标签源码完全匹配后公开（发布 ID `414778390`）。匿名生产更新选择在两个架构从 preview.12 选到 preview.13，同版不提示；公开 SHA 清单下载摘要与核验报告一致。
 
-当前公开为 [preview.12](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.12)，2026-10-16 08:07:50 UTC 发布。本轮窗口交接修复、原生按钮更新与资产核验见下方“preview.12 发布证据”；历史记录继续保留。
+不读取用户真实 Copilot 记录/凭据，不发模型请求；不将隔离原生引擎回读称为用户真实 Copilot 样本、所有目标的桌面人工显示或付费续聊验收。适配字段、共享会话标注、未支持的撤回/截断和 VS Code 范围见 [COPILOT.md](COPILOT.md)。保留先前全部历史兼容与更新修复。
+
+前一版 [preview.12](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.12) 于 2026-10-16 08:07:50 UTC 发布，窗口交接修复、原生按钮更新与资产核验见下方“preview.12 发布证据”；历史记录继续保留。
 
 2026-10-16 用户再次报告校验转圈后，确认当时实际运行版本仍为 `preview.8`，且无步骤/秒数，原提示已与旧版源码核对。当时尚未确认安装 preview.10，未将此反馈作为新版失败或用户真机已通过的证据，后续请用户手动替换；用户随后确认已安装 preview.10，新的导入回归见下方。旧版当次系统阻塞的具体原因仍未知。
 
