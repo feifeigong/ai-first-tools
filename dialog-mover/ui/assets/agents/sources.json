@@ -138,5 +138,14 @@
     "source": "https://raw.githubusercontent.com/NousResearch/hermes-agent/main/apps/bootstrap-installer/src-tauri/icons/icon.ico",
     "status": "unavailable",
     "origin": "generic software fallback; never a fabricated brand mark"
+  },
+  "copilot": {
+    "source": "%LOCALAPPDATA%/Programs/GitHub Copilot/github.exe",
+    "size": [
+      256,
+      256
+    ],
+    "sha256": "4a5417272a3285f541ccc4f4e174625d2c23e485443ad7d57051715d03dee59d",
+    "origin": "installed GitHub Copilot desktop application icon resource; no redraw or recolor"
   }
 }

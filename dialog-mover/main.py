@@ -33,6 +33,7 @@ AGENTS = [
     {"id": "grok", "name": "Grok", "sub": "命令行", "color": "#343a40"},
     {"id": "hermes", "name": "Hermes", "sub": "Agent", "color": "#a61e4d"},
     {"id": "opencode", "name": "OpenCode", "sub": "桌面与命令行", "color": "#364fc7"},
+    {"id": "copilot_desktop", "name": "GitHub Copilot", "sub": "桌面端 · 本机历史", "color": "#24292f"},
 ]
 
 
@@ -96,6 +97,8 @@ class Api:
                 return {"error": "ChatGPT 暂时限流了（读取太频繁）。请等几分钟，再点右上角的刷新。"}
             if agent_id == "chatgpt":
                 return {"error": str(error) if str(error).startswith("ChatGPT") else "ChatGPT 本机数据没有读完整，请稍后刷新；详细原因已记入日志。"}
+            if agent_id == "copilot_desktop":
+                return {"error": "Copilot 桌面索引暂时无法读取或格式已变化，请关闭 Copilot 后刷新；未修改源记录。"}
             if "locked" in text or "being used" in text:
                 return {"error": "这个软件正在占用数据，请先关闭它再试一次。"}
             return {"error": "读取这个软件的对话时出了问题。"}

@@ -16,6 +16,7 @@ AGENTS = [
     ("qwen_work", "千问办公"), ("doubao_work", "豆包工作"), ("chatgpt", "ChatGPT"),
     ("claude_code", "Claude Code"), ("claude_desktop", "Claude"), ("cowork", "Cowork"),
     ("antigravity", "Antigravity"), ("grok", "Grok"), ("opencode", "OpenCode"), ("hermes", "Hermes"),
+    ("copilot_desktop", "GitHub Copilot"),
 ]
 
 

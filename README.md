@@ -65,6 +65,7 @@
 | Claude | 普通聊天可读取；**Claude Code / 已初始化的本机 Cowork** 可作为目的地 |
 | Antigravity、Cursor CLI、Grok CLI、OpenCode | 本地适配，具体限制见下方说明 |
 | 豆包工作、Hermes | 当前界面只支持搬出，不承诺原生搬入 |
+| GitHub Copilot Desktop | 支持本机历史搬出；共用记录标为 Copilot 共享会话，暂不支持搬入；[范围说明](docs/COPILOT.md) |
 
 **不是每种软件、每个版本都已完成原生界面和继续对话的验收。** “写入后回读通过”不等于附件、工具调用和下一轮对话必定可用。尤其 Antigravity 桌面端的自动重新索引尚未全面验证。
 

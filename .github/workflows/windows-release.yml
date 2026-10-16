@@ -39,6 +39,9 @@ jobs:
             [IO.Compression.ZipFileExtensions]::ExtractToFile($entry,(Join-Path $PWD 'dialog-mover/bin/txcript.exe'))
           } finally { $zip.Dispose() }
           if ((Get-FileHash dialog-mover/bin/txcript.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne '799b80dff7ba44cb05f1a92ed5f64a4969ffefc5ad7b3566600ed88adaaaacd2') { throw 'Engine digest mismatch' }
+      - name: Verify Copilot source and isolated imports with the packaged engine
+        working-directory: dialog-mover
+        run: python -m unittest test_copilot -v
       - name: Get official installer tools
         shell: python
         run: |

@@ -11,6 +11,7 @@
     codex: "chatgpt", chatgpt: "chatgpt", chatgpt_work: "chatgpt", claude_code: "claude", claude: "claude",
     claude_desktop: "claude", cowork: "claude", grok: "grok", grokbot: "grok-bot", hermes: "hermes", opencode: "opencode",
     codebuddy: "codebuddy", kimi: "kimi", deepseek: "deepseek", perplexity: "perplexity",
+    copilot_desktop: "copilot",
   };
   const SOFTWARE_ICON = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="15" rx="3"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></svg>';
 

@@ -19,7 +19,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-from . import chatgpt, doubao, imports, mover
+from . import chatgpt, copilot_local, doubao, imports, mover
 from .common import (
     appdata,
     as_millis,
@@ -76,6 +76,8 @@ def _opencode_db() -> Path | None:
 
 
 def installed(agent_id: str) -> bool:
+    if agent_id == "copilot_desktop":
+        return copilot_local.installed()
     if agent_id in ("antigravity", "antigravity_ide", "antigravity_cli"):
         root = _gemini_root(agent_id)
         conv = root / "conversations"
@@ -1116,7 +1118,6 @@ UNSUPPORTED = [
     ("perplexity", "Perplexity", "", ["AppData/Roaming/Perplexity"]),
     ("manus", "Manus", "", ["AppData/Roaming/manus", "AppData/Roaming/openmanus"]),
     ("cline", "Cline", "", [".cline"]),
-    ("copilot", "GitHub Copilot", "", ["AppData/Local/github-copilot", ".copilot"]),
     ("grokbot", "Grok Bot", "", ["AppData/Roaming/Grok Bot"]),
 ]
 
@@ -1142,6 +1143,8 @@ def unsupported_found() -> list[dict]:
 # --------------------------------------------------------------------- API
 
 def list_groups(agent_id: str) -> list[dict]:
+    if agent_id == "copilot_desktop":
+        return copilot_local.groups()
     if agent_id == "cursor_desktop":
         return cursor_groups()
     if agent_id == "workbuddy":
@@ -1181,7 +1184,7 @@ def known_folders() -> list[dict]:
 
     for agent in (
         "cursor_desktop", "workbuddy", "workbuddy_ai", "antigravity", "antigravity_cli",
-        "qwen_work", "codex", "claude_code", "cowork",
+        "qwen_work", "codex", "claude_code", "cowork", "copilot_desktop",
     ):
         if not installed(agent):
             continue

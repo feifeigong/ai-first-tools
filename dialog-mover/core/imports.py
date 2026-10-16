@@ -37,6 +37,7 @@ TARGETS = {
 }
 
 READ_ONLY = {
+    "copilot_desktop": "目前支持从 Copilot Desktop 搬出，暂不支持搬入 Copilot",
     "chatgpt": "仅云端 Chat / Work 不能搬入；上方本机 Work 和 Codex 可以搬入",
     "claude_desktop": "仅普通云端聊天不能搬入；上方本机 Cowork 和 Claude Code 可以搬入",
     "hermes": "当前 txcript 的 Hermes 适配仅支持读取，没有写入实现",

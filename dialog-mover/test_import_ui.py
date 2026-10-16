@@ -17,6 +17,49 @@ class ImportUiTests(unittest.TestCase):
         self.enterContext(patch.object(sources, "unsupported_found", return_value=[]))
         self.enterContext(patch.object(mover, "txcript_path", return_value=Path("fixture/txcript.exe")))
 
+    def test_copilot_source_search_selection_refresh_and_read_only_destination(self):
+        capabilities = Api().agents()
+        capabilities["agents"] = [item for item in capabilities["agents"] if item["id"] == "copilot_desktop"]
+        source = {"groups": [{"title": "合成项目", "kind": "folder", "path": "/synthetic/project", "sessions": [
+            {"id": "desktop-session", "title": "Copilot 桌面长对话", "movable": True, "ts": 2, "when": "刚刚", "note": "Copilot Desktop"},
+            {"id": "shared-session", "title": "Copilot 共享示例", "movable": True, "ts": 1, "when": "昨天", "note": "Copilot 共享会话（Desktop / CLI 共用，来源未确认）"},
+            {"id": "broken-session", "title": "不完整记录", "movable": False, "ts": 0, "note": "记录不完整，请刷新"}]}], "total": 3, "movable": 2}
+        bootstrap = """
+        window._refreshes = 0;
+        window.pywebview = {api: {
+          agents: async () => (CAPABILITIES),
+          sessions: async (id, refresh) => {if(refresh) window._refreshes++; return SOURCE;},
+          folders: async () => []
+        }};
+        window.addEventListener('DOMContentLoaded', () => window.dispatchEvent(new Event('pywebviewready')));
+        """.replace("CAPABILITIES", json.dumps(capabilities)).replace("SOURCE", json.dumps(source))
+        with sync_playwright() as runtime:
+            browser = runtime.chromium.launch(channel="msedge", headless=True)
+            try:
+                page = browser.new_page(viewport={"width": 1180, "height": 780})
+                page.add_init_script(bootstrap)
+                page.goto((Path(__file__).parent / "ui/index.html").as_uri())
+                page.locator('[data-id="desktop-session"]').wait_for()
+                logo = page.locator('[data-agent="copilot_desktop"] img')
+                self.assertEqual(logo.get_attribute("src"), "assets/agents/copilot.png")
+                page.wait_for_function("document.querySelector('[data-agent=\"copilot_desktop\"] img').naturalWidth > 0")
+                self.assertIn("来源未确认", page.locator('[data-id="shared-session"]').inner_text())
+                page.locator("#search").fill("长对话")
+                self.assertEqual(page.locator(".row").count(), 1)
+                page.locator("#search").fill("")
+                page.locator('[data-id="broken-session"]').click()
+                self.assertTrue(page.locator("#bar").is_hidden())
+                page.locator("#reload").click()
+                page.wait_for_function("window._refreshes === 1")
+                page.locator(".group-check").click()
+                self.assertEqual(page.locator("#bar-count").inner_text(), "2")
+                page.locator("#bar-go").click()
+                destination = page.locator('[data-target="copilot_desktop"]')
+                self.assertFalse(destination.is_enabled())
+                self.assertIn("暂不支持搬入", destination.inner_text())
+            finally:
+                browser.close()
+
     def test_real_capabilities_render_and_navigate(self):
         capabilities = Api().agents()
         source = {"groups": [{"title": "测试项目", "kind": "folder", "path": "D:\\vibcoding",

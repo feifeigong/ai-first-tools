@@ -15,13 +15,14 @@ import time
 from pathlib import Path
 
 from .common import appdata, codex_home, localappdata, norm, proxy_env, user_env
-from . import codex_import, doubao, imports
+from . import codex_import, copilot_local, doubao, imports
 
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 SAFE_ID = re.compile(r"^[0-9A-Za-z_-]{6,80}$")
 
 TARGETS = imports.TARGETS
 SOURCES = {
+    "copilot_desktop": "copilot_local",
     "cursor_desktop": "cursor_desktop",
     "workbuddy": "workbuddy",
     "workbuddy_ai": "workbuddy_ai",
@@ -333,12 +334,15 @@ def move_one(source: str, session: dict, target: str, directory: str, details: d
                 src_env["COWORK_SESSIONS_DIR"] = str(root)
         if source == "chatgpt":
             src_env["TXCRIPT_CHATGPT_ACTIVE_ONLY"] = "1"
-        exported = _run(["export", sid, "--from", SOURCES[source], "--out", str(path)], src_env, timeout=300)
-        if exported.returncode != 0:
-            detail = (exported.stderr or exported.stdout or "").strip()
-            log(f"export failed {source}/{sid}: {detail[-400:]}")
-            return "failed", _friendly(detail)
-        document = json.loads(path.read_text(encoding="utf-8"))
+        if source == "copilot_desktop":
+            document = copilot_local.document(sid)
+        else:
+            exported = _run(["export", sid, "--from", SOURCES[source], "--out", str(path)], src_env, timeout=300)
+            if exported.returncode != 0:
+                detail = (exported.stderr or exported.stdout or "").strip()
+                log(f"export failed {source}/{sid}: {detail[-400:]}")
+                return "failed", _friendly(detail)
+            document = json.loads(path.read_text(encoding="utf-8"))
         document["cwd"] = directory
         title = str(session.get("title") or "").strip()
         if title and title != "未命名对话":

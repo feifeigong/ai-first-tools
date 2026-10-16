@@ -1,5 +1,7 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+Copilot Desktop 新增共享的 Python 本机历史读取器，范围见 [COPILOT.md](COPILOT.md)。Mac 路径、共享会话标识与安全失败使用隔离合成记录验证；两架构构建中的 `test_copilot` 会使用本项目原生引擎执行六个目标的导入/回读。此源码修改不代表 preview.12 已有 Copilot 功能，构建与发布状态须核对 CI 和 Releases。
+
 ## 可直接给新对话的背景
 
 > 我在继续开发 feifeigong/ai-first-tools。先读 AGENTS.md、docs/DEVELOPMENT-CONTEXT.md、docs/MACOS.md 和本文件，再检查 Git、Mac 架构与最近 CI，不重复已完成修改。AI一手工具工作台面向非技术用户，当前自制工具是对话搬家。Windows WPF 保留；Mac 是 Python/pywebview Cocoa/WebKit 单窗口，共用 dialog-mover UI、Python 业务、修改后的 txcript。GitHub 发布 DMG，不上商店，不用 Developer ID/公证。根据我提供的错误排查，保持只复制、搬运中不强退、实际 Logo、真正隐藏侧栏和简单操作。不要读/上传真实认证、Cookie、聊天，先用隔离合成记录。不要把回读称为所有原生显示/续聊通过。

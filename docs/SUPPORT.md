@@ -14,6 +14,7 @@ v0.3.6 是 Windows x64 预览版，不是所有软件和所有版本的全面兼
 | Antigravity CLI / Cursor CLI / Grok CLI | 写入对应本机历史，按结果页说明打开或恢复 |
 | OpenCode | 调用本机 OpenCode 官方导入入口，需已安装该软件 |
 | 豆包工作 | 只读来源；本机轨迹文件不等于服务器正式会话，界面不开放搬入 |
+| GitHub Copilot Desktop | 本机事件历史只读搬出，未确认来源的共用记录明确标注；VS Code 自身存储与搬入 Copilot 暂不支持，见 [Copilot 说明](COPILOT.md) |
 | ChatGPT 云端 / Claude 普通聊天 / Hermes | 只读来源，不提供未实现的原生写回 |
 
 迁移记录不迁移附件、项目文件、工作环境、插件、认证、权限或模型配置。不同软件的消息、工具和多模态结构可能不同，导入提示须仔细阅读。
