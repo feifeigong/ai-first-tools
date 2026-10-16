@@ -72,6 +72,7 @@ public partial class App : Application
             window = new MainWindow(configuration, Option(args.Args, "--tool"), Option(args.Args, "--health-report"), true, UpdateSelfTests.FixtureClient(updateFixture));
         }
         else window = new MainWindow(configuration, Option(args.Args, "--tool"), Option(args.Args, "--health-report"), Option(args.Args, "--config") is not null);
+        window.InitialToolId = Option(args.Args, "--page");
         MainWindow = window;
         activation = new InstanceActivation(key, () => Dispatcher.BeginInvoke(() =>
         {

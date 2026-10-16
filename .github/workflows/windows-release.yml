@@ -41,7 +41,10 @@ jobs:
           if ((Get-FileHash dialog-mover/bin/txcript.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne '799b80dff7ba44cb05f1a92ed5f64a4969ffefc5ad7b3566600ed88adaaaacd2') { throw 'Engine digest mismatch' }
       - name: Verify Copilot source and isolated imports with the packaged engine
         working-directory: dialog-mover
-        run: python -m unittest test_copilot -v
+        run: python -m unittest test_copilot test_windows_release -v
+      - name: Isolated auto-resume control checks
+        shell: powershell
+        run: ./workspace/tests/AutoResumeControl.Tests.ps1
       - name: Get official installer tools
         shell: python
         run: |

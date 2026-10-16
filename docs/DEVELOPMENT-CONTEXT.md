@@ -4,6 +4,8 @@
 
 按调研中最后确定的范围实现 Desktop 本机历史搬出，暂不做 VS Code 自身存储或搬入 Copilot。`core/copilot_local.py` 只读解析共享事件和桌面索引，无法确认 Desktop 成员关系时明确标为共享会话；转为 Simple 后沿用现有导入流程，Rust 引擎不变。原版 Logo、搜索/选择/刷新和只读目标已接入。兼容边界、合成测试、原生回读与后续构建结果见 [COPILOT.md](COPILOT.md)。源码开发不代表已安装旧程序自动具有此功能，公开包状态以 Releases 为准。
 
+2026-10-16 本机新增 Windows「Codex 自动续跑」控制页，版本标识 0.3.9；复用电脑已有的自动续跑安装，提供运行与开机自启开关。没有发布新 GitHub 安装包。实现、开关语义及验证范围见 [AUTO-RESUME-CONTROL.md](AUTO-RESUME-CONTROL.md)。下文公开 Windows v0.3.8 的说明继续指公开发布。
+
 本文件供作者、协作者和新的 AI 编程对话接手使用，记录决策和边界，不把旧设想当成已完成能力。
 
 ## 项目由来与演进

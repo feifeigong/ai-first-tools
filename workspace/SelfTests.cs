@@ -24,6 +24,7 @@ internal static class SelfTests
         File.WriteAllText(executable, "fixture only; not executable");
         var path = Path.Combine(root, "settings", "tools.json");
         var store = new ToolRepository(path);
+        AutoResumeTests.Run(Check, Require);
         Check("Bundled brand image and multi-size Windows icon load", () => { Require(new BrandAssets(path).Load() is not null); Require(File.Exists(Path.Combine(AppContext.BaseDirectory, "assets", "ai-first-logo.ico"))); });
         Check("Brand wordmark has a compact horizontal layout", () => { var image = (System.Windows.Media.Imaging.BitmapSource)new BrandAssets(path).Load()!; Require(image.PixelWidth > image.PixelHeight * 1.8 && image.PixelWidth < image.PixelHeight * 2.2); });
         Check("Window icon retains multiple size frames including a high resolution frame", () => { var frame = BrandAssets.LoadWindowIcon(); Require(frame.PixelWidth == 256 && frame.Decoder!.Frames.Count >= 7); Require(frame.Decoder.Frames.Any(image => image.PixelWidth == 32)); });
@@ -73,7 +74,8 @@ internal static class SelfTests
         {
             var version = typeof(App).Assembly.GetName().Version!.ToString(2);
             var loaded = ToolCatalog.Load(AppContext.BaseDirectory, version);
-            Require(loaded.Count == 1 && loaded[0].Id == "dialog-mover" && loaded[0].BuiltIn && loaded[0].Icon is not null);
+            Require(loaded.Count == 2 && loaded[0].Id == "dialog-mover" && loaded[0].BuiltIn && loaded[0].Icon is not null);
+            Require(loaded[1].Id == "auto-resume" && loaded[1].NativePage == "auto-resume" && loaded[1].Icon is not null && loaded[1].Executable == "");
             Require(loaded[0].Executable == Path.Combine(AppContext.BaseDirectory, "tools", "dialog-mover-v" + version, "对话搬家.exe"));
         });
         var catalogRoot = Path.Combine(root, "catalog");

@@ -22,6 +22,7 @@ public sealed class ToolDefinition : INotifyPropertyChanged
     public string Executable { get; set; } = "";
     [JsonIgnore] public bool Embed { get; set; } = true;
     public bool BuiltIn { get; set; }
+    [JsonIgnore] public string NativePage { get; set; } = "";
     [JsonIgnore] public bool EmbeddedStartup { get; set; }
     [JsonIgnore] public ImageSource? Icon { get; set; }
     private string status = "点击使用";

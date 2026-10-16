@@ -5,5 +5,10 @@
     "executable": "tools/dialog-mover-v{version}/对话搬家.exe",
     "icon": "assets/dialog-mover.png",
     "embeddedStartup": true
+  },
+  {
+    "id": "auto-resume",
+    "name": "Codex 自动续跑",
+    "nativePage": "auto-resume"
   }
 ]

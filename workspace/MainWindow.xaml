@@ -60,7 +60,7 @@
       </Border>
       <Grid Grid.Column="1" Margin="10"><Grid.RowDefinitions><RowDefinition /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
         <Border Background="White" BorderBrush="#E4E8ED" BorderThickness="1" CornerRadius="10">
-          <Grid><Grid x:Name="HostSlot" Visibility="Collapsed" />
+          <Grid><Grid x:Name="HostSlot" Visibility="Collapsed" /><Grid x:Name="NativeSlot" Visibility="Collapsed" />
             <Grid x:Name="LoadingView" AutomationProperties.Name="正在准备工具页面" IsHitTestVisible="False" Background="#F6F8FB">
               <Grid.ColumnDefinitions><ColumnDefinition Width="264" /><ColumnDefinition /></Grid.ColumnDefinitions>
               <Border Background="#FAFBFD" BorderBrush="#DFE5EC" BorderThickness="0,0,1,0" Padding="24">

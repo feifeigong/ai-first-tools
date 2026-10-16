@@ -33,13 +33,13 @@ def main() -> None:
         expected.append(f"{digest}  {asset.name}")
     if sums.read_text(encoding="utf-8-sig").splitlines() != expected:
         raise ValueError("Windows package digests differ")
-    releases = json.loads(subprocess.run(["gh", "api", f"repos/{REPOSITORY}/releases?per_page=100"], check=True, capture_output=True, text=True).stdout)
+    releases = json.loads(subprocess.run(["gh", "api", f"repos/{REPOSITORY}/releases?per_page=100"], check=True, capture_output=True).stdout)
     tag = f"v{version}"
     draft = next((item for item in releases if item.get("tag_name") == tag), None)
     if draft is None or draft.get("draft") is not True:
         print("No matching draft; published packages left unchanged")
         return
-    reference = json.loads(subprocess.run(["gh", "api", f"repos/{REPOSITORY}/git/ref/tags/{tag}"], check=True, capture_output=True, text=True).stdout)
+    reference = json.loads(subprocess.run(["gh", "api", f"repos/{REPOSITORY}/git/ref/tags/{tag}"], check=True, capture_output=True).stdout)
     if reference.get("object", {}).get("type") != "commit" or reference["object"]["sha"] != arguments.commit:
         raise ValueError("Prepare a lightweight release tag at the verified build commit")
     subprocess.run(["gh", "release", "upload", tag, "--repo", REPOSITORY, "--clobber", *map(str, [*assets, sums])], check=True)

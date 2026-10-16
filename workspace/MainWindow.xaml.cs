@@ -42,6 +42,8 @@ public partial class MainWindow : Window
     private string? preparedVersion;
     private bool checkingUpdates;
     private bool restartingForUpdate;
+    private AutoResumePage? autoResumePage;
+    internal string? InitialToolId { get; set; }
 
     public MainWindow(string configuration, string? toolOverride, string? report = null, bool developmentTools = false) : this(configuration, toolOverride, report, developmentTools, new UpdateClient()) { }
 
@@ -80,7 +82,7 @@ public partial class MainWindow : Window
         {
             host = new ToolWindowHost();
             HostSlot.Children.Add(host);
-            Dispatcher.BeginInvoke(() => ToolsList.SelectedIndex = 0, DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(() => ToolsList.SelectedIndex = Math.Max(0, tools.ToList().FindIndex(tool => tool.Id == InitialToolId)), DispatcherPriority.Loaded);
             monitor.Start();
             ReadUpdateReceipt();
             _ = CheckAfterOpeningAsync();
@@ -154,6 +156,21 @@ public partial class MainWindow : Window
         if (selected is not null && sessions.ContainsKey(selected.Id)) selected.Status = "已打开";
         selected = tool;
         ShowStatus("");
+        NativeSlot.Visibility = Visibility.Collapsed;
+        if (tool.NativePage == "auto-resume")
+        {
+            host.Use(null);
+            HostSlot.Visibility = BlankState.Visibility = LoadingView.Visibility = Visibility.Collapsed;
+            if (autoResumePage is null)
+            {
+                autoResumePage = new AutoResumePage();
+                NativeSlot.Children.Add(autoResumePage);
+            }
+            NativeSlot.Visibility = Visibility.Visible;
+            tool.Status = "使用中";
+            await autoResumePage.RefreshAsync();
+            return;
+        }
         BlankIcon.Source = tool.Icon;
         if (sessions.TryGetValue(tool.Id, out var existing) && !existing.Process.HasExited && existing.Window != IntPtr.Zero)
         {
@@ -167,6 +184,7 @@ public partial class MainWindow : Window
 
     private void Present(ToolDefinition tool, ToolSession session)
     {
+        NativeSlot.Visibility = Visibility.Collapsed;
         if (session.UseSeparateWindow)
         {
             host?.Use(null);
@@ -256,6 +274,7 @@ public partial class MainWindow : Window
 
     private void ShowBlank(string title, string description, bool retry)
     {
+        NativeSlot.Visibility = Visibility.Collapsed;
         HostSlot.Visibility = Visibility.Collapsed;
         BlankState.Visibility = retry ? Visibility.Visible : Visibility.Collapsed;
         LoadingView.Visibility = retry ? Visibility.Collapsed : Visibility.Visible;
@@ -294,6 +313,7 @@ public partial class MainWindow : Window
     {
         if (released) return;
         released = true;
+        autoResumePage?.Dispose();
         lifetime.Cancel();
         monitor.Stop();
         updateTimer.Stop();
@@ -319,6 +339,7 @@ public partial class MainWindow : Window
         try
         {
             await Dispatcher.Yield(DispatcherPriority.Background);
+            while (autoResumePage?.IsBusy == true) await Task.Delay(100);
             while (opening.Count > 0) await Task.Delay(100);
             foreach (var entry in sessions.ToList().OrderByDescending(item => item.Key == selected?.Id))
             {

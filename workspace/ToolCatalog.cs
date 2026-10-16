@@ -16,6 +16,7 @@ internal static class ToolCatalog
         public string Executable { get; set; } = "";
         public string Icon { get; set; } = "";
         public bool EmbeddedStartup { get; set; }
+        public string NativePage { get; set; } = "";
     }
 
     internal static List<ToolDefinition> Load(string directory, string version)
@@ -26,9 +27,16 @@ internal static class ToolCatalog
         foreach (var entry in entries)
         {
             if (entry is null || entry.Executable is null) throw new InvalidDataException("工具包包含无效的工具登记。");
+            if (!string.IsNullOrEmpty(entry.NativePage))
+            {
+                if (entry.NativePage != "auto-resume" || entry.Id != "auto-resume" || string.IsNullOrWhiteSpace(entry.Name) || entry.Name.Length > 80 || !string.IsNullOrEmpty(entry.Executable) || tools.Any(existing => existing.Id.Equals(entry.Id, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidDataException("工具包包含无效的内置页面。");
+                tools.Add(new ToolDefinition { Id = entry.Id, Name = entry.Name, BuiltIn = true, NativePage = entry.NativePage, Icon = AutoResumePage.CreateIcon() });
+                continue;
+            }
             var tool = new ToolDefinition { Id = entry.Id, Name = entry.Name, BuiltIn = true, EmbeddedStartup = entry.EmbeddedStartup, Executable = Resolve(directory, entry.Executable.Replace("{version}", version)) };
             ToolRepository.Validate(tool);
-            if (tools.Any(existing => existing.Id.Equals(tool.Id, StringComparison.OrdinalIgnoreCase) || ToolRepository.SameExecutable(existing.Executable, tool.Executable))) throw new InvalidDataException("工具包包含重复的工具登记。");
+            if (tools.Any(existing => existing.Id.Equals(tool.Id, StringComparison.OrdinalIgnoreCase) || (existing.NativePage.Length == 0 && ToolRepository.SameExecutable(existing.Executable, tool.Executable)))) throw new InvalidDataException("工具包包含重复的工具登记。");
             if (!string.IsNullOrEmpty(entry.Icon))
             {
                 var image = new BitmapImage();
