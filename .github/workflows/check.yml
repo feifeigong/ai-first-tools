@@ -18,16 +18,12 @@ jobs:
       - run: python -m pip install -r dialog-mover/requirements-dev.txt
       - name: Backend safety and sidebar checks
         working-directory: dialog-mover
-<<<<<<< HEAD
-        run: python -m unittest test_chatgpt test_close_safety test_embedded_startup test_doubao test_copilot test_copilot_import test_windows_release test_macos test_macos_updater test_codex_history -v
+        run: python -m unittest test_chatgpt test_close_safety test_embedded_startup test_doubao test_copilot test_copilot_import test_windows_release test_macos test_macos_updater test_codex_history test_macos_resume -v
       - name: Prepare official Copilot test runtime with pinned integrity
         run: python scripts/prepare_copilot_audit.py
       - name: Native Copilot full history and strict resume without model requests
         working-directory: dialog-mover
         run: python -m unittest test_copilot_native -v
-=======
-        run: python -m unittest test_chatgpt test_close_safety test_embedded_startup test_doubao test_copilot test_windows_release test_macos test_macos_updater test_codex_history test_macos_resume -v
->>>>>>> 03d1c18 (Bundle auto-resume controls and native runtime into the Mac workbench)
       - name: Isolated auto-resume control checks
         shell: powershell
         run: |
