@@ -456,7 +456,7 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
         phase = "replacement"
         if (target / 'Contents/Resources/auto-resume-native').exists():
             import auto_resume
-            auto_resume.Controller(target).action('prepare-update')
+            auto_resume.Controller(target, directory / 'resume-audit-home' if data.get('audit') else None).action('prepare-update')
         atomic_swap(target, candidate)
         moved = True
         phase = "backup"
@@ -466,7 +466,7 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
         phase = "relaunch"
         if (target / 'Contents/Resources/auto-resume-native').exists():
             import auto_resume
-            auto_resume.Controller(target).action('finish-update')
+            auto_resume.Controller(target, directory / 'resume-audit-home' if data.get('audit') else None).action('finish-update')
         (relaunch or relaunch_app)(target)
         return True
     except Exception as error:
@@ -487,7 +487,7 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
             try:
                 if (target / 'Contents/Resources/auto-resume-native').exists():
                     import auto_resume
-                    auto_resume.Controller(target).action('finish-update')
+                    auto_resume.Controller(target, directory / 'resume-audit-home' if data.get('audit') else None).action('finish-update')
                 (relaunch or relaunch_app)(target)
             except (OSError, subprocess.SubprocessError):
                 pass
