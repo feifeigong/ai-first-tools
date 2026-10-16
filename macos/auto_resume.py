@@ -21,7 +21,7 @@ class ControlError(RuntimeError):
 class Controller:
     def __init__(self, bundle: Path | None = None, home: Path | None = None):
         self.home = home or Path.home()
-        self.bundle = (bundle or Path(sys.executable).parents[2]).absolute()
+        self.bundle = (bundle or Path(sys.executable).parents[2]).resolve()
         self.executable = self.bundle / 'Contents/MacOS/AI First Tools'
         self.root = self.home / 'Library/Application Support/AI一手工具工作台/auto-resume'
         self.plist = self.home / 'Library/LaunchAgents' / (LABEL + '.plist')
