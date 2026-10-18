@@ -110,17 +110,30 @@ def audit_update(app: Path, report: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="ai-first-update-audit-") as temporary:
         root = Path(temporary).resolve()
         process = None
+        def fixture_command(step, arguments):
+            diagnostics["fixtureStep"] = step
+            try:
+                return updater.command(arguments)
+            except subprocess.CalledProcessError as error:
+                detail = error.stderr or b""
+                if isinstance(detail, bytes):
+                    detail = detail.decode("utf-8", errors="replace")
+                for path, label in ((app, "<build-app>"), (root, "<audit-root>"), (Path.home(), "<runner-home>")):
+                    detail = detail.replace(str(path), label)
+                diagnostics["fixtureFailure"] = {"command": Path(arguments[0]).name,
+                                                  "returnCode": error.returncode, "stderr": detail[:2000]}
+                raise
         try:
             diagnostics["phase"] = "fixture"
             target = root / updater.APP_NAME
-            updater.command(["/usr/bin/ditto", str(app), str(target)])
+            fixture_command("copy_old_app", ["/usr/bin/ditto", str(app), str(target)])
             (target / "Contents/Resources/version.json").write_text(json.dumps({"version": "0.4.0", "release": "0.4.0-macos-preview.2"}))
-            updater.command(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(target)])
+            fixture_command("sign_old_app", ["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(target)])
             fixture = root / "fixture"
             fixture.mkdir()
-            updater.command(["/usr/bin/ditto", str(app), str(fixture / updater.APP_NAME)])
+            fixture_command("copy_new_app", ["/usr/bin/ditto", str(app), str(fixture / updater.APP_NAME)])
             dmg = root / "fixture.dmg"
-            updater.command(["/usr/bin/hdiutil", "create", "-volname", "AI First Update Audit", "-srcfolder", str(fixture), "-format", "UDZO", str(dmg)])
+            fixture_command("create_dmg", ["/usr/bin/hdiutil", "create", "-volname", "AI First Update Audit", "-srcfolder", str(fixture), "-format", "UDZO", str(dmg)])
             with dmg.open("rb") as stream:
                 digest = hashlib.file_digest(stream, "sha256").hexdigest()
             (root / "fixture-sums.txt").write_text(f"{digest}  fixture.dmg\n")

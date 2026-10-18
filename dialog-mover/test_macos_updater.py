@@ -66,6 +66,27 @@ class MacUpdaterTests(unittest.TestCase):
         Path(arguments[-1]).write_text(json.dumps({"passed": True}))
         return Mock(returncode=0)
 
+    def test_native_audit_fixture_failure_identifies_command_without_machine_paths(self):
+        from update_audit import audit_update
+
+        app = self.bundle(self.root / "synthetic-build.app", "0.4.0-macos-preview.18")
+        report = self.root / "audit-report.json"
+        def failed_copy(arguments):
+            error = f"synthetic failure: {arguments[1]} -> {arguments[2]}".encode()
+            raise subprocess.CalledProcessError(16, arguments, stderr=error)
+
+        with patch.object(updater, "command", side_effect=failed_copy):
+            audit_update(app, report)
+        result = json.loads(report.read_text())
+        self.assertFalse(result["passed"])
+        self.assertFalse(any(result["checks"].values()))
+        failure = result["diagnostics"]["fixtureFailure"]
+        self.assertEqual(result["diagnostics"]["fixtureStep"], "copy_old_app")
+        self.assertEqual((failure["command"], failure["returnCode"]), ("ditto", 16))
+        self.assertNotIn(str(self.root), failure["stderr"])
+        self.assertIn("<build-app>", failure["stderr"])
+        self.assertIn("<audit-root>", failure["stderr"])
+
     def test_matching_release_requires_both_integrity_checked_assets(self):
         version = "0.4.0-macos-preview.3"
         name = f"AI-First-Tools-{version}-macos-arm64.dmg"
