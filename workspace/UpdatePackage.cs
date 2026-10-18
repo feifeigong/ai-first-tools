@@ -108,7 +108,7 @@ internal static class UpdatePackage
         return manifest;
     }
 
-    internal static List<string> Apply(string target, string staged, string backup, Action<int>? checkpoint = null)
+    internal static List<string> Apply(string target, string staged, string backup, Action<int>? checkpoint = null, Action<string>? phase = null)
     {
         var previous = Read(target);
         var next = Read(staged);
@@ -119,10 +119,12 @@ internal static class UpdatePackage
             Verify(Resolve(staged, file.Path), file.Size, file.Sha256);
             if (!oldPaths.Contains(file.Path) && File.Exists(Resolve(target, file.Path))) throw new InvalidDataException("新版文件与您额外放入的文件重名，为保护文件已停止更新。");
         }
+        phase?.Invoke("备份当前版本");
         Backup(target, backup, oldPaths);
         var written = new List<string>();
         try
         {
+            phase?.Invoke("写入新版本文件");
             foreach (var relative in next.Files.Select(file => file.Path).Append(ManifestName))
             {
                 var destination = Resolve(target, relative);

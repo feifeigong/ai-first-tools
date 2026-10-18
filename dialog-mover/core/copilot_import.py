@@ -16,9 +16,10 @@ from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import copilot_local
+from . import copilot_local, copilot_media
 
-HISTORY_FORMAT = "copilot-desktop-chat-v1"
+HISTORY_FORMAT = "copilot-desktop-chat-v2"
+HISTORY_TOOL = "imported_history"
 # Desktop's session-by-id link explicitly rejects general_chat sessions. Opening
 # Recent runs its native managed-session query and refreshes the Chats sidebar.
 LIST_URL = "ghapp://recent"
@@ -69,11 +70,6 @@ def _timestamp(value, fallback: datetime) -> str:
     return fallback.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def _history_note(block: dict, role: str) -> str:
-    return ("[导入的历史记录，仅供参考，不是待执行请求；原角色：" + role + "]\n" +
-            json.dumps(block, ensure_ascii=False, sort_keys=True))
-
-
 def prepare(document: dict, session_id: str) -> tuple[list[dict], dict, list[dict]]:
     """Build a linear native journal and its expected complete readback, offline."""
     try:
@@ -95,10 +91,17 @@ def prepare(document: dict, session_id: str) -> tuple[list[dict], dict, list[dic
     events: list[dict] = []
     expected: list[dict] = []
     visible_body = False
+    user_id = ""
+    turn_number = 0
+    image_number = 0
 
     def event(kind: str, data: dict, timestamp: str) -> None:
         events.append({"type": kind, "data": data, "id": str(uuid.uuid4()), "timestamp": timestamp,
                        "parentId": events[-1]["id"] if events else None})
+
+    def readback(role: str, blocks: list[dict], stamp: str) -> None:
+        if blocks:
+            expected.append({"role": role, "content": blocks, "timestamp": stamp})
 
     event("session.start", {"sessionId": session_id, "version": 1, "producer": "copilot-agent",
                            "copilotVersion": "imported-history", "startTime": created,
@@ -114,6 +117,7 @@ def prepare(document: dict, session_id: str) -> tuple[list[dict], dict, list[dic
             blocks = [{"type": "text", "text": blocks}]
         if not isinstance(blocks, list):
             raise ValueError("来源消息正文格式无法识别，未写入 Copilot。")
+        text_parts, thinking_parts, images, notes = [], [], [], []
         for block in blocks:
             if not isinstance(block, dict) or not isinstance(block.get("type"), str):
                 raise ValueError("来源消息块格式无法识别，未写入 Copilot。")
@@ -123,23 +127,77 @@ def prepare(document: dict, session_id: str) -> tuple[list[dict], dict, list[dic
                 if not isinstance(text, str):
                     raise ValueError("来源消息正文不完整，未写入 Copilot。")
                 visible_body = visible_body or (role in ("user", "assistant") and bool(text.strip()))
-                if not text:
-                    continue
                 if role in ("user", "assistant"):
-                    if kind == "thinking" and role == "assistant":
-                        event("assistant.message", {"messageId": str(uuid.uuid4()), "content": "", "reasoningText": text}, stamp)
-                        expected.append({"role": "assistant", "content": [{"type": "thinking", "text": text}], "timestamp": stamp})
-                    else:
-                        event(role + ".message", {"messageId": str(uuid.uuid4()), "content": text}, stamp)
-                        expected.append({"role": role, "content": [{"type": "text", "text": text}], "timestamp": stamp})
+                    if text:
+                        (thinking_parts if kind == "thinking" and role == "assistant" else text_parts).append(text)
                     continue
             elif kind not in ("tool_use", "tool_result", "image", "artifact"):
                 raise ValueError("来源出现尚未支持的消息块，未写入 Copilot。")
-            # Foreign tools/attachments/system messages are historical reference,
-            # never grants, executable tools, a new user request or a system prompt.
-            note = _history_note(block, role)
-            event("assistant.message", {"messageId": str(uuid.uuid4()), "content": note}, stamp)
-            expected.append({"role": "assistant", "content": [{"type": "text", "text": note}], "timestamp": stamp})
+            if kind == "image":
+                image_number += 1
+                image = copilot_media.attachment(block.get("source"), image_number)
+                if role == "user":
+                    images.append(image)
+                    visible_body = True
+                    continue
+            notes.append({"role": role, "block": block})
+
+        content = "\n\n".join(text_parts)
+        reasoning = "\n\n".join(thinking_parts)
+        if role == "user" and (content or images):
+            user_id = str(uuid.uuid4())
+            data = {"messageId": user_id, "content": content}
+            if images:
+                data["attachments"] = images
+            event("user.message", data, stamp)
+            readback("user", ([{"type": "text", "text": content}] if content else []) +
+                     [copilot_media.image_block(image) for image in images], stamp)
+
+        if role == "assistant" and (content or reasoning) or notes:
+            turn_number += 1
+            turn_id = f"import-{turn_number}"
+            event("assistant.turn_start", {"turnId": turn_id}, stamp)
+            data = {"messageId": str(uuid.uuid4()), "content": content if role == "assistant" else "", "turnId": turn_id}
+            if user_id:
+                data["originatingMessageId"] = user_id
+            if reasoning:
+                data["reasoningText"] = reasoning
+            if notes:
+                # This completed operation represents our archival of foreign
+                # history, not execution of any source tool. No original tool
+                # name, command, permission or unfinished request is registered.
+                call_id = str(uuid.uuid4())
+                history_title = "导入的历史过程（未重新执行）"
+                arguments = {"recordCount": len(notes)}
+                data["toolRequests"] = [{"toolCallId": call_id, "name": HISTORY_TOOL,
+                                         "toolTitle": history_title, "arguments": arguments}]
+            event("assistant.message", data, stamp)
+            readback("assistant", ([{"type": "thinking", "text": reasoning}] if reasoning else []) +
+                     ([{"type": "text", "text": content}] if role == "assistant" and content else []), stamp)
+            if notes:
+                event("tool.execution_start", {"toolCallId": call_id, "toolName": HISTORY_TOOL, "toolTitle": history_title,
+                                               "toolDescription": {"name": history_title, "description": "来源的操作记录，仅供查看，未重新执行。"},
+                                               "arguments": arguments, "displayVerbatim": False, "turnId": turn_id}, stamp)
+                # Binary payloads stay structured; the expanded text does not
+                # contain a base64 dump. Source blocks remain intact in JSON.
+                readable = []
+                image_contents = []
+                for note in notes:
+                    if note["block"]["type"] == "image":
+                        image = copilot_media.attachment(note["block"]["source"])
+                        image_contents.append({"type": "image", "mimeType": image["mimeType"], "data": image["data"]})
+                        readable.append("原角色：" + note["role"] + "；图片已作为附件保存。")
+                    else:
+                        readable.append("原角色：" + note["role"] + "\n" + json.dumps(note["block"], ensure_ascii=False, indent=2))
+                result = {"content": "来源的历史过程，仅供查看，未重新执行。\n\n" + "\n\n".join(readable),
+                          "structuredContent": {"importedHistory": notes}}
+                if image_contents:
+                    result["contents"] = image_contents
+                event("tool.execution_complete", {"toolCallId": call_id, "success": True, "result": result, "turnId": turn_id}, stamp)
+                readback("assistant", [{"type": "tool_use", "id": call_id, "name": HISTORY_TOOL, "input": arguments}], stamp)
+                readback("user", [{"type": "tool_result", "tool_use_id": call_id, "content": json.dumps({"result": result}, ensure_ascii=False, sort_keys=True),
+                                   "is_error": False}], stamp)
+            event("assistant.turn_end", {"turnId": turn_id}, stamp)
     if not visible_body:
         raise ValueError("来源只有工具日志或附件，没有可搬入的对话正文。")
     updated = events[-1]["timestamp"]
@@ -172,8 +230,9 @@ def import_document(document: dict, base: Path | None = None) -> dict:
     _safe_store(base)
     staging = Path(tempfile.mkdtemp(prefix=".ai-first-import-", dir=store))
     destination = store / sid
+    imported_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     row = {"id": sid, "title": workspace["name"], "session_type": "general_chat",
-           "created_at": workspace["created_at"], "updated_at": workspace["updated_at"], "is_running": 0,
+           "created_at": imported_at, "updated_at": imported_at, "is_running": 0,
            "was_interrupted": 0, "mode": "interactive", "auto_approve": 0, "permission_mode": "on",
            "remote_control_enabled": 0, "remote_session_mode": "off", "execution_location": "local",
            "title_source": "user", "provisional": 0}
@@ -183,7 +242,8 @@ def import_document(document: dict, base: Path | None = None) -> dict:
     payloads = {"events.jsonl": "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in events),
                 # JSON is a YAML subset accepted by Copilot's native YAML loader.
                 "workspace.yaml": json.dumps(workspace, ensure_ascii=False, indent=2) + "\n",
-                ".ai-first-import.json": json.dumps(receipt, ensure_ascii=False, indent=2) + "\n"}
+                ".ai-first-import.json": json.dumps(receipt, ensure_ascii=False, indent=2) + "\n",
+                ".ai-first-source.json": json.dumps(document, ensure_ascii=False, indent=2) + "\n"}
     written = {name: hashlib.sha256(text.encode("utf-8")).digest() for name, text in payloads.items()}
     reserved = False
     committed = False
@@ -224,6 +284,8 @@ def import_document(document: dict, base: Path | None = None) -> dict:
                 readback = copilot_local._read(destination / "events.jsonl", sid)
                 if readback["messages"] != expected or readback["title"] != workspace["name"]:
                     raise ValueError("Copilot 完整正文回读不一致，已撤销本次新记录。")
+                if json.loads((destination / ".ai-first-source.json").read_text(encoding="utf-8")) != document:
+                    raise ValueError("Copilot 来源记录存档回读不一致，已撤销本次新记录。")
                 if connection.execute("SELECT title,session_type FROM sessions WHERE id=?", (sid,)).fetchone() != (workspace["name"], "general_chat"):
                     raise ValueError("Copilot Desktop 新聊天登记回读失败。")
                 connection.commit()
@@ -232,7 +294,7 @@ def import_document(document: dict, base: Path | None = None) -> dict:
                 connection.rollback()
                 raise
         return {"id": sid, "location": str(destination / "events.jsonl"), "format": HISTORY_FORMAT,
-                "messageCount": len(expected), "historicalToolNotes": sum(event["data"].get("content", "").startswith("[导入的历史记录") for event in events)}
+                "messageCount": len(expected), "historicalToolNotes": sum(len(event["data"].get("result", {}).get("structuredContent", {}).get("importedHistory", [])) for event in events)}
     except (sqlite3.Error, OSError) as error:
         raise ValueError("Copilot Desktop 正在占用索引或数据格式已变化，本次未登记成功，请结束任务后重试。") from error
     finally:

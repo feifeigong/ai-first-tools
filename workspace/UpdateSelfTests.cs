@@ -342,6 +342,41 @@ internal static class UpdateSelfTests
             using var guard = new Mutex(false, UpdateRunner.GuardName(target));
             require(UpdateRunner.IsUpdating(target) && !UpdateRunner.IsUpdating(Area("other-guard")));
         });
+        check("Update progress remains responsive and shows the actual stage and elapsed seconds", () =>
+        {
+            var job = Area("progress"); Directory.CreateDirectory(job);
+            using var progress = new UpdateProgressWindow(job);
+            progress.Show();
+            progress.SetStage(3, "备份当前版本");
+            Wait(Task.Delay(1100));
+            require(progress.Window.IsVisible && progress.ElapsedSeconds >= 1 && progress.StageText == "备份当前版本（3/6）");
+            progress.SetStage(4, "安装新版本");
+            using var status = JsonDocument.Parse(File.ReadAllText(Path.Combine(job, "progress.json")));
+            require(status.RootElement.GetProperty("step").GetInt32() == 4 && status.RootElement.GetProperty("elapsedSeconds").GetInt64() >= 1);
+        });
+        check("Launching during an update activates its existing progress window for the same installation", () =>
+        {
+            var job = Area("progress-activation"); Directory.CreateDirectory(job);
+            using var progress = new UpdateProgressWindow(job);
+            progress.Show(); progress.Window.WindowState = System.Windows.WindowState.Minimized;
+            using var activation = new InstanceActivation(UpdateRunner.ActivationKey(job), () => progress.Window.Dispatcher.BeginInvoke(progress.Activate));
+            var shown = InstanceActivation.ShowExistingAsync(UpdateRunner.ActivationKey(job));
+            Wait(shown); Wait(Task.Delay(100));
+            require(shown.Result && progress.Window.WindowState == System.Windows.WindowState.Normal);
+            require(UpdateRunner.ActivationKey(job) != UpdateRunner.ActivationKey(Area("other-progress")));
+        });
+        check("A successful update reopens while its complete backup is retained for later housekeeping", () =>
+        {
+            var job = Area("reopen-before-cleanup"); var backup = Path.Combine(job, "backup"); Directory.CreateDirectory(backup);
+            var preserved = Path.Combine(backup, "previous-program.txt"); File.WriteAllText(preserved, "original program");
+            var opened = false;
+            UpdateRunner.CompleteAndOpen(job, () =>
+            {
+                require(File.Exists(Path.Combine(job, "completed")) && File.ReadAllText(preserved) == "original program");
+                opened = true;
+            });
+            require(opened && File.Exists(preserved));
+        });
     }
 
     private sealed class FakeHttp : HttpMessageHandler

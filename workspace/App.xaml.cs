@@ -50,7 +50,8 @@ public partial class App : Application
         }
         if (UpdateRunner.IsUpdating(AppContext.BaseDirectory))
         {
-            MessageBox.Show("正在更新，完成后会自动打开，请稍等。", "AI一手", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (!await InstanceActivation.ShowExistingAsync(UpdateRunner.ActivationKey(AppContext.BaseDirectory)))
+                MessageBox.Show("正在更新，完成后会自动打开，请在更新窗口查看当前步骤和已用时间。", "AI一手", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
         }

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import copy
+import base64
 import json
 import os
 import sqlite3
+import struct
 import tempfile
 import unittest
+import zlib
 from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,6 +46,24 @@ def conversation(directory: Path, rounds: int = 3) -> dict:
     return {"id": "chatgpt-synthetic-source", "title": "从 ChatGPT 导入的合成长对话", "cwd": str(directory), "messages": messages}
 
 
+def image_source() -> dict:
+    def chunk(kind, payload):
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload))
+    pixels = b"".join(b"\0" + b"\xe6\x52\x52" * 80 + b"\x49\x90\xe2" * 80 for _ in range(80))
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 160, 80, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(pixels)) + chunk(b"IEND", b"")
+    return {"type": "base64", "media_type": "image/png", "data": base64.b64encode(png).decode("ascii")}
+
+
+def visual_conversation(directory: Path) -> dict:
+    return {"id": "synthetic-visual-history", "title": "AI一手导入显示测试", "cwd": str(directory), "messages": [
+        {"role": "user", "content": [{"type": "image", "source": image_source()}, {"type": "text", "text": "这张合成图片里有哪两种颜色？"}]},
+        {"role": "assistant", "content": [{"type": "thinking", "text": "合成思考：核对图片颜色。"}, {"type": "tool_use", "id": "original-call", "name": "source_shell", "input": {"command": "DO_NOT_EXECUTE_SYNTHETIC"}}]},
+        {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "original-call", "content": "合成日志：红色和蓝色。"}]},
+        {"role": "assistant", "content": [{"type": "text", "text": "图片左侧是红色，右侧是蓝色。"}]},
+        {"role": "user", "content": [{"type": "text", "text": "请保持问答顺序。"}]},
+        {"role": "assistant", "content": [{"type": "text", "text": "这是第二轮的合成回答。"}]}]}
+
+
 class CopilotDestinationTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="copilot-import-")
@@ -60,10 +81,10 @@ class CopilotDestinationTests(unittest.TestCase):
         result = copilot_import.import_document(document)
         self.assertEqual(document, original)
         body = copilot_local.document(result["id"])
-        self.assertEqual(len(body["messages"]), 375)
+        self.assertEqual(len(body["messages"]), 250)
         for source in document["messages"]:
             for block in source["content"]:
-                self.assertIn(block["text"], [entry["content"][0]["text"] for entry in body["messages"]])
+                self.assertIn(block["text"], [part["text"] for entry in body["messages"] for part in entry["content"]])
         groups = copilot_local.groups()
         self.assertEqual(groups[0]["title"], "聊天")
         self.assertEqual(groups[0]["sessions"][0]["title"], document["title"])
@@ -76,7 +97,7 @@ class CopilotDestinationTests(unittest.TestCase):
         self.assertEqual(json.loads((directory / "workspace.yaml").read_text(encoding="utf-8"))["cwd"], str(self.directory))
         self.assertFalse(any(self.root.rglob(".ai-first-import-*")))
 
-    def test_foreign_tools_and_system_instructions_are_complete_historical_notes(self):
+    def test_foreign_tools_and_system_instructions_are_collapsed_complete_history(self):
         document = conversation(self.directory)
         blocks = [{"type": "tool_use", "id": "foreign-call", "name": "dangerous_tool", "input": {"command": "synthetic command, never execute"}},
                   {"type": "tool_result", "tool_use_id": "foreign-call", "content": "完整工具返回\n" + "x" * 10000}]
@@ -85,12 +106,49 @@ class CopilotDestinationTests(unittest.TestCase):
         result = copilot_import.import_document(document)
         body = copilot_local.document(result["id"])
         text = json.dumps(body, ensure_ascii=False)
-        self.assertIn("不是待执行请求", text)
+        self.assertIn("未重新执行", text)
         self.assertIn("synthetic source instruction", text)
         for block in blocks:
-            self.assertTrue(any(json.dumps(block, ensure_ascii=False, sort_keys=True) in message["content"][0]["text"] for message in body["messages"]))
+            self.assertIn(block, [note["block"] for event in [json.loads(line) for line in Path(result["location"]).read_text(encoding="utf-8").splitlines()]
+                                  for note in event["data"].get("result", {}).get("structuredContent", {}).get("importedHistory", [])])
         events = [json.loads(line) for line in Path(result["location"]).read_text(encoding="utf-8").splitlines()]
-        self.assertFalse(any(event["type"].startswith(("tool.", "permission.")) for event in events))
+        self.assertFalse(any(event["type"].startswith("permission.") for event in events))
+        self.assertEqual({event["data"]["toolName"] for event in events if event["type"] == "tool.execution_start"}, {copilot_import.HISTORY_TOOL})
+        requests = {request["toolCallId"] for event in events for request in event["data"].get("toolRequests", [])}
+        completed = {event["data"]["toolCallId"] for event in events if event["type"] == "tool.execution_complete"}
+        self.assertEqual(requests, completed)
+        self.assertFalse(any("dangerous_tool" in event["data"].get("content", "") for event in events if event["type"] in ("user.message", "assistant.message")))
+        self.assertEqual(json.loads(Path(result["location"]).with_name(".ai-first-source.json").read_text(encoding="utf-8")), document)
+
+    def test_images_are_native_attachments_and_normal_chat_has_no_protocol_dumps(self):
+        document = visual_conversation(self.directory)
+        result = copilot_import.import_document(document)
+        events = [json.loads(line) for line in Path(result["location"]).read_text(encoding="utf-8").splitlines()]
+        displayed = [event for event in events if event["type"] in ("user.message", "assistant.message") and event["data"]["content"]]
+        self.assertEqual([(event["type"], event["data"]["content"]) for event in displayed], [
+            ("user.message", "这张合成图片里有哪两种颜色？"), ("assistant.message", "图片左侧是红色，右侧是蓝色。"),
+            ("user.message", "请保持问答顺序。"), ("assistant.message", "这是第二轮的合成回答。")])
+        image = displayed[0]["data"]["attachments"][0]
+        self.assertEqual(image["type"], "blob")
+        self.assertEqual(image["data"], image_source()["data"])
+        self.assertFalse(any(image["data"] in event["data"]["content"] or "DO_NOT_EXECUTE" in event["data"]["content"] for event in displayed))
+        self.assertEqual(copilot_local.document(result["id"])["messages"][0]["content"][1]["source"], image_source())
+
+    def test_bad_images_fail_before_writing_and_old_format_allows_one_corrected_copy(self):
+        for source in ({"type": "url", "data": "https://example.invalid/image.png"},
+                       {"type": "base64", "media_type": "image/png", "data": "broken encoding!"},
+                       {"type": "base64", "media_type": "image/png", "data": base64.b64encode(b"not a PNG").decode()}):
+            document = visual_conversation(self.directory)
+            document["messages"][0]["content"][0]["source"] = source
+            with self.assertRaises(ValueError):
+                copilot_import.import_document(document)
+        self.assertFalse((self.root / "session-state").exists())
+        key = mover.history_key("chatgpt_work", "synthetic-source", "copilot_desktop", str(self.directory))
+        (self.base / "history.json").write_text(json.dumps({key: {"time": 1, "format": "copilot-desktop-chat-v1"}}), encoding="utf-8")
+        with patch.object(mover, "data_dir", return_value=self.base):
+            self.assertFalse(mover.already_moved("chatgpt_work", "synthetic-source", "copilot_desktop", str(self.directory)))
+            mover._record_move("chatgpt_work", "synthetic-source", "copilot_desktop", str(self.directory))
+            self.assertTrue(mover.already_moved("chatgpt_work", "synthetic-source", "copilot_desktop", str(self.directory)))
 
     def test_chatgpt_export_flows_to_desktop_and_is_deduplicated(self):
         document = conversation(self.directory)
@@ -122,7 +180,7 @@ class CopilotDestinationTests(unittest.TestCase):
         self.assertEqual(body["title"], document["title"])
         for source in document["messages"]:
             for block in source["content"]:
-                self.assertIn(block["text"], [entry["content"][0]["text"] for entry in body["messages"]])
+                self.assertIn(block["text"], [part["text"] for entry in body["messages"] for part in entry["content"]])
 
     def test_native_list_handoff_for_new_and_previous_copies_and_open_failure_retry(self):
         for state in ("ok", "skipped"):

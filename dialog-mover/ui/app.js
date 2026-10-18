@@ -573,7 +573,7 @@
     const copilot = sheet.target === "copilot_desktop";
     const openName = copilot ? "Copilot" : "ChatGPT";
     const openPending = copilot ? "可打开 Copilot 会话列表，刷新后查看搬入记录" : "可请求 ChatGPT 打开这条本机记录";
-    const openRequested = copilot ? "已请求 Copilot 刷新会话列表，点击搬入记录的标题查看" : "已请求打开这条记录；请在 ChatGPT 中确认";
+    const openRequested = copilot ? "已请求打开 Copilot 会话列表；仍是旧列表时，请刷新 Copilot 窗口" : "已请求打开这条记录；请在 ChatGPT 中确认";
     const hint = target.resultHint || "已写入目标软件的本机记录。";
     body.innerHTML = `<div class="done-mark ${bad ? "warn" : ""}">${bad ? ICON.dash.replace(/13/g, "26") : ICON.tick.replace(/13/g, "26")}</div>
       <h2>${bad ? (status.ok ? "部分记录未复制成功" : "这次没有复制成功") : (!status.ok && status.skipped ? "这些记录之前已复制" : "记录已复制")}</h2>

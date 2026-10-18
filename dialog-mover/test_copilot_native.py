@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 from core import copilot_import, mover
-from test_copilot_import import conversation, desktop_index
+from test_copilot_import import conversation, desktop_index, visual_conversation
 
 
 class NativeReader:
@@ -103,6 +103,7 @@ class NativeCopilotTests(unittest.TestCase):
             desktop_index(base / "profile")
             source = conversation(base / "project", 125)
             source["messages"][1]["content"].append({"type": "tool_result", "tool_use_id": "foreign-id", "content": "Historical result\n" * 1000})
+            source["messages"].extend(visual_conversation(base / "project")["messages"])
             result = copilot_import.import_document(source, base / "profile")
             expected = [json.loads(line) for line in Path(result["location"]).read_text(encoding="utf-8").splitlines()]
             reader = NativeReader(binary, base)

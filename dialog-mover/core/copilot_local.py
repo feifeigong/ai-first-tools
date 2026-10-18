@@ -16,6 +16,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from .common import as_millis, finish_groups, folder_name, home, make_group, make_session, norm, read_db, user_env
+from . import copilot_media
 
 IDENTITY = re.compile(r"^[0-9A-Za-z_-]{6,80}$")
 INDEX_ERROR = "Copilot 桌面索引暂时无法识别或正被占用，请关闭 Copilot 后刷新；未修改源记录。"
@@ -230,6 +231,14 @@ def _read(path: Path, sid: str) -> dict:
                             blocks.append({"type": "thinking", "text": data["reasoningText"]})
                         if data["content"]:
                             blocks.append({"type": "text", "text": data["content"]})
+                        attachments = data.get("attachments") or []
+                        if not isinstance(attachments, list) or any(not isinstance(item, dict) for item in attachments):
+                            raise ValueError("Copilot 图片附件格式变化，暂时不能搬运。")
+                        for item in attachments:
+                            if item.get("type") == "blob" and str(item.get("mimeType", "")).startswith("image/"):
+                                blocks.append(copilot_media.image_block(item))
+                            else:
+                                blocks.append(_historical(item, "附件信息（附件文件未读取）"))
                         has_body = has_body or bool(data["content"].strip())
                         role = "user" if kind == "user.message" else "assistant"
                         current_model = data.get("model") or model

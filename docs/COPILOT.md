@@ -1,5 +1,9 @@
 # Copilot Desktop 对话搬家
 
+2026-10-18 候选 v0.3.15 / preview.18 修正了导入内容的显示语义。旧 v1 将图片 Base64、工具调用和工具结果逐块串成普通助手正文，导致编码刷屏、JSON 日志连在正常回答前面。v2 将同一消息的普通文字合并、原始角色和时间保留；用户图片写入原生 `user.message.attachments` 的内嵌图片字段；思考仍用原生 reasoningText；原工具、系统说明和其他历史信息归入默认折叠的 `imported_history` 归档操作，不登记原工具名称或权限、不重新执行。每个归档操作均已完整结束，成功仅表示历史保存成功，不代表来源工具执行成功。完整源文档另保存在新副本的 `.ai-first-source.json`，逐字段回读验证，不出现在正常聊天正文中。
+
+v2 去重允许旧格式记录再复制一次，源和旧副本都保留；新的本机登记时间取本次复制时间，便于在列表顶部找到，消息时间仍保留来源值。Windows Desktop 1.1.30 的合成图片、连续两轮问答和默认折叠已通过实际窗口验收。另已复现：官方 Recent 链接只导航页面，并不能保证重新加载已缓存的侧栏；旧记录可能可见，而刚搬入的记录点开后返回 New。结果页明确提示 Copilot 已开着时在 Windows 按 F5 刷新；Mac 在任务结束后完全退出 Copilot 再打开，不再把打开请求称作刷新成功。此前 v0.3.14 的“自动刷新”验收范围不充分，不能据此保证所有新导入立即可见。
+
 2026-10-18 已发布修订（[Windows v0.3.14](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.14) / [Mac preview.17](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.17)，构建、原生检查及全部资产独立下载核验通过）：修复搬入后 Desktop 仍显示旧列表的问题。在 Windows 已安装的 Copilot Desktop 1.1.30 中复现：索引与正文已存在，窗口关闭再开仍复用后台进程；进入原生 Manage sessions 后查询到新记录，Chats 侧栏随之更新，点击能打开正文。此前官方 CLI 严格恢复检查没有覆盖这个界面刷新环节，不能替代 Desktop 验收。
 
 新流程在每批完成后调用官方本机 `ghapp://chats`，再进入 `ghapp://recent`，使已经停留在会话管理页的重复搬运也重新进入查询页面；不退出或终止 Copilot，不发送消息。结果提供「在 Copilot 中查看」和失败重试。已搬过记录沿用去重，仍提供同一个列表入口，因此 v0.3.13 的旧副本无需再复制。此入口打开会话列表，不声称按编号直接打开聊天：`ghapp://sessions/<编号>` 在该 Desktop 版本会明确拒绝普通 Chats。官方入口参见 [GitHub 深链接文档](https://docs.github.com/en/copilot/how-tos/github-copilot-app/open-with-deep-links)。Windows 实机已验证新版打开流程和原记录正文；Mac 共用该流程，Mac Desktop 实机尚未验证。

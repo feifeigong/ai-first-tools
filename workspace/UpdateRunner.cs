@@ -21,6 +21,7 @@ internal static class UpdateRunner
     internal static string InstalledRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "AI First Tools");
     internal const string RegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\AIFirstTools";
     internal static string GuardName(string target) => "Local\\AI_FIRST_TOOLS_UPDATING_" + ToolRepository.ConfigurationKey(Path.Combine(target, UpdatePackage.AppExecutable));
+    internal static string ActivationKey(string target) => "UPDATE_" + ToolRepository.ConfigurationKey(Path.Combine(target, UpdatePackage.AppExecutable));
     internal static string ReceiptPath(string target) => Path.Combine(CacheRoot, "result-" + ToolRepository.ConfigurationKey(Path.Combine(target, UpdatePackage.AppExecutable)) + ".json");
 
     internal static bool IsUpdating(string target)
@@ -130,7 +131,8 @@ internal static class UpdateRunner
     internal static async Task<int> RunAsync(string planPath)
     {
         UpdatePlan? plan = null;
-        Window? window = null;
+        UpdateProgressWindow? progress = null;
+        InstanceActivation? activation = null;
         Mutex? guard = null;
         var parentExited = false;
         try
@@ -150,11 +152,15 @@ internal static class UpdateRunner
                 await Task.Delay(100);
             }
             parentExited = true;
-            window = ProgressWindow();
-            window.Show();
+            progress = new UpdateProgressWindow(job);
+            progress.Show();
+            activation = new InstanceActivation(ActivationKey(plan.Target), () => Application.Current.Dispatcher.BeginInvoke(() => progress?.Activate()));
+            void Stage(int number, string label) => Application.Current.Dispatcher.Invoke(() => progress.SetStage(number, label));
             await Task.Run(async () =>
             {
+                Stage(1, "暂停续跑后台");
                 await AutoResumeRuntime.PrepareAsync(plan.Target);
+                Stage(2, "等待程序文件释放");
                 await WaitForFilesAsync(plan.Target);
                 var backup = Path.Combine(job, "backup");
                 if (plan.Installed)
@@ -165,14 +171,17 @@ internal static class UpdateRunner
                         throw new InvalidOperationException("请先关闭其他工作台窗口，再更新。");
                     }
                     var old = UpdatePackage.Read(plan.Target, plan.PreviousVersion);
+                    Stage(3, "备份当前版本");
                     UpdatePackage.Backup(plan.Target, backup, old.Files.Select(file => file.Path).Append(UpdatePackage.ManifestName).Append("Uninstall.exe"));
                     try
                     {
+                        Stage(4, "安装新版本");
                         var start = new ProcessStartInfo(UpdatePackage.Resolve(job, plan.PackageName)) { UseShellExecute = false, WorkingDirectory = job };
                         start.ArgumentList.Add("/S");
                         using var installer = Process.Start(start) ?? throw new InvalidOperationException("没有启动安装程序。");
                         await installer.WaitForExitAsync();
                         if (installer.ExitCode != 0) throw new InvalidOperationException("安装未完成，请关闭其他工作台窗口后重试。");
+                        Stage(5, "核对新版本文件");
                         var installedManifest = UpdatePackage.Read(plan.Target, plan.Version);
                         CheckExecutableVersion(plan.Target, plan.Version);
                         var newFiles = installedManifest.Files.Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -198,25 +207,26 @@ internal static class UpdateRunner
                 else
                 {
                     var staged = Path.Combine(job, "staged");
+                    Stage(3, "校验与备份程序");
                     UpdatePackage.Read(staged, plan.Version);
                     CheckExecutableVersion(staged, plan.Version);
-                    var written = UpdatePackage.Apply(plan.Target, staged, backup);
+                    var written = UpdatePackage.Apply(plan.Target, staged, backup, phase: label => Stage(label == "备份当前版本" ? 3 : 4, label));
+                    Stage(5, "核对新版本文件");
                     try { CheckExecutableVersion(plan.Target, plan.Version); }
                     catch { UpdatePackage.Restore(plan.Target, backup, written); throw; }
                 }
             });
+            Stage(6, "正在打开新版本");
             File.WriteAllText(ReceiptPath(plan.Target), JsonSerializer.Serialize(new { version = plan.Version, success = true }, UpdatePackage.Json));
-            File.WriteAllText(Path.Combine(job, "completed"), DateTimeOffset.UtcNow.ToString("O"));
-            await Task.Run(() => RemoveTemporaryFiles(job));
-            if (window is not null)
-            {
-                window.Closing -= (CancelEventHandler)window.Tag;
-                window.Close();
-                window = null;
-            }
+            // Reopening must not wait for deleting hundreds of megabytes of
+            // backups. Existing background cache housekeeping removes old jobs.
+            progress.Dispose();
+            progress = null;
+            activation.Dispose();
+            activation = null;
             guard.Dispose();
             guard = null;
-            OpenWorkbench(plan);
+            CompleteAndOpen(job, () => OpenWorkbench(plan));
             return 0;
         }
         catch (Exception exception)
@@ -235,12 +245,15 @@ internal static class UpdateRunner
         finally
         {
             guard?.Dispose();
-            if (window is not null)
-            {
-                window.Closing -= (CancelEventHandler)window.Tag;
-                window.Close();
-            }
+            activation?.Dispose();
+            progress?.Dispose();
         }
+    }
+
+    internal static void CompleteAndOpen(string job, Action open)
+    {
+        File.WriteAllText(Path.Combine(job, "completed"), DateTimeOffset.UtcNow.ToString("O"));
+        open();
     }
 
     private static void OpenWorkbench(UpdatePlan plan)
@@ -299,32 +312,4 @@ internal static class UpdateRunner
         Directory.Delete(path);
     }
 
-    private static void RemoveTemporaryFiles(string job)
-    {
-        try
-        {
-            UpdatePackage.EnsureNoLinks(job);
-            foreach (var name in new[] { "staged", "backup" })
-            {
-                var directory = UpdatePackage.Resolve(job, name);
-                if (!Directory.Exists(directory)) continue;
-                DeleteCacheTree(directory);
-            }
-            foreach (var file in Directory.GetFiles(job).Where(path => path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))) File.Delete(file);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { App.Log(exception); }
-    }
-
-    private static Window ProgressWindow()
-    {
-        var panel = new StackPanel { Margin = new Thickness(28) };
-        panel.Children.Add(new TextBlock { Text = "正在更新工具工作台", FontSize = 20, FontWeight = FontWeights.SemiBold });
-        panel.Children.Add(new TextBlock { Text = "完成后自动重新打开，请稍等…", Margin = new Thickness(0, 10, 0, 20), FontSize = 13 });
-        panel.Children.Add(new ProgressBar { Height = 4, IsIndeterminate = true });
-        var window = new Window { Title = "AI一手工具工作台", Icon = BrandAssets.LoadWindowIcon(), Content = panel, Width = 420, Height = 200, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterScreen, FontFamily = new System.Windows.Media.FontFamily("Microsoft YaHei UI") };
-        CancelEventHandler closing = (_, args) => args.Cancel = true;
-        window.Closing += closing;
-        window.Tag = closing;
-        return window;
-    }
 }
