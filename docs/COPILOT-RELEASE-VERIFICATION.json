@@ -291,5 +291,114 @@
       "sameVersionNotOffered": true,
       "installedApplicationTouched": false
     }
+  },
+  "nativePresentation20261018": {
+    "windows": {
+      "passed": true,
+      "version": "0.3.15",
+      "source": "552596768f9f95301cb6ea592c5b53b549adcf0b",
+      "releaseId": 416418665,
+      "scope": "independent CI and draft downloads, installer and workspace reports, immutable source tag, exact names, bytes and SHA-256",
+      "installerChecks": {
+        "safeUninstall": true,
+        "extraFilePreserved": true,
+        "installedVersion": true,
+        "silentInstall": true,
+        "bundledRuntime": true,
+        "backgroundUninstall": true,
+        "silentReinstall": true,
+        "installedSelfChecks": true,
+        "backgroundUpgrade": true,
+        "bundledControls": true
+      },
+      "assets": [
+        {
+          "name": "AI-First-Tools-Setup-0.3.15.exe",
+          "bytes": 165645236,
+          "sha256": "bf980cf467c9b1b04c723dea76b52b8565a96094d62277b178e5ec508700d8f6"
+        },
+        {
+          "name": "AI-First-Tools-Portable-0.3.15-win-x64.zip",
+          "bytes": 249625281,
+          "sha256": "7ac003cae49889b2a8e9472dc672b8ff77c62e64c2de4e3976209e4cd7929fe4"
+        },
+        {
+          "name": "SHA256SUMS.txt",
+          "bytes": 209,
+          "sha256": "a3137509f2290447a49391b7c925405890ce16e3e5835a113507216dfe20bd1a"
+        }
+      ]
+    },
+    "windowsPublic": {
+      "public": true,
+      "tag": "v0.3.15",
+      "assets": [
+        {
+          "name": "AI-First-Tools-Setup-0.3.15.exe",
+          "bytes": 165645236,
+          "sha256": "bf980cf467c9b1b04c723dea76b52b8565a96094d62277b178e5ec508700d8f6"
+        },
+        {
+          "name": "AI-First-Tools-Portable-0.3.15-win-x64.zip",
+          "bytes": 249625281,
+          "sha256": "7ac003cae49889b2a8e9472dc672b8ff77c62e64c2de4e3976209e4cd7929fe4"
+        },
+        {
+          "name": "SHA256SUMS.txt",
+          "bytes": 209,
+          "sha256": "a3137509f2290447a49391b7c925405890ce16e3e5835a113507216dfe20bd1a"
+        }
+      ],
+      "allDigestsMatched": true,
+      "checksumFileDownloaded": true
+    },
+    "windowsBuildRun": 39124030559,
+    "windowsCheckRun": 39124026844,
+    "windowsVerificationRun": 39124640263,
+    "desktopVisual": {
+      "windowsDesktopVersion": "1.1.30",
+      "inlineImagePreview": true,
+      "twoRoundOrder": true,
+      "historyCollapsedByDefault": true,
+      "detailsExpandable": true,
+      "base64AbsentFromNormalText": true,
+      "nativeF5RefreshVerified": true,
+      "ownedTestCopiesCleaned": true,
+      "workbenchInstallationTouched": false,
+      "modelRequestSent": false
+    },
+    "isolatedUpdateHelper": {
+      "passed": true,
+      "realHelper": true,
+      "newVersion": true,
+      "sixthStageReached": true,
+      "backupRetainedBeforeReopen": true,
+      "userFilePreserved": true,
+      "installedApplicationTouched": false
+    },
+    "localChecks": {
+      "backend": 148,
+      "ui": 35,
+      "workspace": 74,
+      "nativeCopilotStrictResume": 1,
+      "macUpdaterWithDiagnostics": 26
+    },
+    "windowsPublicSelector": {
+      "from": "0.3.14",
+      "selected": "0.3.15",
+      "sameVersionNotOffered": true
+    },
+    "mac": {
+      "state": "pending native rebuild with fixture diagnostics",
+      "failedArmJob": 117665288705,
+      "firstBuildRun": 39124026895
+    },
+    "limitations": [
+      "Copilot Desktop UI checked on Windows 1.1.30 only; no model request sent",
+      "Old imported copies are preserved; reimport once for v2 presentation",
+      "Opening a list URL does not guarantee native sidebar cache invalidation; Windows F5 verified, Mac fully quit after tasks then reopen",
+      "Update retains full packages; measured old replacement about 49 seconds and then about 4 seconds to process launch, download duration unknown",
+      "Existing installed helper changes only after the user upgrades; workbench installation was not upgraded or restarted by the agent"
+    ]
   }
 }

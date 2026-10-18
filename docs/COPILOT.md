@@ -1,12 +1,12 @@
 # Copilot Desktop 对话搬家
 
-2026-10-18 候选 v0.3.15 / preview.18 修正了导入内容的显示语义。旧 v1 将图片 Base64、工具调用和工具结果逐块串成普通助手正文，导致编码刷屏、JSON 日志连在正常回答前面。v2 将同一消息的普通文字合并、原始角色和时间保留；用户图片写入原生 `user.message.attachments` 的内嵌图片字段；思考仍用原生 reasoningText；原工具、系统说明和其他历史信息归入默认折叠的 `imported_history` 归档操作，不登记原工具名称或权限、不重新执行。每个归档操作均已完整结束，成功仅表示历史保存成功，不代表来源工具执行成功。完整源文档另保存在新副本的 `.ai-first-source.json`，逐字段回读验证，不出现在正常聊天正文中。
+2026-10-18 Windows v0.3.15 已发布，Mac preview.18 待原生构建通过。该轮修正导入内容的显示语义。旧 v1 将图片 Base64、工具调用和工具结果逐块串成普通助手正文，导致编码刷屏、JSON 日志连在正常回答前面。v2 将同一消息的普通文字合并、原始角色和时间保留；用户图片写入原生 `user.message.attachments` 的内嵌图片字段；思考仍用原生 reasoningText；原工具、系统说明和其他历史信息归入默认折叠的 `imported_history` 归档操作，不登记原工具名称或权限、不重新执行。每个归档操作均已完整结束，成功仅表示历史保存成功，不代表来源工具执行成功。完整源文档另保存在新副本的 `.ai-first-source.json`，逐字段回读验证，不出现在正常聊天正文中。
 
 v2 去重允许旧格式记录再复制一次，源和旧副本都保留；新的本机登记时间取本次复制时间，便于在列表顶部找到，消息时间仍保留来源值。Windows Desktop 1.1.30 的合成图片、连续两轮问答和默认折叠已通过实际窗口验收。另已复现：官方 Recent 链接只导航页面，并不能保证重新加载已缓存的侧栏；旧记录可能可见，而刚搬入的记录点开后返回 New。结果页明确提示 Copilot 已开着时在 Windows 按 F5 刷新；Mac 在任务结束后完全退出 Copilot 再打开，不再把打开请求称作刷新成功。此前 v0.3.14 的“自动刷新”验收范围不充分，不能据此保证所有新导入立即可见。
 
-2026-10-18 已发布修订（[Windows v0.3.14](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.14) / [Mac preview.17](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.17)，构建、原生检查及全部资产独立下载核验通过）：修复搬入后 Desktop 仍显示旧列表的问题。在 Windows 已安装的 Copilot Desktop 1.1.30 中复现：索引与正文已存在，窗口关闭再开仍复用后台进程；进入原生 Manage sessions 后查询到新记录，Chats 侧栏随之更新，点击能打开正文。此前官方 CLI 严格恢复检查没有覆盖这个界面刷新环节，不能替代 Desktop 验收。
+上轮 v0.3.14 / preview.17 增加官方列表导航，但只对已有副本验证了打开，遗漏新写入记录的侧栏缓存。该导航不能视为可靠的自动刷新；当前提示和上述 v2 实际窗口检查已修正这一结论。
 
-新流程在每批完成后调用官方本机 `ghapp://chats`，再进入 `ghapp://recent`，使已经停留在会话管理页的重复搬运也重新进入查询页面；不退出或终止 Copilot，不发送消息。结果提供「在 Copilot 中查看」和失败重试。已搬过记录沿用去重，仍提供同一个列表入口，因此 v0.3.13 的旧副本无需再复制。此入口打开会话列表，不声称按编号直接打开聊天：`ghapp://sessions/<编号>` 在该 Desktop 版本会明确拒绝普通 Chats。官方入口参见 [GitHub 深链接文档](https://docs.github.com/en/copilot/how-tos/github-copilot-app/open-with-deep-links)。Windows 实机已验证新版打开流程和原记录正文；Mac 共用该流程，Mac Desktop 实机尚未验证。
+当前流程在每批完成后请求官方本机 `ghapp://chats` → `ghapp://recent` 导航，并提供「在 Copilot 中查看」和失败重试。已搬过记录仍有列表入口。这个入口不按编号直接打开聊天：`ghapp://sessions/<编号>` 在该 Desktop 版本明确拒绝普通 Chats。官方入口参见 [GitHub 深链接文档](https://docs.github.com/en/copilot/how-tos/github-copilot-app/open-with-deep-links)。缓存仍在时按前述客户端步骤刷新；Mac 共用导航但未作 Desktop 真机显示验收。
 
 Windows 搬入与列表修正版已公开 [v0.3.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.13)，构建与独立下载核验通过。Mac 搬入与列表修正版已公开 [preview.15](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.15)，两架构构建与全部资产独立下载核验通过；下文早期版本保留为历史。
 
@@ -26,9 +26,9 @@ Desktop 与 CLI 共用上述存储，不能把所有 `session-state` 文件夹�
 
 ## 搬入 Copilot Desktop
 
-在来源（包括 ChatGPT 普通聊天、本机 Work/Codex）选择已有完整正文的记录，目标选 GitHub Copilot，选择工作文件夹后确认。每条创建一个新的 UUID 聊天副本并登记为 `general_chat`，位于 Desktop 的 Chats，而非自动新建项目或 worktree。v0.3.14 / preview.17 起会打开会话管理页以刷新侧栏，点击搬入标题查看；若系统未能打开本机链接，结果显示重试入口，并提示从 Copilot 用户菜单进入 Manage sessions。
+在来源（包括 ChatGPT 普通聊天、本机 Work/Codex）选择已有完整正文的记录，目标选 GitHub Copilot，选择工作文件夹后确认。每条创建一个新的 UUID 聊天副本并登记为 `general_chat`，位于 Desktop 的 Chats，而非自动新建项目或 worktree。完成后可打开会话管理页；若仍是旧列表，Windows 在 Copilot 按 F5 刷新，Mac 任务结束后完全退出 Copilot 再打开。链接只请求导航，不保证侧栏缓存即时失效。
 
-这是对本机格式的适配，不是 GitHub 官方提供的跨软件历史导入 API。先检查会话表字段和必填项；格式变化、数据库占用、未知正文块时停止。消息转换为版本 1 的连续事件：原用户/助手角色与完整文字、时间保留；思考通过 `assistant.message.reasoningText` 保留，因为原生恢复会过滤独立 `assistant.reasoning` 事件。工具调用/结果、系统说明和附件信息转为明确标注的历史参考文字，不作为可执行工具或新系统指令。附件文件和原项目环境不迁移。
+这是对本机格式的适配，不是 GitHub 官方提供的跨软件历史导入 API。先检查会话表字段和必填项；格式变化、数据库占用、未知正文块时停止。消息转换为版本 1 的连续事件，搬家格式为 v2：原用户/助手角色与完整文字、时间保留；思考通过 `assistant.message.reasoningText` 保留，因为原生恢复会过滤独立 `assistant.reasoning` 事件。用户内嵌图片写为原生 blob 附件；工具调用/结果和系统说明放入已完成且默认折叠的历史归档。外部附件文件和原项目环境不迁移，不获取任意本机路径或网络图片。
 
 写入新目录并在同一 SQLite 事务内登记、比较完整消息后提交；失败只撤销本次新行和仍与本次写入一致的文件，已有行及目录不覆盖。不复制认证、不创建自动批准或远程权限，不启动 Copilot 或模型。SQLite 写入授权只允许本次新增会话，并识别原生的条件 agent 触发器；未知触发器不能修改其他表或额外插入会话。格式版本参与去重。
 
@@ -44,7 +44,7 @@ Desktop 与 CLI 共用上述存储，不能把所有 `session-state` 文件夹�
 - 含截断、快照撤回或清空上下文事件的会话暂时拒绝搬运，避免把已撤回的分支当作当前对话；后续需要单独适配其恢复协议。
 - 列表可搬运不代替最终检查：点击搬运后会重新读取源记录并检查索引。目标仍保留其现有格式校验、备份、回读和去重要求。
 
-只搬对话历史，不复制文件、附件、登录状态、工具权限或原工作环境。目标原生客户端是否显示、是否能继续发送下一轮，需要分别验收，不能以生成文件或回读通过代替。
+只搬对话历史及已在来源正文内嵌的图片，不复制外部文件、登录状态、工具权限或原工作环境。目标原生客户端是否显示、是否能继续发送下一轮，需要分别验收，不能以生成文件或回读通过代替。
 
 读取器逐字保留消息正文。目标适配仍遵循原有格式，例如 WorkBuddy 的用户消息回读会去掉正文首尾空白；不承诺所有目标的排版字节完全一致。
 
@@ -56,7 +56,7 @@ Desktop 与 CLI 共用上述存储，不能把所有 `session-state` 文件夹�
 
 `test_copilot_import` 覆盖 125 轮完整正文、Desktop 登记、工具历史说明、ChatGPT 导出接线及去重、未知结构/触发器、失败回滚和已有目录保护。`test_copilot_native` 在独立空账户目录启动校验值固定的官方 Copilot 1.0.98 测试组件，完整分页读取全部事件，禁止修复地恢复会话，再逐字段比较所有原始事件，包括思考和长工具说明。请求白名单不含发送消息、登录、工具执行；测试组件不打包给用户。Windows、两种 Mac 架构均执行该原生检查。当前依据 Desktop 1.1.29 的索引形状，其他版本需通过同样的结构检查。
 
-原生历史读取和严格恢复不等于已在用户 Desktop 上逐条人工滚动或发送付费下一轮。没有对用户安装做合成导入或升级操作。实际构建与发布验收见两份 QA。
+原生历史读取和严格恢复不等于已在用户 Desktop 上逐条人工滚动或发送付费下一轮。v2 在 Windows 已安装的 Copilot 1.1.30 中用独立合成图片、两轮问答及折叠工具过程验证；只撤销这次自建的两条测试行及目录，未修改用户原记录。没有升级或重开用户工作台。Mac Desktop 界面与在线模型下一轮未验收；实际构建与发布验收见两份 QA。
 
 图标提取自已安装 GitHub Copilot App 的程序资源，未重画、未改色，随软件打包，运行时不联网获取。资源来源与 SHA-256 见 `dialog-mover/ui/assets/agents/sources.json`。
 
