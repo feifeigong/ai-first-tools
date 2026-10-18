@@ -1,5 +1,18 @@
 # Mac 移植验证记录
 
+## 2026-10-18：preview.17 已发布，Copilot 搬入后打开会话管理页
+
+[公开版本](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.17)，两架构包和不可变标签固定源码 `d15b0ee80240f0de0c29730edb7574738feca680`，发布 ID `416401378`。每批搬入后使用官方 Chats → Recent 本机链接刷新列表，结果增加 Copilot 查看与重试，已搬过记录不重复写入。保留 preview.16 完整内置续跑与自动更新。
+
+[两架构原生构建](https://github.com/feifeigong/ai-first-tools/actions/runs/39121374816) 的 Apple 芯片与 Intel 均完成 143 项共享检查、1 项 Copilot 原生完整历史/严格恢复、54 项后台算法及 10 项原生历史/本机模拟续聊，实际 Cocoa APP/DMG、资源、桥接、HTTPS、更新与内置后台报告全部通过。[独立核验](https://github.com/feifeigong/ai-first-tools/actions/runs/39122126090) 将原 CI 与草稿全部 13 个文件逐个下载核对名称、字节、SHA-256、报告和源码标签后公开。匿名公开元数据摘要与公开 SHA256SUMS 再核对通过，两架构从 preview.16 选到 preview.17，包被生产更新校验器接受，同版不提示。
+
+Copilot Desktop 的侧栏刷新与已导入记录正文打开实机验证仅限 Windows Desktop 1.1.30；Mac 共用相同导航流程，没有操作用户真实 Mac Copilot 或测试付费模型下一轮。未替用户安装、更新或重开工作台，不把生产更新选择通过称为用户窗口已经弹出提示。
+
+| 芯片 | DMG 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| Apple / arm64 | 149864399 | `a50e20a4c40731a1206124bc3a1533655a8b6e19a096d3848edf4f4e699fb3b0` |
+| Intel / x86_64 | 159409057 | `90437855fc6d7619317d362a7a3876c97c1ec798ca35042a075f2f62e9a2c66e` |
+
 ## 2026-10-16：preview.16 已发布，单个 APP 内置自动续跑
 
 [公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.16)。不可变源码标签与两种芯片的安装包均固定 `f6efcc44ae34e2505c79a41754439f862587e49a`，发布 ID `415011225`。同一个 Cocoa 工作台新增自动续跑页、包内 Python 后台入口与按芯片校验的 Codex 原生组件；不要求读者另外安装后台、Python、Node 或 Codex CLI。保留自动更新及本轮 Copilot Desktop 搬入与列表修正。

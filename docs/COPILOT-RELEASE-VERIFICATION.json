@@ -138,5 +138,158 @@
     "source": "f6efcc44ae34e2505c79a41754439f862587e49a",
     "containsCopilotSource": true,
     "fourCopilotAdapterFilesIdenticalToPreview15": true
+  },
+  "desktopRefresh20261018": {
+    "source": "d15b0ee80240f0de0c29730edb7574738feca680",
+    "windows": {
+      "passed": true,
+      "version": "0.3.14",
+      "source": "d15b0ee80240f0de0c29730edb7574738feca680",
+      "releaseId": 416401036,
+      "scope": "independent CI and draft downloads, installer and workspace reports, immutable source tag, exact names, bytes and SHA-256",
+      "installerChecks": {
+        "bundledRuntime": true,
+        "extraFilePreserved": true,
+        "silentReinstall": true,
+        "backgroundUninstall": true,
+        "safeUninstall": true,
+        "bundledControls": true,
+        "installedVersion": true,
+        "backgroundUpgrade": true,
+        "silentInstall": true,
+        "installedSelfChecks": true
+      },
+      "assets": [
+        {
+          "name": "AI-First-Tools-Setup-0.3.14.exe",
+          "bytes": 165610993,
+          "sha256": "d4dc6094071348657d74d68628034a85cc69e8756715ec3b302b979bf4b1e66b"
+        },
+        {
+          "name": "AI-First-Tools-Portable-0.3.14-win-x64.zip",
+          "bytes": 249612325,
+          "sha256": "9ff738949ac9af489d05d5284a26feb61deb0731ba0c74b614b013dd8d05692a"
+        },
+        {
+          "name": "SHA256SUMS.txt",
+          "bytes": 209,
+          "sha256": "dfe54ba2e8e3512b7b6d898d0271c663cb62f8c3095aeb7d77c21e3efc4cbd19"
+        }
+      ]
+    },
+    "mac": {
+      "passed": true,
+      "release": "0.4.0-macos-preview.17",
+      "source": "d15b0ee80240f0de0c29730edb7574738feca680",
+      "releaseId": 416401378,
+      "scope": "separately downloaded original CI artifacts and draft assets; native reports, exact names, bytes and SHA-256",
+      "assets": [
+        {
+          "name": "self-test-arm64.json",
+          "bytes": 572,
+          "sha256": "97faf8f1985c1a76a2e0412f8b12930171cd0e75538e769a00d427bba45e2387"
+        },
+        {
+          "name": "smoke-test-arm64.json",
+          "bytes": 640,
+          "sha256": "46c92daceabe310d7f5a1399e7a45a25fea3891215219079f16506d7d3fdfdcf"
+        },
+        {
+          "name": "network-test-arm64.json",
+          "bytes": 381,
+          "sha256": "55e0df974c95a3900c1dd4ed3906c4713552067abfc0c24a94f5920b68e1a26d"
+        },
+        {
+          "name": "update-test-arm64.json",
+          "bytes": 2272,
+          "sha256": "8ecdde8d4592cff4dfbceae4c01eb752dd5c29e131d4ceb3805a6eef691a45ca"
+        },
+        {
+          "name": "resume-test-arm64.json",
+          "bytes": 646,
+          "sha256": "48d8177b1fa97740106a6a37feac9ac5d9c831f0c925daa4633dbb1367c18cdf"
+        },
+        {
+          "name": "AI-First-Tools-0.4.0-macos-preview.17-macos-arm64.dmg",
+          "bytes": 149864399,
+          "sha256": "a50e20a4c40731a1206124bc3a1533655a8b6e19a096d3848edf4f4e699fb3b0"
+        },
+        {
+          "name": "self-test-x86_64.json",
+          "bytes": 573,
+          "sha256": "f14832403ee123c888a6d26d988c556d9b74b0ebfa4b31ed0a2e3d9e3895602f"
+        },
+        {
+          "name": "smoke-test-x86_64.json",
+          "bytes": 640,
+          "sha256": "46c92daceabe310d7f5a1399e7a45a25fea3891215219079f16506d7d3fdfdcf"
+        },
+        {
+          "name": "network-test-x86_64.json",
+          "bytes": 382,
+          "sha256": "0a2bd5e001694f304e6dcc8e0be310d50a5e52ee8af572c146685b197b25601a"
+        },
+        {
+          "name": "update-test-x86_64.json",
+          "bytes": 2273,
+          "sha256": "5d090fc1c59f0bb12086a3808b00f109c5354ae6bda223135cdc0121b82389b1"
+        },
+        {
+          "name": "resume-test-x86_64.json",
+          "bytes": 647,
+          "sha256": "fd946212b4654d6dcdaabee3e8d2c2947d05c74ddeb3f908e0f68e901cd1a73f"
+        },
+        {
+          "name": "AI-First-Tools-0.4.0-macos-preview.17-macos-x86_64.dmg",
+          "bytes": 159409057,
+          "sha256": "90437855fc6d7619317d362a7a3876c97c1ec798ca35042a075f2f62e9a2c66e"
+        },
+        {
+          "name": "SHA256SUMS.txt",
+          "bytes": 241,
+          "sha256": "aab8debdfa53ac8a7e44b37f15952d75493c7a343f93b891ef3b8097bc700b3e"
+        }
+      ]
+    },
+    "public": [
+      {
+        "tag": "v0.3.14",
+        "publicAssetsMatched": true,
+        "publicChecksumsDownloaded": true,
+        "assetCount": 3
+      },
+      {
+        "tag": "v0.4.0-macos-preview.17",
+        "publicAssetsMatched": true,
+        "publicChecksumsDownloaded": true,
+        "assetCount": 13
+      }
+    ],
+    "buildRuns": {
+      "windows": 39121376207,
+      "mac": 39121374816,
+      "windowsChecks": 39121374831
+    },
+    "independentVerificationRuns": {
+      "windows": 39122102190,
+      "mac": 39122126090
+    },
+    "nativeDesktop": {
+      "platform": "Windows",
+      "version": "1.1.30",
+      "previouslyImportedRecordShown": true,
+      "transcriptOpened": true,
+      "updatedNavigationExercised": true,
+      "noModelRequest": true,
+      "workbenchInstallationTouched": false,
+      "scope": "User-selected existing copy and native UI navigation; no real transcript included in this report. Mac Desktop UI not exercised."
+    },
+    "publicUpdateSelection": {
+      "anonymousApi": true,
+      "windowsFrom0313": "0.3.14",
+      "macFromPreview16BothArchitectures": "0.4.0-macos-preview.17",
+      "sameVersionNotOffered": true,
+      "installedApplicationTouched": false
+    }
   }
 }

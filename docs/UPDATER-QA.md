@@ -1,5 +1,20 @@
 # Windows 更新功能验收
 
+## 2026-10-18：v0.3.14 已发布，Copilot 搬入后刷新原生列表
+
+[公开版本](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.14)，安装包和不可变标签固定源码 `d15b0ee80240f0de0c29730edb7574738feca680`，发布 ID `416401036`。
+
+在 Windows Copilot Desktop 1.1.30 复现：此前成功导入的记录已登记，但旧侧栏没有自动重查；关闭窗口后后台进程仍在。原生 Manage sessions 查询后侧栏显示新标题，点击正文可见。新版每批完成使用官方 Chats → Recent 本机链接重新进入会话管理页；已搬过记录也可查看且不重复写入。只导航页面，不退出目标软件、不发送消息。Mac Desktop 实机未验收。
+
+本机 146 项后端、35 项界面、71 项 WPF 自检及 1 项 Copilot 完整历史/严格恢复通过。[同源码 Windows 检查](https://github.com/feifeigong/ai-first-tools/actions/runs/39121374831) 成功；[实际打包](https://github.com/feifeigong/ai-first-tools/actions/runs/39121376207) 的 31 项 Copilot/安装范围检查、1 项原生历史恢复和 54 项续跑算法通过，真实安装/重装/卸载、额外文件保留、后台运行与自启生命周期检查通过。[独立下载核验](https://github.com/feifeigong/ai-first-tools/actions/runs/39122102190) 将原构建与草稿全部 3 个文件逐个比较名称、字节、SHA-256 和源码标签后公开。完整摘要保存在 COPILOT-RELEASE-VERIFICATION.json。
+
+匿名公开 API 的名称、大小和摘要与报告一致，公开 SHA256SUMS 下载校验通过。实际 UpdateClient.SelectRelease 从 0.3.13 选到 0.3.14，同版返回无更新；与 0.3.13 的选择器源码相同。没有触发用户安装、替换或重开工作台；没有将公共入口核验说成其正在运行窗口已弹出通知。
+
+| 资产 | 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| Setup 0.3.14 | 165610993 | `d4dc6094071348657d74d68628034a85cc69e8756715ec3b302b979bf4b1e66b` |
+| Portable 0.3.14 | 249612325 | `9ff738949ac9af489d05d5284a26feb61deb0731ba0c74b614b013dd8d05692a` |
+
 ## 2026-10-16：Windows v0.3.13 已发布，Copilot Desktop 搬入与列表对应
 
 [公开版本](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.13)，2026-10-16 13:26:02 UTC 发布，安装包及不可变标签源码 `30b0f6be7677edeb82d00d3b4fe02c35dbb2f98d`。修正共享 session-state 混列、空目录凑数、内部聊天沙箱误作项目；新增 ChatGPT 等来源搬入 Copilot Desktop Chats，完整正文与思考保留，工具/系统/附件信息作为历史说明。只新建副本和登记，不改已有行，不迁移认证或权限。当前索引形状以 Desktop 1.1.29 为依据，变化时停止写入。

@@ -1,6 +1,8 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
-当前公开 [preview.16](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.16)，安装包源码 `f6efcc44ae34e2505c79a41754439f862587e49a`。同一个工作台 APP 完整内置自动续跑页、Python 后台与按芯片校验的原生运行组件，不要求用户安装额外工具。两架构原生资源/页面/HTTPS/更新/续跑分别 11/10/3/9/8 项全通过，13 个资产独立下载核验通过，公开更新选择正常；源码与构建证据见 MACOS-QA.md。后台关闭防拉起、实际 launchd 自启、重复入口单实例、更新状态恢复、隔离 APP 移除后的退出与自启清理已验证。没有操作用户真实 Mac 或测试付费模型请求。下文为历史交接记录。
+当前公开 [preview.17](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.17)，源码 `d15b0ee80240f0de0c29730edb7574738feca680`。Copilot 搬入完成打开原生会话管理页刷新列表，已搬过副本也能查看；保留 preview.16 的完整内置续跑。两架构原生构建与 13 个资产独立下载核验通过，匿名更新从 preview.16 选到 preview.17。Copilot 实际窗口验证仅限 Windows 1.1.30，未称 Mac Desktop 已验收。由用户自行自动更新，不替其升级或重开工作台。证据见 MACOS-QA.md、COPILOT-RELEASE-VERIFICATION.json。下文保留历史交接。
+
+此前公开 [preview.16](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.16)，安装包源码 `f6efcc44ae34e2505c79a41754439f862587e49a`。同一个工作台 APP 完整内置自动续跑页、Python 后台与按芯片校验的原生运行组件，不要求用户安装额外工具。两架构原生资源/页面/HTTPS/更新/续跑分别 11/10/3/9/8 项全通过，13 个资产独立下载核验通过，公开更新选择正常；源码与构建证据见 MACOS-QA.md。后台关闭防拉起、实际 launchd 自启、重复入口单实例、更新状态恢复、隔离 APP 移除后的退出与自启清理已验证。没有操作用户真实 Mac 或测试付费模型请求。下文为历史交接记录。
 
 Copilot Desktop 搬入与列表修正已随 [preview.15](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.15) 公开，源码 dcdf5ad，两架构 131+1+10 项及 7/9/3/9 项冻结检查、全部 11 资产独立下载核验通过。当前更新入口选择较新的 preview.16，并确认保留相同 Copilot 适配；Windows 对应 v0.3.13。用户要求只提交和发布，由用户使用自动更新，不替其升级或重开本机。证据见 COPILOT.md、MACOS-QA.md。
 

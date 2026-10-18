@@ -1,6 +1,6 @@
 # Copilot Desktop 对话搬家
 
-2026-10-18 候选修订（Windows v0.3.14 / Mac preview.17，发布结果另记）：修复搬入后 Desktop 仍显示旧列表的问题。在 Windows 已安装的 Copilot Desktop 1.1.30 中复现：索引与正文已存在，窗口关闭再开仍复用后台进程；进入原生 Manage sessions 后查询到新记录，Chats 侧栏随之更新，点击能打开正文。此前官方 CLI 严格恢复检查没有覆盖这个界面刷新环节，不能替代 Desktop 验收。
+2026-10-18 已发布修订（[Windows v0.3.14](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.14) / [Mac preview.17](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.17)，构建、原生检查及全部资产独立下载核验通过）：修复搬入后 Desktop 仍显示旧列表的问题。在 Windows 已安装的 Copilot Desktop 1.1.30 中复现：索引与正文已存在，窗口关闭再开仍复用后台进程；进入原生 Manage sessions 后查询到新记录，Chats 侧栏随之更新，点击能打开正文。此前官方 CLI 严格恢复检查没有覆盖这个界面刷新环节，不能替代 Desktop 验收。
 
 新流程在每批完成后调用官方本机 `ghapp://chats`，再进入 `ghapp://recent`，使已经停留在会话管理页的重复搬运也重新进入查询页面；不退出或终止 Copilot，不发送消息。结果提供「在 Copilot 中查看」和失败重试。已搬过记录沿用去重，仍提供同一个列表入口，因此 v0.3.13 的旧副本无需再复制。此入口打开会话列表，不声称按编号直接打开聊天：`ghapp://sessions/<编号>` 在该 Desktop 版本会明确拒绝普通 Chats。官方入口参见 [GitHub 深链接文档](https://docs.github.com/en/copilot/how-tos/github-copilot-app/open-with-deep-links)。Windows 实机已验证新版打开流程和原记录正文；Mac 共用该流程，Mac Desktop 实机尚未验证。
 
@@ -22,7 +22,7 @@ Desktop 与 CLI 共用上述存储，不能把所有 `session-state` 文件夹�
 
 ## 搬入 Copilot Desktop
 
-在来源（包括 ChatGPT 普通聊天、本机 Work/Codex）选择已有完整正文的记录，目标选 GitHub Copilot，选择工作文件夹后确认。每条创建一个新的 UUID 聊天副本并登记为 `general_chat`，位于 Desktop 的 Chats，而非自动新建项目或 worktree。新候选版本会打开会话管理页以刷新侧栏，点击搬入标题查看；若系统未能打开本机链接，结果显示重试入口，并提示从 Copilot 用户菜单进入 Manage sessions。
+在来源（包括 ChatGPT 普通聊天、本机 Work/Codex）选择已有完整正文的记录，目标选 GitHub Copilot，选择工作文件夹后确认。每条创建一个新的 UUID 聊天副本并登记为 `general_chat`，位于 Desktop 的 Chats，而非自动新建项目或 worktree。v0.3.14 / preview.17 起会打开会话管理页以刷新侧栏，点击搬入标题查看；若系统未能打开本机链接，结果显示重试入口，并提示从 Copilot 用户菜单进入 Manage sessions。
 
 这是对本机格式的适配，不是 GitHub 官方提供的跨软件历史导入 API。先检查会话表字段和必填项；格式变化、数据库占用、未知正文块时停止。消息转换为版本 1 的连续事件：原用户/助手角色与完整文字、时间保留；思考通过 `assistant.message.reasoningText` 保留，因为原生恢复会过滤独立 `assistant.reasoning` 事件。工具调用/结果、系统说明和附件信息转为明确标注的历史参考文字，不作为可执行工具或新系统指令。附件文件和原项目环境不迁移。
 
