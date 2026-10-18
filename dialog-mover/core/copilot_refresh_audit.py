@@ -12,6 +12,10 @@ def run(report: Path):
 
     def check():
         try:
+            # The packaging runner starts processes hidden. UIA can only audit
+            # the synthetic composer after this test window is actually shown.
+            window.show()
+            window.restore()
             handle = window.native.Handle.ToInt64()
             deadline = time.monotonic() + 10
             while _has_draft(handle) is not True and time.monotonic() < deadline:

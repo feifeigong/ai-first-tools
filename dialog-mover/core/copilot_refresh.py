@@ -25,6 +25,9 @@ def _has_draft(parent: int) -> bool | None:
         from System import IntPtr
         from System.Windows.Automation import AutomationElement, ControlType, PropertyCondition, TreeScope, ValuePattern, TextPattern
         root = AutomationElement.FromHandle(IntPtr(parent))
+        document = root.FindFirst(TreeScope.Descendants, PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Document))
+        if document is None:
+            return None  # An unavailable browser tree is not an empty composer.
         editors = root.FindAll(TreeScope.Descendants, PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit))
         for editor in editors:
             if editor.Current.Name != "Message":
@@ -118,9 +121,6 @@ def _windows() -> str:
     if len(targets) != 1 or not owned(targets[0][0]):
         return "unavailable"
     parent, _ = targets[0]
-    draft = _has_draft(parent)
-    if draft is not False:
-        return "draft" if draft else "unavailable"
     if user.IsIconic(parent):
         user.ShowWindow(parent, 9)
     user.SetForegroundWindow(parent)
@@ -129,6 +129,9 @@ def _windows() -> str:
         time.sleep(.02)
     if user.GetForegroundWindow() != parent or not owned(parent):
         return "unavailable"
+    draft = _has_draft(parent)
+    if draft is not False:
+        return "draft" if draft else "unavailable"
     class Keyboard(ctypes.Structure):
         _fields_ = [("vk", w.WORD), ("scan", w.WORD), ("flags", w.DWORD), ("time", w.DWORD), ("extra", ctypes.c_size_t)]
     class Mouse(ctypes.Structure):
