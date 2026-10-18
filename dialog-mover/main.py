@@ -12,7 +12,7 @@ from pathlib import Path
 
 import webview
 
-from core import chatgpt, copilot_import, imports, mover, sources
+from core import chatgpt, copilot_import, copilot_refresh, imports, mover, sources
 from core.common import open_external
 from embedded_startup import EmbeddedStartup
 
@@ -183,16 +183,22 @@ class Api:
             return {"error": "这个目标不支持直接打开。"}
         try:
             if copilot:
-                # Recent fetches sessions on entry. Leave it first so a second
-                # import also refreshes when Desktop is already showing Recent.
-                # Neither navigation stops tasks or closes the background app.
-                open_external("ghapp://chats")
-                time.sleep(1)
+                refreshed = copilot_refresh.refresh()
+                if refreshed == "busy":
+                    return {"error": "记录已复制。Copilot 正在执行任务，未打断它；任务结束后点「在 Copilot 中查看」即可刷新。"}
+                if refreshed == "draft":
+                    return {"error": "记录已复制。Copilot 中还有未发送的内容，已保留草稿；处理完草稿后点「在 Copilot 中查看」即可刷新。"}
+                if refreshed == "unavailable":
+                    return {"error": "记录已复制，但没有完成 Copilot 窗口刷新。请松开快捷键并打开 Copilot，再点「在 Copilot 中查看」重试。"}
+                if refreshed == "requested":
+                    # Let the reload initialize before dispatching navigation.
+                    # Reload invalidates both the sidebar and Recent caches.
+                    time.sleep(1)
             open_external(url)
         except (OSError, subprocess.SubprocessError) as error:
             mover.log(f"open_in_app {url}: {error!r}")
             return {"error": "无法打开 Copilot 的会话列表，请在 Copilot 用户菜单选择 Manage sessions（管理会话）。" if copilot else "没有找到可以打开它的软件，请先安装并启动 ChatGPT。"}
-        return {"ok": True}
+        return {"ok": True, "refreshed": refreshed == "requested"} if copilot else {"ok": True}
 
     def move_status(self) -> dict:
         if self._job is None:
@@ -201,6 +207,9 @@ class Api:
 
 
 def main() -> None:
+    if sys.platform == "win32" and len(sys.argv) == 3 and sys.argv[1] == "--copilot-refresh-self-test":
+        from core.copilot_refresh_audit import run
+        raise SystemExit(run(Path(sys.argv[2]).resolve()))
     api = Api()
     startup = EmbeddedStartup.from_environment() if sys.platform == "win32" else None
     window = webview.create_window(

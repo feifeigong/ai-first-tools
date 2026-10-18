@@ -187,15 +187,26 @@ class CopilotDestinationTests(unittest.TestCase):
             api = Api()
             api._job = SimpleNamespace(target="copilot_desktop", snapshot=lambda: {"items": [
                 {"state": state, "openUrl": copilot_import.LIST_URL}]})
-            with patch("main.open_external") as opened, patch("main.time.sleep"):
-                self.assertEqual(api.open_in_app(0), {"ok": True})
-                # Leave Recent before re-entering: opening the same current
-                # route alone need not run the native query a second time.
-                self.assertEqual(opened.call_args_list, [call("ghapp://chats"), call("ghapp://recent")])
+            with patch("main.open_external") as opened, patch("main.time.sleep"), patch("main.copilot_refresh.refresh", return_value="requested") as refresh:
+                self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": True})
+                self.assertEqual(opened.call_args_list, [call("ghapp://recent")])
+                refresh.assert_called_once_with()
                 opened.side_effect = OSError("synthetic missing handler")
                 self.assertIn("Manage sessions", api.open_in_app(0)["error"])
                 opened.side_effect = None
-                self.assertEqual(api.open_in_app(0), {"ok": True})
+                self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": True})
+
+    def test_busy_or_unidentified_copilot_does_not_send_navigation_or_report_refresh_success(self):
+        api = Api()
+        api._job = SimpleNamespace(target="copilot_desktop", snapshot=lambda: {"items": [{"state": "ok", "openUrl": copilot_import.LIST_URL}]})
+        for status in ("busy", "draft", "unavailable"):
+            with patch("main.copilot_refresh.refresh", return_value=status), patch("main.open_external") as opened:
+                self.assertIn("error", api.open_in_app(0))
+                opened.assert_not_called()
+        for status in ("not-running", "unsupported"):
+            with patch("main.copilot_refresh.refresh", return_value=status), patch("main.open_external") as opened:
+                self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": False})
+                opened.assert_called_once_with("ghapp://recent")
 
     def test_handoff_rejects_other_protocols_wrong_batch_and_unsaved_results(self):
         for target, state, url in (("copilot_desktop", "failed", copilot_import.LIST_URL),

@@ -3,6 +3,7 @@ Unicode true
 !include "LogicLib.nsh"
 !include "WinVer.nsh"
 !include "x64.nsh"
+!include "FileFunc.nsh"
 
 !define APP "AI一手工具工作台"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\AIFirstTools"
@@ -12,7 +13,9 @@ Name "${APP}"
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\AI First Tools"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+; Independent deflate blocks avoid decoding the entire solid archive before
+; reaching a later file; updates stage this work while the old app is usable.
+SetCompressor zlib
 ShowInstDetails nevershow
 ShowUninstDetails nevershow
 Icon "${ICON}"
@@ -22,6 +25,8 @@ VIAddVersionKey /LANG=2052 "ProductName" "${APP}"
 VIAddVersionKey /LANG=2052 "FileDescription" "AI一手工具工作台安装程序"
 VIAddVersionKey /LANG=2052 "FileVersion" "${VERSION}"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "Apache-2.0; third-party components retain their licenses"
+Var StageOnly
+Var StageDirectory
 
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "欢迎使用 AI一手工具工作台"
@@ -49,6 +54,23 @@ VIAddVersionKey /LANG=2052 "LegalCopyright" "Apache-2.0; third-party components 
 
 Function .onInit
   SetShellVarContext current
+  ${GetOptions} $CMDLINE "/AI-FIRST-STAGE" $0
+  ${IfNot} ${Errors}
+    ; Only unpack next to the verified download in a workbench update job.
+    ; This mode never installs, edits the registry or starts/stops a backend.
+    ${GetParent} "$EXEDIR" $0
+    GetFullPathName $1 "$LOCALAPPDATA\AI一手工具工作台\updates"
+    ${If} $0 != $1
+      SetErrorLevel 1603
+      Abort
+    ${EndIf}
+    StrCpy $StageDirectory "$EXEDIR\staged"
+    IfFileExists "$StageDirectory" 0 +3
+      SetErrorLevel 1603
+      Abort
+    StrCpy $StageOnly 1
+    Return
+  ${EndIf}
   ${IfNot} ${AtLeastWin10}
     MessageBox MB_OK "需要 Windows 10 或更新版本。" /SD IDOK
     SetErrorLevel 1633
@@ -87,6 +109,18 @@ Function WebViewExists
 FunctionEnd
 
 Section "安装"
+  ${If} $StageOnly == 1
+    SetOutPath "$StageDirectory"
+    ClearErrors
+    File /r "${PACKAGE}\*"
+    WriteUninstaller "$StageDirectory\Uninstall.exe"
+    ${If} ${Errors}
+      SetErrorLevel 1603
+      Abort
+    ${EndIf}
+    SetErrorLevel 0
+    Quit
+  ${EndIf}
   !insertmacro CheckRunning
   Call WebViewExists
   ${If} $1 == 0

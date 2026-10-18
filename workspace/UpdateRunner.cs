@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -13,7 +14,7 @@ using Microsoft.Win32;
 
 namespace AIFirst.Workspace;
 
-internal sealed record UpdatePlan(string Target, int ParentId, long ParentStarted, string PreviousVersion, string Version, bool Installed, string PackageName, long PackageSize, string PackageHash, string? Configuration = null, string? Tool = null);
+internal sealed record UpdatePlan(string Target, int ParentId, long ParentStarted, string PreviousVersion, string Version, bool Installed, string PackageName, long PackageSize, string PackageHash, string? Configuration = null, string? Tool = null, bool StagedInstaller = false);
 
 internal static class UpdateRunner
 {
@@ -54,6 +55,7 @@ internal static class UpdateRunner
         var package = Path.Combine(job, asset.Name);
         await client.DownloadAsync(release, asset, package, progress, cancellation);
         progress.Report(-1);
+        if (installed) await StageInstallerAsync(package, job, release.Version, cancellation);
         await Task.Run(() =>
         {
             cancellation.ThrowIfCancellationRequested();
@@ -70,13 +72,44 @@ internal static class UpdateRunner
                 File.Copy(source, destination);
             }
             using var parent = Process.GetCurrentProcess();
-            var plan = new UpdatePlan(target, parent.Id, parent.StartTime.ToUniversalTime().Ticks, existing.Version, release.Version, installed, asset.Name, asset.Size, asset.Digest, configuration, tool);
+            var plan = new UpdatePlan(target, parent.Id, parent.StartTime.ToUniversalTime().Ticks, existing.Version, release.Version, installed, asset.Name, asset.Size, asset.Digest, configuration, tool, installed);
             File.WriteAllText(Path.Combine(job, "plan.json"), JsonSerializer.Serialize(plan, UpdatePackage.Json));
         }, cancellation);
         return job;
     }
 
     internal static bool IsRunnerFile(PackageFile file) => file.Path == UpdatePackage.AppExecutable || file.Path == "assets/ai-first-logo.ico" || file.Path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) && !file.Path.StartsWith("tools/", StringComparison.OrdinalIgnoreCase) || file.Path.EndsWith(".runtimeconfig.json", StringComparison.Ordinal) || file.Path.EndsWith(".deps.json", StringComparison.Ordinal);
+
+    internal static async Task StageInstallerAsync(string package, string job, string version, CancellationToken cancellation)
+    {
+        var staged = Path.Combine(job, "staged");
+        UpdatePackage.EnsureNoLinks(staged);
+        if (Directory.Exists(staged)) throw new InvalidDataException("更新暂存目录已存在。");
+        var start = new ProcessStartInfo(package) { UseShellExecute = false, WorkingDirectory = job, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
+        start.ArgumentList.Add("/S");
+        start.ArgumentList.Add("/AI-FIRST-STAGE");
+        using var extractor = Process.Start(start) ?? throw new IOException("无法准备新版文件。");
+        // Never kill a self-extractor part way through a write. Cancellation
+        // stops the handoff; the current workbench stays available.
+        await extractor.WaitForExitAsync();
+        cancellation.ThrowIfCancellationRequested();
+        if (extractor.ExitCode != 0) throw new IOException("新版文件没有准备完整，当前版本可以继续使用。");
+        await Task.Run(() =>
+        {
+            var manifest = UpdatePackage.Read(staged, version);
+            foreach (var file in manifest.Files)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                UpdatePackage.Verify(UpdatePackage.Resolve(staged, file.Path), file.Size, file.Sha256);
+            }
+            CheckExecutableVersion(staged, version);
+            var uninstaller = UpdatePackage.Resolve(staged, "Uninstall.exe");
+            using var stream = File.OpenRead(uninstaller);
+            if (stream.Length is < 1 or > 16 * 1024 * 1024 || manifest.Files.Any(file => file.Path.Equals("Uninstall.exe", StringComparison.OrdinalIgnoreCase))) throw new InvalidDataException("新版卸载程序不完整。");
+            manifest.Files.Add(new PackageFile("Uninstall.exe", stream.Length, Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant()));
+            File.WriteAllText(Path.Combine(staged, UpdatePackage.ManifestName), JsonSerializer.Serialize(manifest, UpdatePackage.Json));
+        }, cancellation);
+    }
 
     internal static async Task StartAsync(string job)
     {
@@ -114,6 +147,7 @@ internal static class UpdateRunner
         UpdatePackage.Read(plan.Target, plan.PreviousVersion);
         CheckExecutableVersion(plan.Target, plan.PreviousVersion);
         if (!File.Exists(UpdatePackage.Resolve(plan.Target, UpdatePackage.AppExecutable)) || plan.Installed != IsInstalled(plan.Target)) throw new InvalidDataException("工作台位置已改变，请重新下载更新。");
+        if (plan.StagedInstaller && !plan.Installed) throw new InvalidDataException("更新安装方式不匹配。");
         var name = plan.Installed ? "AI-First-Tools-Setup-" + plan.Version + ".exe" : "AI-First-Tools-Portable-" + plan.Version + "-win-x64.zip";
         UpdateClient.ValidateAsset(new UpdateAsset(plan.PackageName, UpdateClient.Repository + "/releases/download/v" + plan.Version + "/" + plan.PackageName, plan.PackageSize, plan.PackageHash), plan.Version, name);
         UpdatePackage.Verify(UpdatePackage.Resolve(job, name), plan.PackageSize, plan.PackageHash);
@@ -163,13 +197,13 @@ internal static class UpdateRunner
                 Stage(2, "等待程序文件释放");
                 await WaitForFilesAsync(plan.Target);
                 var backup = Path.Combine(job, "backup");
-                if (plan.Installed)
+                if (plan.Installed && Mutex.TryOpenExisting("Local\\AI_FIRST_TOOLS_RUNNING", out var running))
                 {
-                    if (Mutex.TryOpenExisting("Local\\AI_FIRST_TOOLS_RUNNING", out var running))
-                    {
-                        running.Dispose();
-                        throw new InvalidOperationException("请先关闭其他工作台窗口，再更新。");
-                    }
+                    running.Dispose();
+                    throw new InvalidOperationException("请先关闭其他工作台窗口，再更新。");
+                }
+                if (plan.Installed && !plan.StagedInstaller)
+                {
                     var old = UpdatePackage.Read(plan.Target, plan.PreviousVersion);
                     Stage(3, "备份当前版本");
                     UpdatePackage.Backup(plan.Target, backup, old.Files.Select(file => file.Path).Append(UpdatePackage.ManifestName).Append("Uninstall.exe"));
@@ -210,9 +244,17 @@ internal static class UpdateRunner
                     Stage(3, "校验与备份程序");
                     UpdatePackage.Read(staged, plan.Version);
                     CheckExecutableVersion(staged, plan.Version);
-                    var written = UpdatePackage.Apply(plan.Target, staged, backup, phase: label => Stage(label == "备份当前版本" ? 3 : 4, label));
+                    var written = UpdatePackage.Apply(plan.Target, staged, backup, phase: label => Stage(label == "备份当前版本" ? 3 : 4, label), installed: plan.Installed);
                     Stage(5, "核对新版本文件");
-                    try { CheckExecutableVersion(plan.Target, plan.Version); }
+                    try
+                    {
+                        CheckExecutableVersion(plan.Target, plan.Version);
+                        if (plan.Installed)
+                        {
+                            using var key = Registry.CurrentUser.OpenSubKey(RegistryKey, true) ?? throw new IOException("工作台安装登记不存在。");
+                            key.SetValue("DisplayVersion", plan.Version);
+                        }
+                    }
                     catch { UpdatePackage.Restore(plan.Target, backup, written); throw; }
                 }
             });
@@ -226,7 +268,7 @@ internal static class UpdateRunner
             activation = null;
             guard.Dispose();
             guard = null;
-            CompleteAndOpen(job, () => OpenWorkbench(plan));
+            CompleteAndOpen(job, () => OpenWorkbench(plan, Path.Combine(job, "reopened.json")));
             return 0;
         }
         catch (Exception exception)
@@ -256,11 +298,16 @@ internal static class UpdateRunner
         open();
     }
 
-    private static void OpenWorkbench(UpdatePlan plan)
+    private static void OpenWorkbench(UpdatePlan plan, string? fixtureHealth = null)
     {
         var start = new ProcessStartInfo(UpdatePackage.Resolve(plan.Target, UpdatePackage.AppExecutable)) { UseShellExecute = false, WorkingDirectory = plan.Target };
         if (plan.Configuration is not null) { start.ArgumentList.Add("--config"); start.ArgumentList.Add(plan.Configuration); }
         if (plan.Tool is not null) { start.ArgumentList.Add("--tool"); start.ArgumentList.Add(plan.Tool); }
+        // The full-payload integration fixture must prove the new tool is
+        // actually attached, not merely that Process.Start returned a PID.
+        if (fixtureHealth is not null && plan.Configuration is not null && !plan.Installed &&
+            UpdatePackage.Read(plan.Target).Files.Any(file => file.Path.EndsWith("/WorkspaceWindowFixture.dll", StringComparison.Ordinal)))
+        { start.ArgumentList.Add("--health-report"); start.ArgumentList.Add(fixtureHealth); }
         Process.Start(start);
     }
 

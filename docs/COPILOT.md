@@ -26,7 +26,7 @@ Desktop 与 CLI 共用上述存储，不能把所有 `session-state` 文件夹�
 
 ## 搬入 Copilot Desktop
 
-在来源（包括 ChatGPT 普通聊天、本机 Work/Codex）选择已有完整正文的记录，目标选 GitHub Copilot，选择工作文件夹后确认。每条创建一个新的 UUID 聊天副本并登记为 `general_chat`，位于 Desktop 的 Chats，而非自动新建项目或 worktree。完成后可打开会话管理页；若仍是旧列表，Windows 在 Copilot 按 F5 刷新，Mac 任务结束后完全退出 Copilot 再打开。链接只请求导航，不保证侧栏缓存即时失效。
+在来源（包括 ChatGPT 普通聊天、本机 Work/Codex）选择已有完整正文的记录，目标选 GitHub Copilot，选择工作文件夹后确认。每条创建一个新的 UUID 聊天副本并登记为 `general_chat`，位于 Desktop 的 Chats，而非自动新建项目或 worktree。Windows v0.3.16 完成后自动刷新已识别的 Copilot Desktop 窗口并打开会话列表，侧栏同步重读。正在执行任务或编辑未发送内容时保留它们，处理完后点「在 Copilot 中查看」重试；窗口身份/草稿无法核实则不发送刷新键。Mac 仍需在任务结束后完全退出 Copilot 再打开。官方深链只导航，不会使侧栏缓存失效。
 
 这是对本机格式的适配，不是 GitHub 官方提供的跨软件历史导入 API。先检查会话表字段和必填项；格式变化、数据库占用、未知正文块时停止。消息转换为版本 1 的连续事件，搬家格式为 v2：原用户/助手角色与完整文字、时间保留；思考通过 `assistant.message.reasoningText` 保留，因为原生恢复会过滤独立 `assistant.reasoning` 事件。用户内嵌图片写为原生 blob 附件；工具调用/结果和系统说明放入已完成且默认折叠的历史归档。外部附件文件和原项目环境不迁移，不获取任意本机路径或网络图片。
 

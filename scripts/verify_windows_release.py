@@ -44,6 +44,19 @@ def validated_assets(root: Path, version: str) -> list[Path]:
             raise ValueError('Bundled auto-resume reports did not pass')
     assets = [root / "release" / f"AI-First-Tools-Setup-{version}.exe",
               root / "release" / f"AI-First-Tools-Portable-{version}-win-x64.zip"]
+    if tuple(map(int, version.split('.'))) >= (0,3,16):
+        for filename, fields in (
+                ('staged-install-test.json', ('stageOnly', 'incrementalApply', 'stableFilesUntouched', 'extraFilePreserved', 'allHashesVerified', 'uninstallerUpdated')),
+                ('update-pipeline-test.json', ('realHelper', 'newToolAttached', 'extraFilePreserved'))):
+            try:
+                audit = json.loads((root / 'windows' / filename).read_text(encoding='utf-8-sig'))
+            except (OSError, ValueError) as error:
+                raise ValueError('Full update pipeline reports missing') from error
+            if audit.get('passed') is not True or audit.get('fullPayloadBytes', 0) < 500_000_000 or any(audit.get(field) is not True for field in fields):
+                raise ValueError('Full update pipeline reports did not pass')
+        guard = json.loads((root / 'windows/copilot-refresh-test.json').read_text(encoding='utf-8-sig'))
+        if any(guard.get(field) is not True for field in ('passed', 'draftDetected', 'emptyAccepted')):
+            raise ValueError('Frozen Copilot draft guard did not pass')
     sums = root / "release/SHA256SUMS.txt"
     expected = [f"{digest(path)}  {path.name}" for path in assets]
     if sums.read_text(encoding="utf-8-sig").splitlines() != expected:

@@ -547,7 +547,7 @@
       status.items.forEach((item, index) => { if (canOpenResult(item, sheet)) last = index; });
       if (last >= 0) {
         const result = await call("open_in_app", last);
-        sheet.openRequest = { index: last, error: result && result.error };
+        sheet.openRequest = { index: last, error: result && result.error, refreshed: result && result.refreshed };
         if (state.sheet === sheet) renderSheet();
         if (result && result.error) toast(result.error);
       }
@@ -572,8 +572,8 @@
     const bad = status.failed > 0;
     const copilot = sheet.target === "copilot_desktop";
     const openName = copilot ? "Copilot" : "ChatGPT";
-    const openPending = copilot ? "可打开 Copilot 会话列表，刷新后查看搬入记录" : "可请求 ChatGPT 打开这条本机记录";
-    const openRequested = copilot ? "已请求打开 Copilot 会话列表；仍是旧列表时，请刷新 Copilot 窗口" : "已请求打开这条记录；请在 ChatGPT 中确认";
+    const openPending = copilot ? "在 Copilot 查看搬入的聊天" : "可请求 ChatGPT 打开这条本机记录";
+    const openRequested = copilot ? (sheet.openRequest?.refreshed ? "已刷新 Copilot，最新复制的聊天在列表顶部" : "已请求打开 Copilot 会话列表") : "已请求打开这条记录；请在 ChatGPT 中确认";
     const hint = target.resultHint || "已写入目标软件的本机记录。";
     body.innerHTML = `<div class="done-mark ${bad ? "warn" : ""}">${bad ? ICON.dash.replace(/13/g, "26") : ICON.tick.replace(/13/g, "26")}</div>
       <h2>${bad ? (status.ok ? "部分记录未复制成功" : "这次没有复制成功") : (!status.ok && status.skipped ? "这些记录之前已复制" : "记录已复制")}</h2>
@@ -593,7 +593,7 @@
     body.querySelectorAll("[data-open-app]").forEach((button) => {
       button.onclick = async () => {
         const result = await call("open_in_app", Number(button.dataset.openApp));
-        sheet.openRequest = { index: Number(button.dataset.openApp), error: result && result.error };
+        sheet.openRequest = { index: Number(button.dataset.openApp), error: result && result.error, refreshed: result && result.refreshed };
         if (state.sheet === sheet) renderSheet();
         if (result.error) toast(result.error);
       };

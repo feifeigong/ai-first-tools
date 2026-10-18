@@ -41,7 +41,7 @@ jobs:
           if ((Get-FileHash dialog-mover/bin/txcript.exe -Algorithm SHA256).Hash.ToLowerInvariant() -ne '799b80dff7ba44cb05f1a92ed5f64a4969ffefc5ad7b3566600ed88adaaaacd2') { throw 'Engine digest mismatch' }
       - name: Verify Copilot source and isolated imports with the packaged engine
         working-directory: dialog-mover
-        run: python -m unittest test_copilot test_copilot_import test_windows_release -v
+        run: python -m unittest test_copilot test_copilot_import test_copilot_refresh test_windows_release -v
       - name: Prepare official Copilot test runtime with pinned integrity
         run: python scripts/prepare_copilot_audit.py
       - name: Native Copilot full history and strict resume without model requests
@@ -103,6 +103,12 @@ jobs:
           python -m PyInstaller --noconfirm --distpath ../artifacts/windows/mover --workpath ../artifacts/windows/build 对话搬家.spec
           if ($LASTEXITCODE) { throw 'Mover freezing failed' }
           Pop-Location
+          $mover=Join-Path $PWD 'artifacts/windows/mover/对话搬家/对话搬家.exe'
+          $guardReport=Join-Path $PWD 'artifacts/windows/copilot-refresh-test.json'
+          $guard=Start-Process -FilePath $mover -ArgumentList @('--copilot-refresh-self-test',$guardReport) -PassThru -WindowStyle Hidden
+          if (!$guard.WaitForExit(30000)) { throw 'Frozen draft guard audit timed out' }
+          $guardChecks=Get-Content -LiteralPath $guardReport -Raw | ConvertFrom-Json
+          if ($guard.ExitCode -ne 0 -or $guardChecks.passed -ne $true) { throw 'Frozen draft guard audit failed' }
           $version=([xml](Get-Content workspace/AIFirst.Workspace.csproj -Raw)).Project.PropertyGroup.Version
           ./scripts/package.ps1 -Version $version -Python python -MoverPackage (Join-Path $PWD 'artifacts/windows/mover/对话搬家') -ResumePackage (Join-Path $PWD 'artifacts/windows/auto-resume/AI一手续跑后台') -AnalysisToc (Join-Path $PWD 'artifacts/windows/build/对话搬家/Analysis-00.toc') -NsisDirectory (Join-Path $PWD 'artifacts/build-tools/nsis/nsis-3.12') -WebViewBootstrapper (Join-Path $PWD 'artifacts/build-tools/MicrosoftEdgeWebview2Setup.exe')
       - name: Audit silent install, reinstall, self checks and safe uninstall
@@ -143,6 +149,13 @@ jobs:
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json --stage uninstall
           if ($LASTEXITCODE) { throw 'Uninstall left background processes or startup behind' }
           @{ passed=$true; checks=@{ silentInstall=$true; silentReinstall=$true; installedSelfChecks=$true; installedVersion=$true; extraFilePreserved=$true; safeUninstall=$true; bundledRuntime=$true; bundledControls=$true; backgroundUpgrade=$true; backgroundUninstall=$true }; version=$version; scope='Clean GitHub Windows runner, real installer and bundled background, synthetic disabled workload; no user installation or Agent data' } | ConvertTo-Json -Depth 4 | Set-Content artifacts/windows/installer-test.json
+      - name: Audit full installer staging and incremental replacement
+        shell: pwsh
+        run: |
+          $version=([xml](Get-Content workspace/AIFirst.Workspace.csproj -Raw)).Project.PropertyGroup.Version
+          ./scripts/audit_staged_install.ps1 -Package artifacts/package/AI-First-Tools -Setup "artifacts/release/AI-First-Tools-Setup-$version.exe" -Output artifacts/staged-install-audit -Report artifacts/windows/staged-install-test.json
+      - name: Audit full payload helper and native tool reopening
+        run: python scripts/audit_update_pipeline.py --package artifacts/package/AI-First-Tools --output artifacts/full-update-audit --report artifacts/windows/update-pipeline-test.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

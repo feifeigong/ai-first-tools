@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -7,6 +8,8 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Runtime.ExceptionServices;
 
 namespace AIFirst.Workspace;
 
@@ -68,7 +71,7 @@ internal static class UpdatePackage
     {
         EnsureNoLinks(path);
         if (new FileInfo(path).Length != size) throw new InvalidDataException("更新文件大小不匹配。");
-        using var stream = File.OpenRead(path);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, FileOptions.SequentialScan);
         if (!string.Equals(Convert.ToHexString(SHA256.HashData(stream)), digest, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("更新文件校验未通过。");
     }
 
@@ -108,24 +111,40 @@ internal static class UpdatePackage
         return manifest;
     }
 
-    internal static List<string> Apply(string target, string staged, string backup, Action<int>? checkpoint = null, Action<string>? phase = null)
+    internal static List<string> Apply(string target, string staged, string backup, Action<int>? checkpoint = null, Action<string>? phase = null, bool installed = false)
     {
         var previous = Read(target);
         var next = Read(staged);
         if (UpdateClient.ParseVersion(next.Version) <= UpdateClient.ParseVersion(previous.Version)) throw new InvalidDataException("不能降级或重复更新。");
         var oldPaths = previous.Files.Select(file => file.Path).Append(ManifestName).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in next.Files)
+        if (installed) oldPaths.Add("Uninstall.exe");
+        var unchanged = new ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        var errors = new ConcurrentQueue<Exception>();
+        Parallel.ForEach(next.Files, new ParallelOptions { MaxDegreeOfParallelism = 4 }, file =>
         {
-            Verify(Resolve(staged, file.Path), file.Size, file.Sha256);
-            if (!oldPaths.Contains(file.Path) && File.Exists(Resolve(target, file.Path))) throw new InvalidDataException("新版文件与您额外放入的文件重名，为保护文件已停止更新。");
-        }
+            try
+            {
+                Verify(Resolve(staged, file.Path), file.Size, file.Sha256);
+                if (!oldPaths.Contains(file.Path) && File.Exists(Resolve(target, file.Path))) throw new InvalidDataException("新版文件与您额外放入的文件重名，为保护文件已停止更新。");
+                // Compare actual bytes, not just two manifests: repair locally
+                // damaged files and retain rollback for every file we do replace.
+                var current = Resolve(target, file.Path);
+                if (File.Exists(current))
+                {
+                    try { Verify(current, file.Size, file.Sha256); unchanged.TryAdd(file.Path, true); }
+                    catch (InvalidDataException) { }
+                }
+            }
+            catch (Exception error) { errors.Enqueue(error); }
+        });
+        if (errors.TryDequeue(out var failure)) ExceptionDispatchInfo.Capture(failure).Throw();
         phase?.Invoke("备份当前版本");
-        Backup(target, backup, oldPaths);
+        Backup(target, backup, oldPaths.Where(path => !unchanged.ContainsKey(path)));
         var written = new List<string>();
         try
         {
             phase?.Invoke("写入新版本文件");
-            foreach (var relative in next.Files.Select(file => file.Path).Append(ManifestName))
+            foreach (var relative in next.Files.Select(file => file.Path).Where(path => !unchanged.ContainsKey(path)).Append(ManifestName))
             {
                 var destination = Resolve(target, relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);

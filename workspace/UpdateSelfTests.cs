@@ -271,6 +271,27 @@ internal static class UpdateSelfTests
             Reject(() => UpdatePackage.Apply(target, staged, Area("collision-backup")));
             require(UpdatePackage.Read(target).Version == "0.3.7" && File.ReadAllText(Path.Combine(target, "notes.txt")) == "user notes");
         });
+        check("Updater leaves byte-identical runtime files untouched and repairs altered copies", () =>
+        {
+            var target = Area("incremental"); var staged = Area("incremental-staged"); var backup = Area("incremental-backup");
+            Fixture(target, "0.3.7", ("runtime.bin", "stable payload"), ("damaged.bin", "good payload"));
+            Fixture(staged, "0.3.8", ("runtime.bin", "stable payload"), ("damaged.bin", "good payload"));
+            var runtime = Path.Combine(target, "runtime.bin");
+            File.SetLastWriteTimeUtc(runtime, new DateTime(2020, 1, 1));
+            File.WriteAllText(Path.Combine(target, "damaged.bin"), "damaged copy");
+            var changed = UpdatePackage.Apply(target, staged, backup);
+            require(!changed.Contains("runtime.bin") && !File.Exists(Path.Combine(backup, "runtime.bin")) && File.GetLastWriteTimeUtc(runtime) == new DateTime(2020, 1, 1));
+            require(changed.Contains("damaged.bin") && File.ReadAllText(Path.Combine(target, "damaged.bin")) == "good payload" && File.ReadAllText(Path.Combine(backup, "damaged.bin")) == "damaged copy");
+        });
+        check("Installed staged update replaces and rolls back its uninstaller with the package", () =>
+        {
+            var target = Area("installed-stage"); var staged = Area("installed-stage-next"); var backup = Area("installed-stage-backup");
+            Fixture(target, "0.3.7", ("stable.bin", "same"));
+            Fixture(staged, "0.3.8", ("stable.bin", "same"), ("Uninstall.exe", "next uninstaller"));
+            File.WriteAllText(Path.Combine(target, "Uninstall.exe"), "previous uninstaller");
+            Reject(() => UpdatePackage.Apply(target, staged, backup, count => { if (count == 3) throw new IOException("synthetic interruption"); }, installed: true));
+            require(UpdatePackage.Read(target).Version == "0.3.7" && File.ReadAllText(Path.Combine(target, "Uninstall.exe")) == "previous uninstaller" && File.ReadAllText(Path.Combine(target, "stable.bin")) == "same");
+        });
         check("Updater does not delete obsolete publisher files modified by the user", () =>
         {
             var target = Area("modified"); var staged = Area("modified-staged");

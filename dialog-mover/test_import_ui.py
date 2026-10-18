@@ -163,7 +163,7 @@ class ImportUiTests(unittest.TestCase):
           folders:async()=>[{name:'合成项目',path:'D:/synthetic/project'}],
           start_move:async(...args)=>{window._moves.push(args);return {ok:true,total:1};},
           move_status:async()=>({finished:true,total:1,done:1,ok:RESULT_OK,failed:0,skipped:RESULT_SKIPPED,items:[{id:'synthetic-chatgpt',title:'ChatGPT 合成聊天',state:'RESULT_STATE',message:'已复制到 Copilot',resumeCommand:'',openUrl:'ghapp://recent'}]}),
-          open_in_app:async(index)=>{window._opens.push(index);return window._openFails ? {error:'合成打开失败'} : {ok:true};}
+          open_in_app:async(index)=>{window._opens.push(index);return window._openFails ? {error:'合成打开失败'} : {ok:true,refreshed:true};}
         }};
         window.addEventListener('DOMContentLoaded',()=>window.dispatchEvent(new Event('pywebviewready')));
         """.replace("CAPABILITIES", json.dumps(capabilities))
@@ -184,7 +184,7 @@ class ImportUiTests(unittest.TestCase):
                         page.locator("#next").click()
                         self.assertIn("GitHub Copilot", page.locator("#sheet-body").inner_text())
                         page.locator("#go").click()
-                        page.get_by_text("已请求打开 Copilot 会话列表；仍是旧列表时，请刷新 Copilot 窗口", exact=True).wait_for()
+                        page.get_by_text("已刷新 Copilot，最新复制的聊天在列表顶部", exact=True).wait_for()
                         self.assertEqual(page.evaluate("window._opens"), [0])
                         self.assertEqual(page.evaluate("window._moves[0]"), ["chatgpt", ["synthetic-chatgpt"], "copilot_desktop", "D:/synthetic/project"])
                         self.assertEqual(page.locator('[aria-label="续聊命令"]').count(), 0)
@@ -194,7 +194,7 @@ class ImportUiTests(unittest.TestCase):
                         page.get_by_text("记录已复制，打开软件失败；可以重试", exact=True).wait_for()
                         page.evaluate("window._openFails=false")
                         page.get_by_role("button", name="在 Copilot 中查看", exact=True).click()
-                        page.get_by_text("已请求打开 Copilot 会话列表；仍是旧列表时，请刷新 Copilot 窗口", exact=True).wait_for()
+                        page.get_by_text("已刷新 Copilot，最新复制的聊天在列表顶部", exact=True).wait_for()
                         self.assertEqual(page.evaluate("window._opens"), [0, 0, 0])
                         page.close()
             finally:

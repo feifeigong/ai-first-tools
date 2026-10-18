@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.3.13',
+    [string]$Version = '0.3.16',
     [string]$Python = 'python',
     [string]$MoverPackage,
     [string]$ResumePackage,

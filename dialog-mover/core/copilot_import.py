@@ -21,7 +21,8 @@ from . import copilot_local, copilot_media
 HISTORY_FORMAT = "copilot-desktop-chat-v2"
 HISTORY_TOOL = "imported_history"
 # Desktop's session-by-id link explicitly rejects general_chat sessions. Opening
-# Recent runs its native managed-session query and refreshes the Chats sidebar.
+# Recent opens the native managed-session list. Running Desktop also needs a
+# separate UI reload: this route alone does not invalidate the sidebar cache.
 LIST_URL = "ghapp://recent"
 REQUIRED = {"id", "title", "session_type", "created_at", "updated_at"}
 WRITABLE = REQUIRED | {"is_running", "was_interrupted", "mode", "auto_approve", "permission_mode",

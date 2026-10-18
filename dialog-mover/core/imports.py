@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 import time
 import uuid
 from contextlib import closing
@@ -16,7 +17,7 @@ TARGETS = {
     "copilot_desktop": {"harness": "copilot_local", "mode": "local", "targetSub": "桌面端 · 本机聊天",
         "notice": "复制到 Copilot Desktop 的聊天列表。图片作为附件，操作过程折叠保存，不重新执行原工具。旧格式记录可重新复制一次，旧副本保留。",
         "folderHint": "选择继续使用这条聊天时的工作文件夹；记录加入 Copilot 的 Chats，不新建项目或复制项目文件。",
-        "resultHint": "记录在 Copilot 的 Chats（聊天）中，查看最新复制的记录。若仍是旧列表，Windows 在 Copilot 中按 F5 刷新；Mac 在任务结束后完全退出 Copilot 再打开。旧格式副本不会被覆盖。"},
+        "resultHint": ("完成后自动刷新并打开 Copilot，最新复制的记录显示在 Chats（聊天）顶部。有进行中的任务或未发送草稿时暂缓刷新，处理完后可点下方按钮查看。" if sys.platform == "win32" else "记录在 Copilot 的 Chats（聊天）中；若仍是旧列表，在任务结束后完全退出 Copilot 再打开。") + "旧格式副本不会被覆盖。"},
     "cursor_desktop": {"harness": "cursor_desktop", "mode": "history", "resultHint": "打开对应文件夹的 Cursor，等待历史列表刷新。"},
     "workbuddy": {"harness": "workbuddy", "mode": "history", "resultHint": "已复制到 WorkBuddy 的本机历史。请在对应文件夹下确认记录是否显示；刷新方式取决于软件版本。"},
     "workbuddy_ai": {"harness": "workbuddy_ai", "mode": "history", "resultHint": "在 WorkBuddy AI 的对应文件夹下查看；未刷新时重新打开 WorkBuddy AI。"},
