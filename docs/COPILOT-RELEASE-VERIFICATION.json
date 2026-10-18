@@ -636,5 +636,86 @@
       "failedPackageUnpublished": true,
       "diagnosticsAddedIn": "851887b"
     }
+  },
+  "updateRefresh20261018": {
+    "windows": {
+      "passed": true,
+      "version": "0.3.16",
+      "source": "2da089f6dfe49bd1ac77b2b7d97cfd4e4e17dbbf",
+      "releaseId": 416456201,
+      "scope": "independent CI and draft downloads, installer and workspace reports, immutable source tag, exact names, bytes and SHA-256",
+      "installerChecks": {
+        "bundledControls": true,
+        "silentInstall": true,
+        "silentReinstall": true,
+        "extraFilePreserved": true,
+        "backgroundUninstall": true,
+        "backgroundUpgrade": true,
+        "safeUninstall": true,
+        "installedSelfChecks": true,
+        "bundledRuntime": true,
+        "installedVersion": true
+      },
+      "assets": [
+        {
+          "name": "AI-First-Tools-Setup-0.3.16.exe",
+          "bytes": 233472008,
+          "sha256": "60254158b13515fecb9e0d4a985ca3488c37b65b7e8e3ee2207725ac29f75587"
+        },
+        {
+          "name": "AI-First-Tools-Portable-0.3.16-win-x64.zip",
+          "bytes": 249641511,
+          "sha256": "9057c565598501ea7d1d90ab12da4cb9b6c4a45aa50fbb94c7310999d32796b1"
+        },
+        {
+          "name": "SHA256SUMS.txt",
+          "bytes": 209,
+          "sha256": "982e9ff19567655a64f34faabab8d32164e7f8565c6e983343dbac64452ba09a"
+        }
+      ]
+    },
+    "buildRun": 39129465143,
+    "checksRun": 39129458514,
+    "verificationRun": 39130153593,
+    "publicAudit": {
+      "passed": true,
+      "anonymousPublicAssets": true,
+      "publishedVersion": "0.3.16",
+      "publicChecksumMatched": true,
+      "windowsFrom15Selects16": true,
+      "sameVersionNotOffered": true,
+      "macUnchanged": "preview.18",
+      "installedApplicationTouched": false
+    },
+    "failedCandidateUnpublished": 39128983664,
+    "nativeCopilot": {
+      "version": "1.1.30",
+      "syntheticImports": 3,
+      "sidebarAndRecentVisible": true,
+      "openedBodyVerified": true,
+      "visibleDraftPreserved": true,
+      "noModelRequest": true,
+      "syntheticRowsRemoved": 3
+    },
+    "fullPayloadCi": {
+      "stagingMs": 16640,
+      "incrementalApplyMs": 1483,
+      "incrementalChangedFiles": 2,
+      "parentExitToSyntheticToolReadyMs": 5366,
+      "prepareThroughSyntheticToolReadyMs": 31184,
+      "realHelper": true,
+      "newToolAttached": true,
+      "scope": "Full release payload with synthetic embedded tool and no-op background; real installed background lifecycle audited separately"
+    },
+    "localFullPayload": {
+      "parentExitToSyntheticToolReadyMs": 34106,
+      "prepareThroughSyntheticToolReadyMs": 79480,
+      "installedApplicationTouched": false
+    },
+    "frozenComposerGuard": {
+      "passed": true,
+      "draftDetected": true,
+      "emptyAccepted": true
+    }
   }
 }
