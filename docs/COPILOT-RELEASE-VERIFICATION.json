@@ -389,9 +389,78 @@
       "sameVersionNotOffered": true
     },
     "mac": {
-      "state": "pending native rebuild with fixture diagnostics",
-      "failedArmJob": 117665288705,
-      "firstBuildRun": 39124026895
+      "passed": true,
+      "release": "0.4.0-macos-preview.18",
+      "source": "851887ba4903d3bb8b79e8b344950223f915737f",
+      "releaseId": 416425797,
+      "scope": "separately downloaded original CI artifacts and draft assets; native reports, exact names, bytes and SHA-256",
+      "assets": [
+        {
+          "name": "self-test-arm64.json",
+          "bytes": 572,
+          "sha256": "421821bcc8aee1a61e493578ef577f9e0edb02dd07d7c715d91e4987e9808817"
+        },
+        {
+          "name": "smoke-test-arm64.json",
+          "bytes": 640,
+          "sha256": "46c92daceabe310d7f5a1399e7a45a25fea3891215219079f16506d7d3fdfdcf"
+        },
+        {
+          "name": "network-test-arm64.json",
+          "bytes": 381,
+          "sha256": "07b8e317b0f0871bf0a478369177b4b7ff2b3b66dff90ff8addd273a403b232e"
+        },
+        {
+          "name": "update-test-arm64.json",
+          "bytes": 2305,
+          "sha256": "17ee95b9296ef0f99304369521dd7ed717c5bae8e74421d525ab7f85fa068dc8"
+        },
+        {
+          "name": "resume-test-arm64.json",
+          "bytes": 646,
+          "sha256": "55164c0a55046e7789b2c6fbe7443be6225af17c5dfa2c562833a74c99946363"
+        },
+        {
+          "name": "AI-First-Tools-0.4.0-macos-preview.18-macos-arm64.dmg",
+          "bytes": 149753022,
+          "sha256": "bcd68c5f67eff1f66bf5fe078b913a4bebc28f0198a9db05840a1eb9da1f3cea"
+        },
+        {
+          "name": "self-test-x86_64.json",
+          "bytes": 573,
+          "sha256": "fa11917ce1702422efee8c1c70b25cc22bf8d7e60ff4143887da3908c0fcd5a0"
+        },
+        {
+          "name": "smoke-test-x86_64.json",
+          "bytes": 640,
+          "sha256": "46c92daceabe310d7f5a1399e7a45a25fea3891215219079f16506d7d3fdfdcf"
+        },
+        {
+          "name": "network-test-x86_64.json",
+          "bytes": 382,
+          "sha256": "bf5152f55f8f2c0ec1bfa01cb08ff52a12e6a09f2328def449f5ce8b77e7af83"
+        },
+        {
+          "name": "update-test-x86_64.json",
+          "bytes": 2306,
+          "sha256": "eae88a3f3ee3ea077424cba98e8b7e8fed9930b4a5d83e3f3534e23d0f860f0c"
+        },
+        {
+          "name": "resume-test-x86_64.json",
+          "bytes": 647,
+          "sha256": "a7eaf5f7ae47c55878ed5eff9937a50bff733b2f4a0984c58c856b58dfb3981a"
+        },
+        {
+          "name": "AI-First-Tools-0.4.0-macos-preview.18-macos-x86_64.dmg",
+          "bytes": 163165849,
+          "sha256": "fc42efc7e9f9d7e0fa4ecbeac90a5144ad471b5ccb384a244f70498a41db93f6"
+        },
+        {
+          "name": "SHA256SUMS.txt",
+          "bytes": 241,
+          "sha256": "d75cbfec34a14991472b62ddd833c428b7ebf548cd344233d54b8e4de1924188"
+        }
+      ]
     },
     "limitations": [
       "Copilot Desktop UI checked on Windows 1.1.30 only; no model request sent",
@@ -399,6 +468,173 @@
       "Opening a list URL does not guarantee native sidebar cache invalidation; Windows F5 verified, Mac fully quit after tasks then reopen",
       "Update retains full packages; measured old replacement about 49 seconds and then about 4 seconds to process launch, download duration unknown",
       "Existing installed helper changes only after the user upgrades; workbench installation was not upgraded or restarted by the agent"
-    ]
+    ],
+    "macPublic": {
+      "public": true,
+      "tag": "v0.4.0-macos-preview.18",
+      "allDigestsMatched": true,
+      "checksumFileDownloaded": true,
+      "macPublicSelectors": [
+        {
+          "architecture": "arm64",
+          "from": "preview.17",
+          "selected": "preview.18",
+          "packageAccepted": true,
+          "sameVersionNotOffered": true
+        },
+        {
+          "architecture": "x86_64",
+          "from": "preview.17",
+          "selected": "preview.18",
+          "packageAccepted": true,
+          "sameVersionNotOffered": true
+        }
+      ],
+      "nativeReports": {
+        "self-test-arm64.json": {
+          "passed": true,
+          "checks": {
+            "ui/index.html": true,
+            "ui/app.js": true,
+            "ui/workspace.js": true,
+            "ui/workspace.css": true,
+            "ui/assets/ai-first.png": true,
+            "bin/txcript": true,
+            "ui/auto-resume.js": true,
+            "auto-resume-native/LICENSE": true,
+            "auto-resume-native/NOTICE": true,
+            "bundledAutoResumeRuntime": true,
+            "native_engine": true
+          }
+        },
+        "smoke-test-arm64.json": {
+          "passed": true,
+          "checks": {
+            "sidebarHidden": true,
+            "sidebarState": true,
+            "nativeEngineReady": true,
+            "isolatedRecords": true,
+            "bridge": true,
+            "nativeContentAttached": true,
+            "bundledFileNavigation": true,
+            "automaticUpdateReminder": true,
+            "noUnrequestedDownload": true,
+            "autoResumeControlBridge": true
+          }
+        },
+        "network-test-arm64.json": {
+          "passed": true,
+          "checks": {
+            "verifiedTls": true,
+            "githubReleaseFeed": true,
+            "nativeSystemProxy": true
+          }
+        },
+        "update-test-arm64.json": {
+          "passed": true,
+          "checks": {
+            "preparationStages": true,
+            "nativeUpdateClick": true,
+            "bridgeDrained": true,
+            "nativeParentExit": true,
+            "replacement": true,
+            "nativeRelaunch": true,
+            "backupPreserved": true,
+            "version": true,
+            "repeatNativeRelaunch": true
+          }
+        },
+        "resume-test-arm64.json": {
+          "passed": true,
+          "checks": {
+            "nativeRuntimeWithoutExternalInstallation": true,
+            "singlePackagedWatcher": true,
+            "startupSwitchIndependent": true,
+            "stopBlocksStartupRelaunch": true,
+            "updateRestoresRunningAndStartup": true,
+            "realLaunchAgentStopsWithoutRelaunch": true,
+            "finderRemovalCleansBackgroundAndStartup": true,
+            "cleanupPreservesUserSettings": true
+          }
+        },
+        "self-test-x86_64.json": {
+          "passed": true,
+          "checks": {
+            "ui/index.html": true,
+            "ui/app.js": true,
+            "ui/workspace.js": true,
+            "ui/workspace.css": true,
+            "ui/assets/ai-first.png": true,
+            "bin/txcript": true,
+            "ui/auto-resume.js": true,
+            "auto-resume-native/LICENSE": true,
+            "auto-resume-native/NOTICE": true,
+            "bundledAutoResumeRuntime": true,
+            "native_engine": true
+          }
+        },
+        "smoke-test-x86_64.json": {
+          "passed": true,
+          "checks": {
+            "sidebarHidden": true,
+            "sidebarState": true,
+            "nativeEngineReady": true,
+            "isolatedRecords": true,
+            "bridge": true,
+            "nativeContentAttached": true,
+            "bundledFileNavigation": true,
+            "automaticUpdateReminder": true,
+            "noUnrequestedDownload": true,
+            "autoResumeControlBridge": true
+          }
+        },
+        "network-test-x86_64.json": {
+          "passed": true,
+          "checks": {
+            "verifiedTls": true,
+            "githubReleaseFeed": true,
+            "nativeSystemProxy": true
+          }
+        },
+        "update-test-x86_64.json": {
+          "passed": true,
+          "checks": {
+            "preparationStages": true,
+            "nativeUpdateClick": true,
+            "bridgeDrained": true,
+            "nativeParentExit": true,
+            "replacement": true,
+            "nativeRelaunch": true,
+            "backupPreserved": true,
+            "version": true,
+            "repeatNativeRelaunch": true
+          }
+        },
+        "resume-test-x86_64.json": {
+          "passed": true,
+          "checks": {
+            "nativeRuntimeWithoutExternalInstallation": true,
+            "singlePackagedWatcher": true,
+            "startupSwitchIndependent": true,
+            "stopBlocksStartupRelaunch": true,
+            "updateRestoresRunningAndStartup": true,
+            "realLaunchAgentStopsWithoutRelaunch": true,
+            "finderRemovalCleansBackgroundAndStartup": true,
+            "cleanupPreservesUserSettings": true
+          }
+        }
+      }
+    },
+    "macBuildRun": 39124685770,
+    "macVerificationRun": 39125691806,
+    "firstMacBuild": {
+      "run": 39124026895,
+      "failedArmJob": 117665288705,
+      "phase": "fixture",
+      "errorCode": "CalledProcessError",
+      "exactCauseUndetermined": true,
+      "failedPackageUnpublished": true,
+      "diagnosticsAddedIn": "851887b"
+    }
   }
 }

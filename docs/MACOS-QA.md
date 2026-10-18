@@ -1,5 +1,22 @@
 # Mac 移植验证记录
 
+## 2026-10-18：preview.18 已发布，Copilot 原生图片与历史过程
+
+[公开版本](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.18)，不可变标签与两架构包固定源码 `851887ba4903d3bb8b79e8b344950223f915737f`，发布 ID `416425797`。v2 转换用户内嵌图片为原生附件、合并正常文字并保留原角色；工具与系统记录归入默认折叠且已完成的历史归档，完整源另存回读。旧格式允许重搬一次，源与旧副本不改动。Mac 保留完整内置续跑与现有自动更新；Windows 同轮 v0.3.15 的更新阶段窗口和重开前清理调整不冒称 Mac 功能。
+
+[原生构建 39124685770](https://github.com/feifeigong/ai-first-tools/actions/runs/39124685770) 的 Apple 芯片与 Intel 均通过共享检查、Copilot 原生完整历史/图片严格恢复、原生分页及仅本机模拟续聊、后台算法和实际冻结 APP/DMG。每架构资源/页面/HTTPS/更新/续跑的 **11/10/3/9/8** 项均为 true，包含真实 Cocoa 点击、八步准备、桥排空、父进程退出、helper 替换、备份与两次 Cocoa 重开。下载传输是隔离合成资产，系统 HTTPS 单独检查；不把它称为用户公网完整升级。
+
+[独立核验 39125691806](https://github.com/feifeigong/ai-first-tools/actions/runs/39125691806) 分别下载原 CI 与草稿的全部 13 个文件，核对原生报告、名称、字节、SHA-256 和源码标签后公开。匿名公开元数据、SHA 清单及十份原生报告再次下载核对通过；两个架构的生产选择器从 preview.17 选到 preview.18、资产被校验器接受，同版不提示。完整资产与检查项见 COPILOT-RELEASE-VERIFICATION.json 的 nativePresentation20261018。
+
+首轮源码 5525967 的 ARM 冻结更新审计在 fixture 阶段报 CalledProcessError，失败包未发布，具体命令当时未记录，不能归因为某个系统错误。851887b 仅补充合成夹具命令、退出码及脱敏错误诊断，并新增失败回归；没有延长超时或放宽检查。新的两架构完整执行通过，未复现该错误，原失败和被替代的 Intel 运行保留，不宣称已确定其根因。
+
+Copilot Desktop 的图片、两轮问答、角色与默认折叠只在 Windows 1.1.30 用独立合成副本实际验收，未称 Mac Desktop 已验收，也未请求在线模型。列表导航不能保证原生缓存失效；Mac 有任务时先完成任务，再完全退出 Copilot 并打开。用户工作台由其自行自动更新，代理没有升级或重开安装。
+
+| 芯片 | DMG 大小（字节） | SHA-256 |
+| --- | ---: | --- |
+| Apple / arm64 | 149753022 | `bcd68c5f67eff1f66bf5fe078b913a4bebc28f0198a9db05840a1eb9da1f3cea` |
+| Intel / x86_64 | 163165849 | `fc42efc7e9f9d7e0fa4ecbeac90a5144ad471b5ccb384a244f70498a41db93f6` |
+
 ## 2026-10-18：preview.17 已发布，Copilot 搬入后打开会话管理页
 
 [公开版本](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.17)，两架构包和不可变标签固定源码 `d15b0ee80240f0de0c29730edb7574738feca680`，发布 ID `416401378`。每批搬入后使用官方 Chats → Recent 本机链接刷新列表，结果增加 Copilot 查看与重试，已搬过记录不重复写入。保留 preview.16 完整内置续跑与自动更新。

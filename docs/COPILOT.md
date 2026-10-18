@@ -1,6 +1,6 @@
 # Copilot Desktop 对话搬家
 
-2026-10-18 Windows v0.3.15 已发布，Mac preview.18 待原生构建通过。该轮修正导入内容的显示语义。旧 v1 将图片 Base64、工具调用和工具结果逐块串成普通助手正文，导致编码刷屏、JSON 日志连在正常回答前面。v2 将同一消息的普通文字合并、原始角色和时间保留；用户图片写入原生 `user.message.attachments` 的内嵌图片字段；思考仍用原生 reasoningText；原工具、系统说明和其他历史信息归入默认折叠的 `imported_history` 归档操作，不登记原工具名称或权限、不重新执行。每个归档操作均已完整结束，成功仅表示历史保存成功，不代表来源工具执行成功。完整源文档另保存在新副本的 `.ai-first-source.json`，逐字段回读验证，不出现在正常聊天正文中。
+2026-10-18 [Windows v0.3.15](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.15) 与 [Mac preview.18](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.18) 已发布，原生构建和全部资产独立下载核验通过。该轮修正导入内容的显示语义。旧 v1 将图片 Base64、工具调用和工具结果逐块串成普通助手正文，导致编码刷屏、JSON 日志连在正常回答前面。v2 将同一消息的普通文字合并、原始角色和时间保留；用户图片写入原生 `user.message.attachments` 的内嵌图片字段；思考仍用原生 reasoningText；原工具、系统说明和其他历史信息归入默认折叠的 `imported_history` 归档操作，不登记原工具名称或权限、不重新执行。每个归档操作均已完整结束，成功仅表示历史保存成功，不代表来源工具执行成功。完整源文档另保存在新副本的 `.ai-first-source.json`，逐字段回读验证，不出现在正常聊天正文中。
 
 v2 去重允许旧格式记录再复制一次，源和旧副本都保留；新的本机登记时间取本次复制时间，便于在列表顶部找到，消息时间仍保留来源值。Windows Desktop 1.1.30 的合成图片、连续两轮问答和默认折叠已通过实际窗口验收。另已复现：官方 Recent 链接只导航页面，并不能保证重新加载已缓存的侧栏；旧记录可能可见，而刚搬入的记录点开后返回 New。结果页明确提示 Copilot 已开着时在 Windows 按 F5 刷新；Mac 在任务结束后完全退出 Copilot 再打开，不再把打开请求称作刷新成功。此前 v0.3.14 的“自动刷新”验收范围不充分，不能据此保证所有新导入立即可见。
 
