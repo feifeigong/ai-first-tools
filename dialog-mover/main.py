@@ -7,11 +7,12 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 import webview
 
-from core import chatgpt, imports, mover, sources
+from core import chatgpt, copilot_import, imports, mover, sources
 from core.common import open_external
 from embedded_startup import EmbeddedStartup
 
@@ -166,21 +167,31 @@ class Api:
         return {"ok": True}
 
     def open_in_app(self, index: int) -> dict:
-        """Ask ChatGPT to open a thread we just wrote, by its id. Only codex:// links of our own results."""
+        """Open only an allowlisted destination of this batch's saved results."""
         if self._job is None or not isinstance(index, int):
             return {"error": "没有导入结果。"}
         items = self._job.snapshot()["items"]
-        if index < 0 or index >= len(items) or items[index]["state"] != "ok":
+        if index < 0 or index >= len(items):
             return {"error": "这条记录尚未导入成功。"}
         url = str(items[index].get("openUrl", ""))
         imported = str(items[index].get("importedId", ""))
-        if not imported or url != f"codex://threads/{imported}" or not mover.SAFE_ID.match(imported):
+        copilot = self._job.target == "copilot_desktop" and url == copilot_import.LIST_URL
+        state = items[index]["state"]
+        if state != "ok" and not (copilot and state == "skipped"):
+            return {"error": "这条记录尚未导入成功。"}
+        if not copilot and (self._job.target not in ("codex", "chatgpt_work") or not imported or url != f"codex://threads/{imported}" or not mover.SAFE_ID.fullmatch(imported)):
             return {"error": "这个目标不支持直接打开。"}
         try:
+            if copilot:
+                # Recent fetches sessions on entry. Leave it first so a second
+                # import also refreshes when Desktop is already showing Recent.
+                # Neither navigation stops tasks or closes the background app.
+                open_external("ghapp://chats")
+                time.sleep(1)
             open_external(url)
         except (OSError, subprocess.SubprocessError) as error:
             mover.log(f"open_in_app {url}: {error!r}")
-            return {"error": "没有找到可以打开它的软件，请先安装并启动 ChatGPT。"}
+            return {"error": "无法打开 Copilot 的会话列表，请在 Copilot 用户菜单选择 Manage sessions（管理会话）。" if copilot else "没有找到可以打开它的软件，请先安装并启动 ChatGPT。"}
         return {"ok": True}
 
     def move_status(self) -> dict:

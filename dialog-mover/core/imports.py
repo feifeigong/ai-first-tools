@@ -16,7 +16,7 @@ TARGETS = {
     "copilot_desktop": {"harness": "copilot_local", "mode": "local", "targetSub": "桌面端 · 本机聊天",
         "notice": "复制到 Copilot Desktop 的聊天列表。工具日志、系统说明和附件信息作为历史文字保留，附件文件与原软件权限不迁移。",
         "folderHint": "选择继续使用这条聊天时的工作文件夹；记录加入 Copilot 的 Chats，不新建项目或复制项目文件。",
-        "resultHint": "已登记到 Copilot Desktop 的 Chats（聊天）列表。如果列表尚未刷新，请结束当前任务后重新打开 Copilot。"},
+        "resultHint": "记录在 Copilot 的 Chats（聊天）中。正在打开 Copilot 的会话管理页以刷新列表，点击搬入记录的标题即可查看。"},
     "cursor_desktop": {"harness": "cursor_desktop", "mode": "history", "resultHint": "打开对应文件夹的 Cursor，等待历史列表刷新。"},
     "workbuddy": {"harness": "workbuddy", "mode": "history", "resultHint": "已复制到 WorkBuddy 的本机历史。请在对应文件夹下确认记录是否显示；刷新方式取决于软件版本。"},
     "workbuddy_ai": {"harness": "workbuddy_ai", "mode": "history", "resultHint": "在 WorkBuddy AI 的对应文件夹下查看；未刷新时重新打开 WorkBuddy AI。"},

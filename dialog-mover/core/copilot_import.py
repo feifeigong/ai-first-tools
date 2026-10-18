@@ -19,6 +19,9 @@ from pathlib import Path
 from . import copilot_local
 
 HISTORY_FORMAT = "copilot-desktop-chat-v1"
+# Desktop's session-by-id link explicitly rejects general_chat sessions. Opening
+# Recent runs its native managed-session query and refreshes the Chats sidebar.
+LIST_URL = "ghapp://recent"
 REQUIRED = {"id", "title", "session_type", "created_at", "updated_at"}
 WRITABLE = REQUIRED | {"is_running", "was_interrupted", "mode", "auto_approve", "permission_mode",
                        "remote_control_enabled", "remote_session_mode", "execution_location", "title_source", "provisional"}

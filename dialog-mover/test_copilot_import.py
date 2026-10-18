@@ -8,9 +8,11 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import call, patch
 
 from core import copilot_import, copilot_local, common, mover
+from main import Api
 
 
 def desktop_index(root: Path) -> None:
@@ -105,14 +107,58 @@ class CopilotDestinationTests(unittest.TestCase):
         with patch.object(mover, "data_dir", return_value=self.base), patch.object(mover, "_run", side_effect=exported) as engine:
             state, message = mover.move_one("chatgpt", {"id": document["id"], "title": document["title"]}, "copilot_desktop", str(self.directory), details)
             self.assertEqual(state, "ok", message)
+            self.assertEqual(details["openUrl"], "ghapp://recent")
             self.assertEqual(engine.call_count, 1)  # Source export only; no resume/model/tool request.
-            self.assertEqual(mover.move_one("chatgpt", {"id": document["id"]}, "copilot_desktop", str(self.directory))[0], "skipped")
+            previous = Path(details["location"]).read_bytes()
+            skipped = {}
+            self.assertEqual(mover.move_one("chatgpt", {"id": document["id"]}, "copilot_desktop", str(self.directory), skipped)[0], "skipped")
+            self.assertEqual(skipped["openUrl"], "ghapp://recent")
+            self.assertEqual(engine.call_count, 1)
+            self.assertEqual(Path(details["location"]).read_bytes(), previous)
+            with closing(sqlite3.connect(self.root / "data.db")) as connection:
+                self.assertEqual(connection.execute("SELECT count(*) FROM sessions").fetchone()[0], 1)
         self.assertEqual(fixture.read_bytes(), original)
         body = copilot_local.document(details["importedId"])
         self.assertEqual(body["title"], document["title"])
         for source in document["messages"]:
             for block in source["content"]:
                 self.assertIn(block["text"], [entry["content"][0]["text"] for entry in body["messages"]])
+
+    def test_native_list_handoff_for_new_and_previous_copies_and_open_failure_retry(self):
+        for state in ("ok", "skipped"):
+            api = Api()
+            api._job = SimpleNamespace(target="copilot_desktop", snapshot=lambda: {"items": [
+                {"state": state, "openUrl": copilot_import.LIST_URL}]})
+            with patch("main.open_external") as opened, patch("main.time.sleep"):
+                self.assertEqual(api.open_in_app(0), {"ok": True})
+                # Leave Recent before re-entering: opening the same current
+                # route alone need not run the native query a second time.
+                self.assertEqual(opened.call_args_list, [call("ghapp://chats"), call("ghapp://recent")])
+                opened.side_effect = OSError("synthetic missing handler")
+                self.assertIn("Manage sessions", api.open_in_app(0)["error"])
+                opened.side_effect = None
+                self.assertEqual(api.open_in_app(0), {"ok": True})
+
+    def test_handoff_rejects_other_protocols_wrong_batch_and_unsaved_results(self):
+        for target, state, url in (("copilot_desktop", "failed", copilot_import.LIST_URL),
+                                   ("copilot_desktop", "running", copilot_import.LIST_URL),
+                                   ("chatgpt_work", "ok", copilot_import.LIST_URL),
+                                   ("copilot_desktop", "ok", "ghapp://sessions/synthetic"),
+                                   ("copilot_desktop", "ok", "https://example.invalid/"),
+                                   ("copilot_desktop", "skipped", "file:///synthetic")):
+            api = Api()
+            api._job = SimpleNamespace(target=target, snapshot=lambda: {"items": [{"state": state, "openUrl": url}]})
+            with patch("main.open_external") as opened:
+                self.assertIn("error", api.open_in_app(0))
+                opened.assert_not_called()
+
+    def test_existing_chatgpt_thread_handoff_still_opens_only_own_result(self):
+        api = Api()
+        api._job = SimpleNamespace(target="chatgpt_work", snapshot=lambda: {"items": [
+            {"state": "ok", "importedId": "synthetic-thread", "openUrl": "codex://threads/synthetic-thread"}]})
+        with patch("main.open_external") as opened:
+            self.assertEqual(api.open_in_app(0), {"ok": True})
+            opened.assert_called_once_with("codex://threads/synthetic-thread")
 
     def test_trigger_cannot_create_additional_sessions(self):
         with closing(sqlite3.connect(self.root / "data.db")) as connection, connection:

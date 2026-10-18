@@ -10,7 +10,7 @@
     <AssemblyName>AI一手工具工作台</AssemblyName>
     <RootNamespace>AIFirst.Workspace</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.13</Version>
+    <Version>0.3.14</Version>
     <ApplicationIcon>assets\ai-first-logo.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>

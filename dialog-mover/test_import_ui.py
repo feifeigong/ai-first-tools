@@ -156,34 +156,47 @@ class ImportUiTests(unittest.TestCase):
         capabilities = Api().agents()
         capabilities["agents"] = [item for item in capabilities["agents"] if item["id"] == "chatgpt"]
         bootstrap = """
-        window._moves=[];
+        window._moves=[]; window._opens=[];
         window.pywebview={api:{
           agents:async()=>(CAPABILITIES),
           sessions:async()=>({groups:[{title:'聊天',kind:'recent',path:'',sessions:[{id:'synthetic-chatgpt',title:'ChatGPT 合成聊天',movable:true,ts:1}]}],total:1,movable:1}),
           folders:async()=>[{name:'合成项目',path:'D:/synthetic/project'}],
           start_move:async(...args)=>{window._moves.push(args);return {ok:true,total:1};},
-          move_status:async()=>({finished:true,total:1,done:1,ok:1,failed:0,skipped:0,items:[{id:'synthetic-chatgpt',title:'ChatGPT 合成聊天',state:'ok',message:'已登记到 Copilot 的聊天列表',resumeCommand:''}]})
+          move_status:async()=>({finished:true,total:1,done:1,ok:RESULT_OK,failed:0,skipped:RESULT_SKIPPED,items:[{id:'synthetic-chatgpt',title:'ChatGPT 合成聊天',state:'RESULT_STATE',message:'已复制到 Copilot',resumeCommand:'',openUrl:'ghapp://recent'}]}),
+          open_in_app:async(index)=>{window._opens.push(index);return window._openFails ? {error:'合成打开失败'} : {ok:true};}
         }};
         window.addEventListener('DOMContentLoaded',()=>window.dispatchEvent(new Event('pywebviewready')));
         """.replace("CAPABILITIES", json.dumps(capabilities))
         with sync_playwright() as runtime:
             browser = runtime.chromium.launch(channel="msedge", headless=True)
             try:
-                page = browser.new_page(viewport={"width": 1180, "height": 780})
-                page.add_init_script(bootstrap)
-                page.goto((Path(__file__).parent / "ui/index.html").as_uri())
-                page.locator(".row").first.click()
-                page.locator("#bar-go").click()
-                page.locator('[data-target="copilot_desktop"]').click()
-                self.assertIn("Copilot 的 Chats", page.locator("#sheet-body").inner_text())
-                page.locator("[data-path]").first.click()
-                page.locator("#next").click()
-                self.assertIn("GitHub Copilot", page.locator("#sheet-body").inner_text())
-                page.locator("#go").click()
-                page.locator("#finish").wait_for()
-                self.assertIn("已登记到 Copilot 的聊天列表", page.locator("#sheet-body").inner_text())
-                self.assertEqual(page.evaluate("window._moves[0]"), ["chatgpt", ["synthetic-chatgpt"], "copilot_desktop", "D:/synthetic/project"])
-                self.assertEqual(page.locator('[aria-label="续聊命令"]').count(), 0)
+                for result_state in ("ok", "skipped"):
+                    with self.subTest(state=result_state):
+                        page = browser.new_page(viewport={"width": 1180, "height": 780})
+                        script = bootstrap.replace("RESULT_STATE", result_state).replace("RESULT_OK", "1" if result_state == "ok" else "0").replace("RESULT_SKIPPED", "1" if result_state == "skipped" else "0")
+                        page.add_init_script(script)
+                        page.goto((Path(__file__).parent / "ui/index.html").as_uri())
+                        page.locator(".row").first.click()
+                        page.locator("#bar-go").click()
+                        page.locator('[data-target="copilot_desktop"]').click()
+                        self.assertIn("Copilot 的 Chats", page.locator("#sheet-body").inner_text())
+                        page.locator("[data-path]").first.click()
+                        page.locator("#next").click()
+                        self.assertIn("GitHub Copilot", page.locator("#sheet-body").inner_text())
+                        page.locator("#go").click()
+                        page.get_by_text("已请求 Copilot 刷新会话列表，点击搬入记录的标题查看", exact=True).wait_for()
+                        self.assertEqual(page.evaluate("window._opens"), [0])
+                        self.assertEqual(page.evaluate("window._moves[0]"), ["chatgpt", ["synthetic-chatgpt"], "copilot_desktop", "D:/synthetic/project"])
+                        self.assertEqual(page.locator('[aria-label="续聊命令"]').count(), 0)
+                        self.assertNotIn("在 ChatGPT 中打开", page.locator("#sheet-body").inner_text())
+                        page.evaluate("window._openFails=true")
+                        page.get_by_role("button", name="在 Copilot 中查看", exact=True).click()
+                        page.get_by_text("记录已复制，打开软件失败；可以重试", exact=True).wait_for()
+                        page.evaluate("window._openFails=false")
+                        page.get_by_role("button", name="在 Copilot 中查看", exact=True).click()
+                        page.get_by_text("已请求 Copilot 刷新会话列表，点击搬入记录的标题查看", exact=True).wait_for()
+                        self.assertEqual(page.evaluate("window._opens"), [0, 0, 0])
+                        page.close()
             finally:
                 browser.close()
 

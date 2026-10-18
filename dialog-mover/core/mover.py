@@ -198,8 +198,8 @@ def _import_document(path: Path, document: dict, target: str, details: dict | No
         if details is not None:
             details.update({"importedId": report["id"], "location": report["location"], "resumeCommand": "",
                             "notice": TARGETS[target]["notice"], "mode": "local",
-                            "historicalToolNotes": report["historicalToolNotes"]})
-        return "ok", "已搬好，已登记到 Copilot 的聊天列表"
+                            "historicalToolNotes": report["historicalToolNotes"], "openUrl": copilot_import.LIST_URL})
+        return "ok", "已复制到 Copilot，正在打开会话列表"
     moved = _run(["continue", str(path), "--with", TARGETS[target]["harness"], "--no-resume"], environment)
     if moved.returncode != 0:
         detail = (moved.stderr or moved.stdout or "").strip()
@@ -326,6 +326,11 @@ def move_one(source: str, session: dict, target: str, directory: str, details: d
     if not directory or not Path(directory).is_dir():
         return "failed", "请先选好要放进去的文件夹。"
     if already_moved(source, sid, target, directory):
+        if target == "copilot_desktop" and details is not None:
+            # Older receipts intentionally contain no imported id. The fixed
+            # list link can refresh these copies too, without another write.
+            details.update({"openUrl": copilot_import.LIST_URL, "mode": "local"})
+            return "skipped", "之前已复制到 Copilot，打开会话列表查看；不重复搬运。"
         return "skipped", "之前已经搬到这个文件夹了，不重复搬。"
     if source == "claude_desktop":
         return _move_cached_claude(session, target, directory, details)
