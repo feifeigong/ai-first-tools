@@ -148,6 +148,24 @@ def _darwin_process_start(pid: int) -> int | None:
     return info.seconds * 1_000_000 + info.microseconds
 
 
+def _darwin_process_path(pid: int) -> Path | None:
+    """Read the executable image, rather than ps's mutable command name."""
+    library = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+    query = library.proc_pidpath
+    query.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+    query.restype = ctypes.c_int
+    buffer = ctypes.create_string_buffer(4096)  # PROC_PIDPATHINFO_MAXSIZE
+    size = query(pid, buffer, len(buffer))
+    if size == 0 and ctypes.get_errno() == 3:
+        return None
+    if size <= 0 or size >= len(buffer) or len(buffer.value) != size:
+        raise WatchStateError('identity_unverified')
+    path = Path(os.fsdecode(buffer.value))
+    if not path.is_absolute():
+        raise WatchStateError('identity_unverified')
+    return path.resolve()
+
+
 def _inspect_process(pid: int) -> dict | None:
     """Read only this PID's executable, start time and command line."""
     if sys.platform == "darwin":
@@ -157,12 +175,13 @@ def _inspect_process(pid: int) -> dict | None:
         except subprocess.CalledProcessError:
             return None
         started = _darwin_process_start(pid)
-        if not executable_text or started is None or not command: return None
+        image = _darwin_process_path(pid)
+        if not executable_text or started is None or image is None or not command: return None
         executable = Path(executable_text)
         if not executable.is_absolute() or not (command == executable_text or command.startswith(executable_text + " ")):
             raise WatchStateError("identity_unverified")
         import shlex
-        return {"pid": pid, "executable": str(executable.resolve()), "started_at": started,
+        return {"pid": pid, "executable": str(image), "started_at": started,
                 "argv": [str(executable.resolve()), *shlex.split(command[len(executable_text):])]}
     if sys.platform != "win32":
         try:

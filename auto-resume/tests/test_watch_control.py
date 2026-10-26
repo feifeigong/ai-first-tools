@@ -23,11 +23,41 @@ class WatchControlTests(unittest.TestCase):
         replies = [str(executable), str(executable) + ' --auto-resume-watch']
         with patch.object(watch.sys, 'platform', 'darwin'), \
                 patch.object(watch, '_darwin_process_start', return_value=1792994400123456), \
+                patch.object(watch, '_darwin_process_path', return_value=executable.resolve()), \
                 patch.object(watch.subprocess, 'check_output', side_effect=replies) as ps:
             value = watch._inspect_process(123)
         self.assertEqual(value['started_at'], 1792994400123456)
         self.assertEqual(value['argv'][1:], ['--auto-resume-watch'])
         self.assertFalse(any('lstart=' in call.args[0] for call in ps.call_args_list))
+
+    def test_mac_owner_uses_kernel_image_and_still_rejects_different_command_image(self):
+        image = self.root / 'AI一手工具工作台.app/Contents/MacOS/AI First Tools'
+        command_image = self.root / 'different/AI First Tools'
+        with patch.object(watch.sys, 'platform', 'darwin'), \
+                patch.object(watch, '_darwin_process_start', return_value=123456), \
+                patch.object(watch, '_darwin_process_path', return_value=image.resolve()), \
+                patch.object(watch.subprocess, 'check_output', side_effect=[str(command_image),str(command_image)+' --auto-resume-watch']):
+            value = watch._inspect_process(123)
+            self.assertEqual(value['executable'],str(image.resolve()))
+            self.assertEqual(value['argv'][0],str(command_image.resolve()))
+            self.assertFalse(watch._watcher(value))
+
+    def test_mac_kernel_image_requires_complete_absolute_path(self):
+        from unittest.mock import Mock
+        query = Mock()
+        data = os.fsencode(str(self.root / 'AI First Tools'))
+        def kernel(pid, buffer, size):
+            buffer.value = data
+            return len(data)
+        query.side_effect = kernel
+        with patch.object(watch.ctypes, 'CDLL', return_value=Mock(proc_pidpath=query)):
+            self.assertEqual(watch._darwin_process_path(123), Path(os.fsdecode(data)).resolve())
+            for returned in (0,4096,len(data)+1):
+                query.side_effect = None; query.return_value = returned
+                with patch.object(watch.ctypes, 'get_errno', return_value=1):
+                    with self.assertRaises(watch.WatchStateError): watch._darwin_process_path(123)
+            query.side_effect = lambda pid,buffer,size: (setattr(buffer,'value',b'relative') or 8)
+            with self.assertRaises(watch.WatchStateError): watch._darwin_process_path(123)
 
     def test_mac_kernel_birth_time_requires_complete_matching_process_metadata(self):
         from unittest.mock import Mock

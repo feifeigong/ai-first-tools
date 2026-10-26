@@ -131,6 +131,7 @@ class MacResetTests(unittest.TestCase):
     def test_mac_identity_handles_spaces_without_splitting_executable(self):
         path = str(self.monitor.executable)
         with patch('sys.platform','darwin'), patch('codex_auto_resume.watch_control._darwin_process_start',return_value=1792994400123456), \
+            patch('codex_auto_resume.watch_control._darwin_process_path',return_value=Path(path)), \
             patch('codex_auto_resume.watch_control.subprocess.check_output',
             side_effect=[path+'\n',path+' --auto-resume-watch --manual\n']):
             result = watch_control._inspect_process(1234)
