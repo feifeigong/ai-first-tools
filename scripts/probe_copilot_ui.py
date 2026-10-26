@@ -137,6 +137,20 @@ def main():
                 if menu:
                     controls=list(ax.walk(menu))
                     result['controlLabels']=[{'role':role,'title':title} for _,role,title in controls if title]
+                    for element,role,title in controls:
+                        if role=='AXMenuItem' and title=='Command Palette':
+                            ax.ax.AXUIElementPerformAction(element,ax.string('AXPress'));time.sleep(.5)
+                            fields=[(element,role,title) for element,role,title in ax.walk(app) if role in {'AXTextField','AXSearchField','AXComboBox'}]
+                            result['commandSearchFields']=[{'role':role,'title':title,'description':ax.text(ax.attribute(element,'AXDescription')),
+                                'placeholder':ax.text(ax.attribute(element,'AXPlaceholderValue'))} for element,role,title in fields]
+                            focused=ax.attribute(app,'AXFocusedUIElement')
+                            if len(fields)==1 and focused and ax.cf.CFEqual(focused,fields[0][0]):
+                                ax.ax.AXUIElementSetAttributeValue.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p]
+                                result['commandSearchSet']=ax.ax.AXUIElementSetAttributeValue(fields[0][0],ax.string('AXValue'),ax.string('reload'))
+                                time.sleep(.5)
+                            result['paletteLabels']=[{'role':role,'title':title,'value':ax.text(ax.attribute(element,'AXValue')) if role=='AXStaticText' else ''}
+                                for element,role,title in ax.walk(app) if role in {'AXButton','AXStaticText','AXRow'}]
+                            break
                     old_areas=[element for element,role,_ in ax.walk(app) if role=='AXWebArea']
                     for element,role,title in controls:
                         if role=='AXMenuItem' and title=='Close Window':
