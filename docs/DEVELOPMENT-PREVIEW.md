@@ -1,5 +1,7 @@
 # 智能搬家、续跑与重置开发预览
 
+**历史开发包说明。** Mac现用[AI一手工具箱 preview.21](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.21)，包含当前更名与此前修正，两芯片各131项原生检查通过。Windows当前下载入口以[README](../README.md)及GitHub正式发布为准，不再以本页旧开发包代替正式安装。以下保留当时的构建与验收边界。
+
 2026-10-26，供维护者核对当前源码与开发包。此次上传使用单独的 GitHub 开发预览草稿，正式 Windows v0.3.16 和公开 Mac preview.18 保留。
 
 ## 当前改动

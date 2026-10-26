@@ -164,7 +164,10 @@ jobs:
           Copy-Item -LiteralPath (Join-Path $desktop 'AI一手工具箱.lnk') -Destination $legacyDesktop
           $legacyMenu=Join-Path $programs 'AI一手工具工作台/AI一手工具工作台.lnk'
           New-Item -ItemType Directory -Force (Split-Path $legacyMenu) | Out-Null
-          $link=$shell.CreateShortcut($legacyMenu);$link.TargetPath=Join-Path $env:WINDIR 'System32/notepad.exe';$link.Save()
+          # WSH's ANSI save API cannot create a Chinese link path on English Windows.
+          $foreignFixture=Join-Path $env:RUNNER_TEMP 'synthetic-foreign-legacy.lnk'
+          $link=$shell.CreateShortcut($foreignFixture);$link.TargetPath=Join-Path $env:WINDIR 'System32/notepad.exe';$link.Save()
+          Move-Item -LiteralPath $foreignFixture -Destination $legacyMenu
           $reinstall=Start-Process -FilePath $setup -ArgumentList '/S' -PassThru -WindowStyle Hidden
           $reinstall.WaitForExit()
           if ($reinstall.ExitCode -ne 0 -or (Get-Content -LiteralPath $extra -Raw).Trim() -ne 'synthetic extra file must survive') { throw 'Silent reinstall or extra-file protection failed' }

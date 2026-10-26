@@ -1,10 +1,10 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
-## 当前改名候选：preview.21
+## 当前发布：AI一手工具箱 preview.21
 
-产品名已统一为“AI一手工具箱”，原生发布须重新构建preview.21。旧.app物理名、可执行文件、bundle ID、用户资料与LaunchAgent身份保留，避免中断旧版升级/续跑；本地化显示名、原生进程名、窗口及DMG卷名使用新名。验证增加系统本地化、Finder显示名与进程名三项，详见BRANDING.md。不能仅凭代码断言Finder已改名。原登录Copilot接续边界保持。
+产品名已统一为“AI一手工具箱”。[preview.21](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.21) 已公开，固定源码db1842171ce10cc3ed342e579f981c08673ab940，原生构建40305808109两芯片各131项通过，23份资产摘要与报告已核对。旧.app物理名、可执行文件、bundle ID、用户资料与LaunchAgent身份保留；本地化显示名、原生进程名、窗口及DMG卷名使用新名。系统本地化、Finder显示名与进程名均实际通过，不只比对源码。原登录Copilot接续边界保持。
 
-## 当前 Mac 包：preview.20
+## 上一轮独立预览：preview.20
 
 两架构运行包已完成并上传，固定源码44b7e21，普通40286406179及独立40286421067通过，各129项原生检查。下载开发草稿的20版Apple或Intel独立DMG，不再使用下方旧19包；报告和校验和与新包一起提供。Windows请用公开正式v0.3.17。
 

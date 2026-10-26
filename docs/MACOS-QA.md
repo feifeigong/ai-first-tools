@@ -2,6 +2,8 @@
 
 ## preview.21 改名验收范围
 
+已公开[preview.21](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.21)，源码db1842171ce10cc3ed342e579f981c08673ab940，完整构建及暂存[40305808109](https://github.com/feifeigong/ai-first-tools/actions/runs/40305808109)成功。Apple与Intel各10份原生报告、131项全部通过；23份远端资产、版本、芯片、DMG校验和与GitHub摘要逐项一致。真实登录Copilot及模型续聊仍按原约定接续，未用合成结果代替。
+
 新增localizedProductName、finderDisplayName、nativeProcessName三项原生检查；发布门槛明确要求三者。包装前写入en/zh-Hans/zh-Hant及Base的InfoPlist.strings，保留与文件名匹配的基础名称后重新ad-hoc签名。旧bundle路径、identifier、资料与LaunchAgent不改，原有更新/续跑/提醒生命周期全部仍须通过。首轮已实际通过三项名称检查；另发现更新预检运行于candidate.app，Finder按物理临时名显示属系统正常规则。现严格区分产品与本应用更新暂存范围，发布只接受finderScope=product，暂存检查不能冒充正式名称验收。
 
 ## 2026-10-26 preview.20：两架构原生报告通过
