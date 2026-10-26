@@ -55,8 +55,12 @@ jobs:
           [IO.File]::WriteAllText((Join-Path $PWD 'artifacts/branding-diagnostics/windows-powershell.json'),($classic -join "`n"),[Text.UTF8Encoding]::new($false))
           $modern
           $classic
+          Copy-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'AI一手工具箱.lnk') -Destination artifacts/branding-diagnostics/desktop.lnk
+          Copy-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'AI一手工具箱/AI一手工具箱.lnk') -Destination artifacts/branding-diagnostics/menu.lnk
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: installer-branding-diagnostics
-          path: artifacts/branding-diagnostics/*.json
+          path: |
+            artifacts/branding-diagnostics/*.json
+            artifacts/branding-diagnostics/*.lnk
