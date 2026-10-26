@@ -135,6 +135,27 @@ def audit(report: Path) -> int:
                 except Exception as identity_error: diagnostics['launchAgentIdentityError']=str(identity_error)[:80]
                 try: diagnostics['watchStateRunning']=inspect_watch(state_path())['running']
                 except Exception as state_error: diagnostics['watchStateError']=str(state_error)[:80]
+                # Only this audit's synthetic ownership files and process are
+                # compared; no user state, command text or paths are reported.
+                try:
+                    from codex_auto_resume import watch_control as control
+                    path=state_path()
+                    owner=json.loads(path.with_name('watch.owner.json').read_text())
+                    actual=control._inspect_process(owner['pid'])
+                    diagnostics['ownershipComparison']={
+                        'stateInFixture':path.resolve().is_relative_to(root.resolve()),
+                        'pidFileMatchesOwner':control._pid(path)==owner['pid'],
+                        'launchAgentMatchesOwner':str(owner['pid'])==diagnostics['launchAgentStatus'].get('pid'),
+                        'ownerFormatValid':owner.get('format')==control._FORMAT,
+                        'kernelStartMatches':actual is not None and owner.get('started_at')==actual['started_at'],
+                        'ownerStartType':type(owner.get('started_at')).__name__,
+                        'actualStartType':type(actual['started_at']).__name__ if actual else None,
+                        'executableMatches':actual is not None and control._key(Path(owner['executable']))==control._key(Path(actual['executable'])),
+                        'stateDirectoryMatches':owner.get('state_directory')==control._key(path.parent),
+                        'lifetimeLockHeld':control._lock_held(path),
+                    }
+                except Exception as ownership_error:
+                    diagnostics['ownershipComparisonError']=type(ownership_error).__name__
         else: failure=None
         finally:
             with contextlib.suppress(Exception): controller.action('uninstall')
