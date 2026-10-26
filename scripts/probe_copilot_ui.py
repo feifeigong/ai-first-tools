@@ -57,7 +57,7 @@ class Accessibility:
         return [self.cf.CFArrayGetValueAtIndex(value,i) for i in range(min(100,self.cf.CFArrayGetCount(value)))]
 
     def walk(self,element,depth=0):
-        if depth>7:return
+        if depth>14:return
         yield element, self.text(self.attribute(element,'AXRole')), self.text(self.attribute(element,'AXTitle'))
         for child in self.children(element):yield from self.walk(child,depth+1)
 
@@ -96,10 +96,11 @@ def main():
                     controls=list(ax.walk(menu))
                     result['controlLabels']=[{'role':role,'title':title} for _,role,title in controls if title]
                     for element,role,title in controls:
-                        if role=='AXMenuItem' and title.lower().rstrip('….') in {'healthcheck','health check'}:
+                        if role=='AXMenuItem' and title.lower().rstrip('….') in {'healthcheck','health check','run health check'}:
                             result['healthcheckOpened']=ax.ax.AXUIElementPerformAction(element,ax.string('AXPress'))==0
                             time.sleep(2)
-                            result['healthcheckControls']=[{'role':role,'title':title} for _,role,title in ax.walk(app) if title and role in {'AXButton','AXMenuItem'}]
+                            result['healthcheckControls']=[{'role':role,'title':title,'description':ax.text(ax.attribute(element,'AXDescription'))}
+                                for element,role,title in ax.walk(app) if role in {'AXButton','AXMenuItem'}]
                             break
             finally:ax.close()
         finally:
