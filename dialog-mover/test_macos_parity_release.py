@@ -42,6 +42,25 @@ class MacParityReleaseTests(unittest.TestCase):
     def test_both_native_architectures_require_the_complete_feature_reports(self):
         self.assertEqual(len(validated_assets(self.root,self.release)),23)
 
+    def test_staging_finder_fallback_cannot_replace_real_product_name_verification(self):
+        previous=self.release
+        self.release='0.4.0-macos-preview.21'
+        for architecture in ('arm64','x86_64'):
+            directory=self.root/('macos-'+architecture)
+            name=f'AI-First-Tools-{self.release}-macos-{architecture}.dmg'
+            (directory/f'AI-First-Tools-{previous}-macos-{architecture}.dmg').rename(directory/name)
+            (directory/f'SHA256SUMS-{architecture}.txt').write_text(hashlib.sha256(b'synthetic').hexdigest()+'  '+name+'\n')
+            for path in directory.glob('*-test.json'):
+                value=json.loads(path.read_text());value['version']['release']=self.release
+                if path.name=='self-test.json':
+                    value['checks'].update(dict.fromkeys(('localizedProductName','finderDisplayName','nativeProcessName'),True))
+                    value['finderScope']='product'
+                path.write_text(json.dumps(value))
+        self.assertEqual(len(validated_assets(self.root,self.release)),23)
+        path=self.root/'macos-arm64/self-test.json';value=json.loads(path.read_text())
+        value['finderScope']='update-staging';path.write_text(json.dumps(value))
+        with self.assertRaisesRegex(ValueError,'renamed product'):validated_assets(self.root,self.release)
+
     def test_independent_previews_need_their_own_names_and_isolation_report(self):
         for architecture in ('arm64','x86_64'):
             directory = self.root/('macos-'+architecture)

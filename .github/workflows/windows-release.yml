@@ -151,7 +151,8 @@ jobs:
           $programs=[Environment]::GetFolderPath('Programs')
           $shell=New-Object -ComObject WScript.Shell
           foreach($shortcut in @((Join-Path $desktop 'AI一手工具箱.lnk'),(Join-Path $programs 'AI一手工具箱/AI一手工具箱.lnk'))) {
-            if (!(Test-Path -LiteralPath $shortcut) -or $shell.CreateShortcut($shortcut).TargetPath -ne (Join-Path $target 'AI一手工具工作台.exe')) { throw 'New product shortcuts must retain the stable rollback-compatible target' }
+            if (!(Test-Path -LiteralPath $shortcut)) { throw ('Missing branded shortcut: '+[IO.Path]::GetFileName($shortcut)) }
+            if ($shell.CreateShortcut($shortcut).TargetPath -ne (Join-Path $target 'AI一手工具工作台.exe')) { throw ('Shortcut target must retain the stable rollback-compatible apphost: '+[IO.Path]::GetFileName($shell.CreateShortcut($shortcut).TargetPath)) }
           }
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json
           if ($LASTEXITCODE) { throw 'Installed background lifecycle checks failed' }

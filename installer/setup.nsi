@@ -157,6 +157,7 @@ Section "安装"
     Abort
   ${EndIf}
   WriteUninstaller "$INSTDIR\Uninstall.exe"
+  CreateDirectory "$DESKTOP"
   CreateShortCut "$DESKTOP\${APP}.lnk" "$INSTDIR\${EXECUTABLE}" "" "$INSTDIR\${EXECUTABLE}" 0
   CreateDirectory "$SMPROGRAMS\${APP}"
   CreateShortCut "$SMPROGRAMS\${APP}\${APP}.lnk" "$INSTDIR\${EXECUTABLE}" "" "$INSTDIR\${EXECUTABLE}" 0

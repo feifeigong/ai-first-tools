@@ -351,8 +351,16 @@ def self_check(report: Path) -> bool:
     from Foundation import NSBundle, NSFileManager, NSProcessInfo
     expected_name = display_name(info.get('developmentPreview') is True)
     bundle = NSBundle.mainBundle()
+    bundle_path = Path(sys.executable).parents[2]
+    canonical = 'AI一手工具工作台预览.app' if info.get('developmentPreview') is True else 'AI一手工具工作台.app'
+    finder_scope = ('product' if bundle_path.name == canonical else
+                    'update-staging' if bundle_path.name == 'candidate.app' and bundle_path.parent.name.startswith('.ai-first-update-') else 'unknown')
+    # Finder deliberately uses the physical name after an .app is renamed.
+    # Update preflight runs in candidate.app; published app checks must still
+    # prove the actual new product name at its canonical installation identity.
+    finder_expected = 'candidate' if finder_scope == 'update-staging' else expected_name
     checks['localizedProductName'] = bundle.localizedInfoDictionary().get('CFBundleDisplayName') == expected_name
-    checks['finderDisplayName'] = str(NSFileManager.defaultManager().displayNameAtPath_(str(Path(sys.executable).parents[2]))).removesuffix('.app') == expected_name
+    checks['finderDisplayName'] = finder_scope != 'unknown' and str(NSFileManager.defaultManager().displayNameAtPath_(str(bundle_path))).removesuffix('.app') == finder_expected
     checks['nativeProcessName'] = NSProcessInfo.processInfo().processName() == expected_name
     result = subprocess.run([str(ROOT / "bin" / "txcript"), "--version"], capture_output=True, text=True, timeout=30)
     checks["native_engine"] = result.returncode == 0 and "txcript" in result.stdout
@@ -365,7 +373,7 @@ def self_check(report: Path) -> bool:
             and MacApi().workspace_info()['automaticChecks'] is False)
     report.parent.mkdir(parents=True, exist_ok=True)
     passed = all(checks.values())
-    report.write_text(json.dumps({"passed": passed, "checks": checks, "version": info, "architecture": platform.machine(),
+    report.write_text(json.dumps({"passed": passed, "checks": checks, "version": info, "architecture": platform.machine(), "finderScope": finder_scope,
                                   "scope": "bundle resources and native engine; no real conversation access"}, indent=2), encoding="utf-8")
     return passed
 

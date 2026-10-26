@@ -44,6 +44,8 @@ def standard_fixture(bundle: Path, root: Path) -> None:
     metadata.pop('developmentPreview', None)
     info_path.write_bytes(plistlib.dumps(info))
     metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
+    from branding import localize_bundle
+    localize_bundle(bundle, False)
 
 
 def load_fixture(path: Path, target: Path, report: Path) -> dict:
@@ -196,6 +198,12 @@ def audit_update(app: Path, report: Path) -> None:
             completed = json.loads(completion.read_text()) if completion.is_file() else {}
             receipt = root / "isolated-state/updates/result.json"
             outcome = json.loads(receipt.read_text()) if receipt.is_file() else {}
+            diagnostics['outcome'] = {key:outcome.get(key) for key in ('success','phase','errorCode')}
+            probe_path = job.parent / 'probe.json'
+            if probe_path.is_file():
+                preflight = json.loads(probe_path.read_text())
+                diagnostics['preflightChecks'] = preflight.get('checks')
+                diagnostics['preflightFinderScope'] = preflight.get('finderScope')
             relaunch_report = job.parent / "relaunch.json"
             relaunched = json.loads(relaunch_report.read_text()) if relaunch_report.is_file() else {}
             diagnostics.update({"helperReturnCode": completed.get("returnCode"), "receipt": receipt.is_file(),
