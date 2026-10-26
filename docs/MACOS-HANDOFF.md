@@ -1,5 +1,9 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+## Windows 正式升级补充
+
+Windows固定枚举资料绑定不改变Mac资料布局；ResetBridge宿主仍显式传入Mac既有目录。preview.20必须使用最终提交重新构建，不套用旧包报告。两芯片原生及已登录Copilot接续边界保持。
+
 ## 2026-10-26 preview.20 重置修订
 
 当前源码候选升至preview.20，包含周末重置消息的完整修正；共享44项与源码/页面414项通过，详情见RESET-NOTICES-QA.md。本轮原生构建通过后使用新的20包，不能继续用下方fc54ad4的19包声称已含修正。已登录Copilot的实际列表仍按MACOS-NEXT-VALIDATION.md接续，不读取真实正文或认证，不发模型请求。

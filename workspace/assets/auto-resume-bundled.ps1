@@ -13,6 +13,18 @@ function Get-ResetMonitorDirectory {
     $directory = $settingsDirectory
     if (Test-Path -LiteralPath (Join-Path $bundleRoot 'development-preview.json') -PathType Leaf) {
         $directory = Join-Path $directory 'memory-preview'
+    } else {
+        $binding = Join-Path $directory 'active-data-profile.json'
+        if (Test-Path -LiteralPath $binding) {
+            $file = Get-Item -LiteralPath $binding -Force
+            if ($file.PSIsContainer -or $file.Length -gt 1024 -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw '工作台资料设置暂时无法读取，原资料已保留。' }
+            $value = [IO.File]::ReadAllText($binding) | ConvertFrom-Json
+            if ($null -eq $value -or @($value.PSObject.Properties).Count -ne 2 -or $value.format -cne 'ai-first-data-profile-v1' -or $value.profile -cnotin @('default','memory-preview')) { throw '工作台资料设置暂时无法读取，原资料已保留。' }
+            if ($value.profile -ceq 'memory-preview') { $directory = Join-Path $directory 'memory-preview' }
+        }
+    }
+    foreach ($path in @($settingsDirectory,$directory)) {
+        if ((Test-Path -LiteralPath $path) -and ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw '工作台资料位置暂时无法核对，原资料已保留。' }
     }
     Join-Path $directory 'reset-notices'
 }

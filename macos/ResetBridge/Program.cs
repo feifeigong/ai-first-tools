@@ -6,7 +6,11 @@ namespace AIFirst.Workspace
 {
     // The actual state directory is always supplied by the Mac host. This also
     // lets the existing Windows domain sources compile without a WPF dependency.
-    internal static class App { internal static bool IsDevelopmentPreview => false; }
+    internal static class App
+    {
+        internal static bool IsDevelopmentPreview => false;
+        internal static string UserDataRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"AI一手工具工作台");
+    }
 }
 
 internal static class Program

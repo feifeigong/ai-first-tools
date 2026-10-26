@@ -68,8 +68,7 @@ internal sealed partial class ResetNewsService : IDisposable
     private sealed record Feed(DateTimeOffset FetchedAt, List<Candidate> Candidates, List<Candidate> History);
     private sealed record Verified(string Id, string Text, bool Complete = true);
 
-    internal static string DefaultDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "AI一手工具工作台", App.IsDevelopmentPreview ? "memory-preview" : "", "reset-notices");
+    internal static string DefaultDirectory => Path.Combine(App.UserDataRoot,"reset-notices");
     internal string DataDirectory { get; }
     internal ResetNewsSnapshot Snapshot { get; private set; } = new(true, "正在查看重置消息", "只在发现明确的新消息时提醒。", null, Array.Empty<ResetNewsItem>());
     internal event Action<ResetNewsSnapshot>? Changed;

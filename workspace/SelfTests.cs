@@ -20,6 +20,36 @@ internal static class SelfTests
             catch (Exception exception) { failures++; results.Add(new { name, passed = false, error = exception.ToString() }); }
         }
         void Require(bool condition) { if (!condition) throw new InvalidOperationException("Assertion failed"); }
+        Check("Fresh formal installation keeps its default data location without creating a profile", () =>
+        {
+            var data=Path.Combine(root,"fresh-profile");
+            Require(DataProfile.Resolve(data,false)==data && !Directory.Exists(data));
+        });
+        Check("Formal upgrade can retain preview archives and preferences in place without reading or rewriting them", () =>
+        {
+            var data=Path.Combine(root,"adopt-profile");Directory.CreateDirectory(data);
+            File.WriteAllText(Path.Combine(data,DataProfile.FileName),"{\"format\":\"ai-first-data-profile-v1\",\"profile\":\"memory-preview\"}");
+            var preview=Path.Combine(data,"memory-preview");Directory.CreateDirectory(preview);
+            var sentinel=Path.Combine(preview,"synthetic-preserved.bin");File.WriteAllBytes(sentinel,new byte[]{1,2,3,4});
+            Require(DataProfile.Resolve(data,false)==preview && File.ReadAllBytes(sentinel).SequenceEqual(new byte[]{1,2,3,4}));
+        });
+        Check("Unknown or path-shaped profile bindings fail closed and preserve the original file", () =>
+        {
+            var data=Path.Combine(root,"invalid-profile");Directory.CreateDirectory(data);
+            var binding=Path.Combine(data,DataProfile.FileName);
+            foreach(var json in new[]{"{\"format\":\"future\",\"profile\":\"memory-preview\"}","{\"format\":\"ai-first-data-profile-v1\",\"profile\":\"../other\"}","{\"format\":\"ai-first-data-profile-v1\",\"profile\":\"default\",\"path\":\"other\"}"})
+            {
+                File.WriteAllText(binding,json);var refused=false;
+                try{DataProfile.Resolve(data,false);}catch(InvalidDataException){refused=true;}
+                Require(refused && File.ReadAllText(binding)==json);
+            }
+        });
+        Check("Independent preview ignores formal profile bindings and remains isolated", () =>
+        {
+            var data=Path.Combine(root,"independent-profile");Directory.CreateDirectory(data);
+            File.WriteAllText(Path.Combine(data,DataProfile.FileName),"unreadable formal binding");
+            Require(DataProfile.Resolve(data,true)==Path.Combine(data,"memory-preview"));
+        });
         var executable = Path.Combine(root, "fixture.exe");
         File.WriteAllText(executable, "fixture only; not executable");
         var path = Path.Combine(root, "settings", "tools.json");

@@ -18,7 +18,7 @@ function Reset-Fixture {
     foreach($monitorMutex in $script:monitorMutexes){$monitorMutex.ReleaseMutex();$monitorMutex.Dispose()}
     $script:monitorMutexes.Clear()
     $script:fakeRunning=$false; $script:fakeLegacy=$false; $script:legacyRunning=$false; $script:legacyAuto=$false; $script:fakeRun=$null; $script:owner=$bundledExecutable; $script:readyAfter=0; $script:readyChecks=0; $script:monitorResponds=$false; $script:monitorLaunchFails=$false; $script:calls.Clear()
-    foreach($file in @($bundledPreference,$updateReceipt)){if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file -Force}}
+    foreach($file in @($bundledPreference,$updateReceipt,(Join-Path $settingsDirectory 'active-data-profile.json'))){if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file -Force}}
     foreach($directory in @((Join-Path $settingsDirectory 'reset-notices'),(Join-Path $settingsDirectory 'memory-preview\reset-notices'))){
         foreach($name in @('monitor-owner.json','monitor-stop.json','reset-monitor-update.json')){
             $file=Join-Path $directory $name
@@ -196,6 +196,27 @@ Check 'A crashed owned monitor is reclaimed without a stop request and restored 
     Require(Test-Path -LiteralPath (Join-Path $directory 'reset-monitor-update.json'))
     $null=Invoke-BundledAction 'finish-update'
     Require($script:calls.Contains('monitor-start'))
+}
+Check 'Formal upgrade keeps the selected preview reminder data and normal lifecycle' {
+    $binding=Join-Path $settingsDirectory 'active-data-profile.json'
+    [IO.File]::WriteAllText($binding,'{"format":"ai-first-data-profile-v1","profile":"memory-preview"}')
+    Require((Get-ResetMonitorDirectory) -eq (Join-Path $settingsDirectory 'memory-preview\reset-notices'))
+    Add-MonitorOwner;$script:monitorResponds=$true
+    $null=Invoke-BundledAction 'prepare-update';$null=Invoke-BundledAction 'finish-update'
+    Require($script:calls.Contains('monitor-exit') -and $script:calls.Contains('monitor-start'))
+    Require([IO.File]::ReadAllText($binding) -eq '{"format":"ai-first-data-profile-v1","profile":"memory-preview"}')
+}
+Check 'Invalid profile bindings fail closed before reminder or resume changes' {
+    foreach($text in @('{"format":"unknown","profile":"memory-preview"}','{"format":"ai-first-data-profile-v1","profile":"../other"}','{"format":"ai-first-data-profile-v1","profile":"default","path":"other"}')){
+        $binding=Join-Path $settingsDirectory 'active-data-profile.json';[IO.File]::WriteAllText($binding,$text)
+        $rejected=$false;try{$null=Invoke-BundledAction 'prepare-update'}catch{$rejected=$true}
+        Require($rejected -and $script:calls.Count -eq 0 -and [IO.File]::ReadAllText($binding) -eq $text)
+    }
+}
+Check 'Development preview ignores formal binding and stays isolated' {
+    [IO.File]::WriteAllText((Join-Path $bundleRoot 'development-preview.json'),'{}')
+    [IO.File]::WriteAllText((Join-Path $settingsDirectory 'active-data-profile.json'),'invalid')
+    Require((Get-ResetMonitorDirectory) -eq (Join-Path $settingsDirectory 'memory-preview\reset-notices'))
 }
 Check 'A crashed foreign monitor is never reclaimed by this package' {
     Add-MonitorOwner (Join-Path $testRoot 'other\AI一手工具工作台.exe') -Crashed

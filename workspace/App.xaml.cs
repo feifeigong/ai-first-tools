@@ -9,6 +9,10 @@ namespace AIFirst.Workspace;
 public partial class App : Application
 {
     internal static bool IsDevelopmentPreview => File.Exists(Path.Combine(AppContext.BaseDirectory, "development-preview.json"));
+    private static string UserRoot => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AI一手工具工作台");
+    private static readonly Lazy<string> ProfileRoot = new(() => DataProfile.Resolve(UserRoot, IsDevelopmentPreview));
+    internal static string UserDataRoot => ProfileRoot.Value;
+    internal static bool UsesPreviewData => string.Equals(UserDataRoot, Path.Combine(UserRoot,"memory-preview"), StringComparison.OrdinalIgnoreCase);
     private Mutex? instance;
     private Mutex? installationGuard;
     private InstanceActivation? activation;
@@ -82,9 +86,16 @@ public partial class App : Application
             Shutdown();
             return;
         }
-        var configuration = Option(args.Args, "--config") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AI一手工具工作台", IsDevelopmentPreview ? "memory-preview" : "", "tools.json");
-        if (IsDevelopmentPreview)
-            Environment.SetEnvironmentVariable("AI_FIRST_MOVER_PREVIEW_DATA", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AI一手工具工作台", "memory-preview", "mover"));
+        string dataRoot;
+        try { dataRoot=UserDataRoot; }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException)
+        {
+            MessageBox.Show("工作台资料设置暂时无法读取，原资料已保留。", "AI一手", MessageBoxButton.OK, MessageBoxImage.Information);
+            Shutdown(1); return;
+        }
+        var configuration = Option(args.Args, "--config") ?? Path.Combine(dataRoot, "tools.json");
+        if (UsesPreviewData)
+            Environment.SetEnvironmentVariable("AI_FIRST_MOVER_PREVIEW_DATA", Path.Combine(dataRoot,"mover"));
         var key = ToolRepository.ConfigurationKey(configuration);
         instance = new Mutex(true, "Local\\AI_FIRST_TOOL_WORKSPACE_" + key, out var isNew);
         if (!isNew)
