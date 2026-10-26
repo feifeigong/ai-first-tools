@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import ctypes
 import os
 from pathlib import Path
 import subprocess
@@ -144,7 +145,18 @@ class WatchControlTests(unittest.TestCase):
     def test_current_process_identity_comes_from_os(self):
         actual = watch._inspect_process(os.getpid())
         self.assertEqual(actual["pid"], os.getpid())
-        self.assertEqual(watch._key(Path(actual["executable"])), watch._key(Path(sys.executable)))
+        expected = Path(sys.executable)
+        if sys.platform == 'darwin':
+            # Framework Python's launcher can exec Python.app. Independently
+            # verify ps identity against the kernel, not the launcher's pathname.
+            # https://github.com/apple-oss-distributions/xnu/blob/main/libsyscall/wrappers/libproc/libproc.h
+            library = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+            library.proc_pidpath.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32]
+            library.proc_pidpath.restype = ctypes.c_int
+            buffer = ctypes.create_string_buffer(4096)
+            self.assertGreater(library.proc_pidpath(os.getpid(),buffer,len(buffer)),0)
+            expected = Path(buffer.value.decode('utf-8'))
+        self.assertEqual(watch._key(Path(actual["executable"])), watch._key(expected))
         self.assertTrue(actual["started_at"])
         self.assertTrue(actual["argv"])
 

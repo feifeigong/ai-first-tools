@@ -36,7 +36,7 @@ class ProcessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / "watch.pid"
             path.write_text("8\n", encoding="utf-8")
-            if sys.platform == "win32":
+            if sys.platform in {"win32", "darwin"}:
                 with patch("codex_auto_resume.watch_control._inspect_process", return_value={"pid": 8}), patch("codex_auto_resume.watch_control._watcher", return_value=True):
                     self.assertFalse(claim_watch_pid(path))
             else:
