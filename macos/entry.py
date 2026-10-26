@@ -360,7 +360,8 @@ def self_check(report: Path) -> bool:
     # prove the actual new product name at its canonical installation identity.
     finder_expected = 'candidate' if finder_scope == 'update-staging' else expected_name
     checks['localizedProductName'] = bundle.localizedInfoDictionary().get('CFBundleDisplayName') == expected_name
-    checks['finderDisplayName'] = finder_scope != 'unknown' and str(NSFileManager.defaultManager().displayNameAtPath_(str(bundle_path))).removesuffix('.app') == finder_expected
+    finder_observed = str(NSFileManager.defaultManager().displayNameAtPath_(str(bundle_path))).removesuffix('.app')
+    checks['finderDisplayName'] = finder_scope != 'unknown' and finder_observed == finder_expected
     checks['nativeProcessName'] = NSProcessInfo.processInfo().processName() == expected_name
     result = subprocess.run([str(ROOT / "bin" / "txcript"), "--version"], capture_output=True, text=True, timeout=30)
     checks["native_engine"] = result.returncode == 0 and "txcript" in result.stdout
@@ -374,6 +375,7 @@ def self_check(report: Path) -> bool:
     report.parent.mkdir(parents=True, exist_ok=True)
     passed = all(checks.values())
     report.write_text(json.dumps({"passed": passed, "checks": checks, "version": info, "architecture": platform.machine(), "finderScope": finder_scope,
+                                  "finderName": finder_observed, "expectedFinderName": finder_expected,
                                   "scope": "bundle resources and native engine; no real conversation access"}, indent=2), encoding="utf-8")
     return passed
 

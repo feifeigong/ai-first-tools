@@ -1,0 +1,62 @@
+name: Isolated installer branding diagnostics
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Completed trusted master Windows package run to inspect
+        required: true
+        type: string
+permissions:
+  actions: read
+  contents: read
+jobs:
+  inspect:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the original trusted CI package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          if ($env:RUN_ID -notmatch '^\d+$') { throw 'Expected a run identifier' }
+          $run=gh run view $env:RUN_ID --json headBranch,event,name,status | ConvertFrom-Json
+          if ($run.headBranch -ne 'master' -or $run.event -ne 'workflow_dispatch' -or $run.name -ne 'Windows release packages' -or $run.status -ne 'completed') { throw 'Only the original completed master packaging job may be inspected' }
+          gh run download $env:RUN_ID --name windows-release --dir artifacts/branding-diagnostics/input
+      - name: Inspect real shell links in an empty runner profile
+        run: |
+          $target=Join-Path $env:LOCALAPPDATA 'Programs/AI First Tools'
+          if (Test-Path -LiteralPath $target) { throw 'Refuse an existing installation' }
+          $setups=@(Get-ChildItem artifacts/branding-diagnostics/input/release/AI-First-Tools-Setup-*.exe)
+          if ($setups.Count -ne 1) { throw 'Expected one original installer' }
+          $setup=$setups[0]
+          $install=Start-Process -FilePath $setup.FullName -ArgumentList '/S' -PassThru -WindowStyle Hidden
+          $install.WaitForExit()
+          if ($install.ExitCode) { throw 'Diagnostic installation failed' }
+          $probe=@'
+          [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+          $target=Join-Path $env:LOCALAPPDATA 'Programs/AI First Tools'
+          $shell=New-Object -ComObject WScript.Shell
+          $results=@()
+          foreach($path in @((Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'AI一手工具箱.lnk'),(Join-Path ([Environment]::GetFolderPath('Programs')) 'AI一手工具箱/AI一手工具箱.lnk'))){
+            $exists=Test-Path -LiteralPath $path
+            $link=$shell.CreateShortcut($path)
+            $bytes=if($exists){[IO.File]::ReadAllBytes($path)}else{[byte[]]@()}
+            $results+=@{name=[IO.Path]::GetFileName($path);exists=$exists;bytes=$bytes.Length;target=([string]$link.TargetPath).Replace($target,'<install>');targetLeaf=[IO.Path]::GetFileName([string]$link.TargetPath);flags=if($bytes.Length -ge 24){[BitConverter]::ToUInt32($bytes,20)}else{0};legacyExecutableExists=(Test-Path -LiteralPath (Join-Path $target 'AI一手工具工作台.exe'));newLauncherExists=(Test-Path -LiteralPath (Join-Path $target 'AI一手工具箱.exe'))}
+          }
+          @{powershell=$PSVersionTable.PSVersion.ToString();links=$results;modelRequests=0}|ConvertTo-Json -Depth 5
+          '@
+          $probePath=Join-Path $PWD 'artifacts/branding-diagnostics/probe.ps1'
+          [IO.File]::WriteAllText($probePath,$probe,[Text.UTF8Encoding]::new($true))
+          $modern=& pwsh -NoLogo -NoProfile -File $probePath
+          $classic=& powershell -NoLogo -NoProfile -File $probePath
+          [IO.File]::WriteAllText((Join-Path $PWD 'artifacts/branding-diagnostics/pwsh.json'),($modern -join "`n"),[Text.UTF8Encoding]::new($false))
+          [IO.File]::WriteAllText((Join-Path $PWD 'artifacts/branding-diagnostics/windows-powershell.json'),($classic -join "`n"),[Text.UTF8Encoding]::new($false))
+          $modern
+          $classic
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installer-branding-diagnostics
+          path: artifacts/branding-diagnostics/*.json

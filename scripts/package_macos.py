@@ -53,6 +53,10 @@ def main() -> None:
     localize_bundle(app, args.local_preview)
     subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app)], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
+    # Register the finished bundle, as Finder does on a normal installation.
+    # The app was first created before localized resources were added; use the
+    # completed metadata instead of a cached initial filesystem display name.
+    subprocess.run(['/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister', '-f', str(app)], check=True, timeout=60)
     launcher = app / "Contents" / "MacOS" / "AI First Tools"
     for flag in ("--self-test", '--memory-test', '--codex-import-test', '--reset-test', '--copilot-refresh-test', "--smoke-test", "--network-test", "--update-test", '--resume-test'):
         environment = os.environ.copy()
