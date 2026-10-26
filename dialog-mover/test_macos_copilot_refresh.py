@@ -25,6 +25,13 @@ class MacCopilotRefreshTests(unittest.TestCase):
         self.assertIsNone(native._palette_menu(ax,0))
         ax.walk.assert_not_called()
 
+    def test_an_unreadable_menu_never_supplies_a_command(self):
+        ax=Mock();ax.children.return_value=[1,2];ax.label.side_effect=lambda element:{1:'View',2:'Developer'}[element]
+        with patch.object(native,'_reload_command',side_effect=[native.Unavailable(),9]):
+            self.assertEqual(native._reload_menu(ax,0),9)
+        with patch.object(native,'_reload_command',side_effect=native.Unavailable()):
+            self.assertIsNone(native._reload_menu(ax,0))
+
     def test_drafts_and_unreadable_editors_fail_closed_without_reading_history(self):
         for value,expected in (('synthetic draft',True),('',False),(None,None)):
             ax=Mock();ax.walk.return_value=[(1,'AXWebArea',()),(2,'AXStaticText',()),(3,'AXTextArea',())]

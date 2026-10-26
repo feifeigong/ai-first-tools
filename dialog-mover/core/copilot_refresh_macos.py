@@ -172,17 +172,29 @@ def _reload_command(ax, root):
 def _view_menus(ax, menubar):
     # Never mistake a document called "Reload Window" in Apple's Recent Items
     # or File menu for an application command.
+    _phase('menubar-children')
     return [menu for menu in ax.children(menubar) if _name(ax.label(menu)) in VIEW_MENUS]
 
 
 def _reload_menu(ax, menubar):
-    return next((command for menu in _view_menus(ax, menubar)
-                 if (command := _reload_command(ax, menu)) is not None), None)
+    for menu in _view_menus(ax, menubar):
+        try: command = _reload_command(ax, menu)
+        except Unavailable:
+            # An unreadable menu cannot supply a command. Other known View/
+            # Window menus can still supply an explicitly identified command.
+            _phase('menu-container-unavailable'); continue
+        if command is not None: return command
+    return None
 
 
 def _palette_menu(ax, menubar):
-    return next((element for menu in _view_menus(ax, menubar) for element, role, _ in ax.walk(menu)
-                 if role == 'AXMenuItem' and _name(ax.label(element)) in PALETTE), None)
+    for menu in _view_menus(ax, menubar):
+        try:
+            for element, role, _ in ax.walk(menu):
+                if role == 'AXMenuItem' and _name(ax.label(element)) in PALETTE: return element
+        except Unavailable:
+            _phase('palette-container-unavailable')
+    return None
 
 
 def _dismiss_palette(ax, target, container, field, app):
