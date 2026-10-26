@@ -350,6 +350,7 @@ def self_check(report: Path) -> bool:
         with (Path(sys.executable).parents[1]/'Info.plist').open('rb') as stream:
             bundle = plistlib.load(stream)
         checks['developmentPreviewIsolation'] = (bundle.get('CFBundleIdentifier') == 'cn.aifirst.tools.preview'
+            and Path(sys.executable).parents[2].name == 'AI一手工具工作台预览.app'
             and MacApi().workspace_info()['automaticChecks'] is False)
     report.parent.mkdir(parents=True, exist_ok=True)
     passed = all(checks.values())

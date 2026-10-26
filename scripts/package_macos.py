@@ -39,7 +39,7 @@ def main() -> None:
     output.mkdir(parents=True, exist_ok=True)
     subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--distpath", str(output / "dist"),
                     "--workpath", str(output / "build"), str(ROOT / "macos" / "AI-First-Tools.spec")], check=True, cwd=ROOT)
-    app = output / "dist" / "AI一手工具工作台.app"
+    app = output / "dist" / ("AI一手工具工作台预览.app" if args.local_preview else "AI一手工具工作台.app")
     notices = app / "Contents" / "Resources" / "THIRD-PARTY-LICENSES"
     notices.mkdir(parents=True, exist_ok=True)
     collect_python(output / "build" / "AI-First-Tools" / "Analysis-00.toc", notices)

@@ -16,6 +16,8 @@ RELOAD = {'reload', 'reload window', 'reload app', 'reload application', 'reload
           'developer: reload window', '重新加载', '重新加载窗口', '重新载入窗口'}
 PALETTE = {'command palette', 'command menu', '命令面板', '命令菜单'}
 VIEW_MENUS = {'view', 'window', 'developer', 'debug', '视图', '窗口', '开发者', '调试'}
+LEAF_ROLES = {'AXStaticText', 'AXImage', 'AXLink', 'AXButton', 'AXCheckBox', 'AXRadioButton',
+              'AXScrollBar', 'AXSlider', 'AXTextArea', 'AXTextField', 'AXSearchField', 'AXComboBox'}
 _prompted = False
 
 
@@ -91,8 +93,16 @@ class Accessibility:
             if count > 3000 or len(parents) > 25: raise Unavailable()
             role = self.text(self.attribute(current, 'AXRole'))
             yield current, role, parents
-            if role not in {'AXStaticText', 'AXImage', 'AXLink'}:
-                pending.extend((child, (*parents, current)) for child in reversed(self.children(current)))
+            if role not in LEAF_ROLES:
+                try:
+                    children = self.children(current)
+                except Unavailable as error:
+                    # AppKit leaf menu items report AX failure for AXChildren.
+                    # Editors expose their complete value and are leaves above;
+                    # unknown window/group failures still fail closed.
+                    if role != 'AXMenuItem' or str(error) != 'attribute_AXChildren_-25200': raise
+                    children = []
+                pending.extend((child, (*parents, current)) for child in reversed(children))
 
     def press(self, element):
         if self.ax.AXUIElementPerformAction(element, self.string('AXPress')): raise Unavailable()
@@ -136,6 +146,8 @@ def _draft(ax, window):
     web = False
     for element, role, _ in ax.walk(window):
         if role == 'AXWebArea': web = True
+        if role == 'AXButton' and _name(ax.label(element)).startswith(('remove attachment', 'remove image', '移除附件', '删除附件', '移除图片')):
+            return True
         if role in {'AXTextArea', 'AXTextField', 'AXSearchField', 'AXComboBox'}:
             text = ax.text(ax.attribute(element, 'AXValue'))
             if text is None: raise Unavailable('editor_value_unavailable')

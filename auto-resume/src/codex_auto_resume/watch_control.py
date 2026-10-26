@@ -259,14 +259,16 @@ def _watcher(identity: dict) -> bool:
         return isinstance(catalog, list) and any(isinstance(item, dict) and item.get("id") == "auto-resume" and item.get("nativePage") == "auto-resume" for item in catalog)
     if sys.platform == "darwin" and executable.name == "AI First Tools":
         if argv[1:] not in (["--auto-resume-watch"], ["--auto-resume-watch", "--manual"]): return False
-        if executable.parent.name != "MacOS" or executable.parent.parent.name != "Contents" or executable.parent.parent.parent.name != "AI一手工具工作台.app": return False
+        app_name = executable.parent.parent.parent.name
+        if executable.parent.name != "MacOS" or executable.parent.parent.name != "Contents" or app_name not in {"AI一手工具工作台.app", "AI一手工具工作台预览.app"}: return False
         import plistlib
         info = executable.parent.parent / "Info.plist"
         _plain(executable)
         _plain(info)
         if not executable.is_file() or not info.is_file(): return False
         with info.open("rb") as stream: metadata = plistlib.load(stream)
-        return metadata.get("CFBundleIdentifier") in {"cn.aifirst.tools", "cn.aifirst.tools.preview"} and metadata.get("CFBundleExecutable") == executable.name
+        allowed = {"cn.aifirst.tools.preview"} if app_name == "AI一手工具工作台预览.app" else {"cn.aifirst.tools", "cn.aifirst.tools.preview"}
+        return metadata.get("CFBundleIdentifier") in allowed and metadata.get("CFBundleExecutable") == executable.name
     # Source installations are supported only with the exact original runner and modules.
     if executable.name.lower() not in ("python.exe", "pythonw.exe", "python", "python3") and not executable.name.startswith("python3."):
         return False

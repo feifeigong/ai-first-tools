@@ -157,6 +157,16 @@ class MacResetTests(unittest.TestCase):
             info.write_bytes(plistlib.dumps({'CFBundleIdentifier':'foreign','CFBundleExecutable':'AI First Tools'}))
             self.assertFalse(watch_control._watcher(identity))
 
+    def test_named_preview_watcher_requires_the_independent_bundle_identifier(self):
+        import plistlib
+        executable = self.root/'AI一手工具工作台预览.app/Contents/MacOS/AI First Tools'
+        executable.parent.mkdir(parents=True); executable.touch()
+        info = executable.parent.parent/'Info.plist'
+        identity = {'executable':str(executable),'argv':[str(executable),'--auto-resume-watch']}
+        for identifier,expected in (('cn.aifirst.tools.preview',True),('cn.aifirst.tools',False)):
+            info.write_bytes(plistlib.dumps({'CFBundleIdentifier':identifier,'CFBundleExecutable':'AI First Tools'}))
+            with patch('sys.platform','darwin'): self.assertEqual(watch_control._watcher(identity),expected)
+
     def test_resume_stop_never_sends_termination_even_when_still_finishing(self):
         controller = auto_resume.Controller(self.bundle, self.root / 'home')
         controller.watchers = Mock(return_value=[1234])

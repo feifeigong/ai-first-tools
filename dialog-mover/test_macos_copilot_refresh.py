@@ -34,6 +34,18 @@ class MacCopilotRefreshTests(unittest.TestCase):
                 with self.assertRaises(native.Unavailable):native._draft(ax,0)
             else:self.assertEqual(native._draft(ax,0),expected)
 
+    def test_an_unsent_attachment_is_not_treated_as_an_empty_draft(self):
+        ax=Mock();ax.walk.return_value=[(1,'AXWebArea',()),(2,'AXButton',())]
+        ax.label.return_value='Remove attachment'
+        self.assertTrue(native._draft(ax,0))
+
+    def test_native_text_editor_is_a_leaf_even_when_webkit_rejects_children(self):
+        ax=native.Accessibility.__new__(native.Accessibility)
+        ax.attribute=lambda element,name:'AXTextArea' if name=='AXRole' else self.fail('No editor child query')
+        ax.text=lambda value:value
+        ax.children=Mock(side_effect=native.Unavailable('attribute_AXChildren_-25200'))
+        self.assertEqual(list(ax.walk(1)),[(1,'AXTextArea',())]);ax.children.assert_not_called()
+
     def fake(self):
         ax=Mock();ax.__enter__=Mock(return_value=ax);ax.__exit__=Mock(return_value=False)
         ax.owned=[];ax.ax.AXIsProcessTrusted.return_value=True;ax.children.return_value=[1]

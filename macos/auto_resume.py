@@ -12,6 +12,7 @@ from pathlib import Path
 LABEL = 'cn.aifirst.tools.auto-resume'
 LEGACY = 'com.vibcoding.codex-auto-resume'
 APP = 'AI一手工具工作台.app'
+APP_NAMES = {APP, 'AI一手工具工作台预览.app'}
 WATCH = '--auto-resume-watch'
 
 class ControlError(RuntimeError):
@@ -58,7 +59,7 @@ class Controller:
         if Path(value['executable']).resolve() != self.executable:
             executable = Path(value['executable']).resolve()
             if (executable.name != 'AI First Tools' or executable.parent.name != 'MacOS'
-                    or executable.parent.parent.name != 'Contents' or executable.parent.parent.parent.name != APP):
+                    or executable.parent.parent.name != 'Contents' or executable.parent.parent.parent.name not in APP_NAMES):
                 raise ControlError('现有续跑程序的归属暂时无法确认，请稍后刷新。')
             self._foreign = Controller(executable.parents[2], self.home)
         return [value['pid']]

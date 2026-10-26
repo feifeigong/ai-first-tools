@@ -15,6 +15,7 @@ from pathlib import Path
 WATCH = '--reset-monitor'
 FORMAT = 'ai-first-reset-monitor-v1'
 APP = 'AI一手工具工作台.app'
+APP_NAMES = {APP, 'AI一手工具工作台预览.app'}
 
 
 class NoticeError(RuntimeError):
@@ -176,7 +177,7 @@ class Monitor:
                 or not isinstance(owner.get('token'), str) or not re.fullmatch(r'[0-9a-f]{32}', owner['token'])
                 or not executable.is_absolute() or executable.name != 'AI First Tools'
                 or executable.parent.name != 'MacOS' or executable.parent.parent.name != 'Contents'
-                or executable.parent.parent.parent.name != APP):
+                or executable.parent.parent.parent.name not in APP_NAMES):
             raise NoticeError('提醒状态暂时无法核对，已保留现有设置。')
         actual = process_identity(owner['pid'])
         if actual is None: return None

@@ -44,6 +44,7 @@ class MacPathsTests(unittest.TestCase):
                 namespace.update(collection=object(),BUNDLE=lambda *args,**kwargs:kwargs)
                 actual=eval(compile(ast.Expression(bundle),'<bundle-identity>','eval'),namespace)
                 self.assertEqual(actual['bundle_identifier'],'cn.aifirst.tools.preview' if preview else 'cn.aifirst.tools')
+                self.assertEqual(actual['name'],'AI一手工具工作台预览.app' if preview else 'AI一手工具工作台.app')
                 self.assertEqual('本地预览' in actual['info_plist']['CFBundleDisplayName'],preview)
             self.assertEqual(json.loads((root/'macos/version.json').read_text()),formal)
 
