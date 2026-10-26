@@ -84,6 +84,7 @@ def audit(report: Path) -> int:
             controller.stop()
             value=controller.registration()
             value['EnvironmentVariables'].update({'HOME':str(home),'CODEX_HOME':str(codex_home)})
+            value.update(StandardOutPath=str(root/'launch-agent.stdout'),StandardErrorPath=str(root/'launch-agent.stderr'))
             import plistlib
             with controller.plist.open('wb') as stream: plistlib.dump(value,stream)
             result=controller.launchctl('bootstrap',controller.domain,str(controller.plist))
@@ -112,6 +113,17 @@ def audit(report: Path) -> int:
             checks['cleanupPreservesUserSettings']=True
         except Exception as error:
             failure=type(error).__name__
+            if phase=='launchAgentReady':
+                import re
+                status=controller.launchctl('print',controller.domain+'/'+LABEL)
+                output=status.stdout.decode('utf-8',errors='replace')
+                diagnostics['launchAgentStatus']={key:match.group(1) for key in ('state','pid','last exit code')
+                    if (match:=re.search(r'(?m)^\s*'+re.escape(key)+r' = ([^\n]+)',output))}
+                for name in ('stdout','stderr'):
+                    path=root/('launch-agent.'+name)
+                    diagnostics['syntheticChild'+name.title()]=(path.read_text(errors='replace')[-1000:].replace(str(root),'[fixture]') if path.exists() else '')
+                diagnostics['startupEnabled']=controller.enabled()
+                diagnostics['syntheticStateExists']=(state/'state.json').exists()
         else: failure=None
         finally:
             with contextlib.suppress(Exception): controller.action('uninstall')
