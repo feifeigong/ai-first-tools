@@ -229,14 +229,8 @@ def refresh(*, passive=False, busy):
             if _draft(ax, windows[0]): return 'draft'
             state = busy()
             if state != 'idle': return state
-            _phase('menu')
-            menu = ax.attribute(target, 'AXMenuBar')
-            if menu is None: return 'unavailable'
-            reload = _reload_menu(ax, menu)
-            palette = _palette_menu(ax, menu) if reload is None else None
-            if reload is None and palette is None:
-                _phase('no-named-command'); return 'unavailable'
-            # Only bring forward a verified empty, idle window. Never use keys.
+            # AppKit only exposes some application menus while frontmost.
+            # Only bring forward a verified empty, idle window, then recheck.
             _phase('activation')
             app.activateWithOptions_(2)
             from AppKit import NSWorkspace
@@ -248,6 +242,13 @@ def refresh(*, passive=False, busy):
             if _draft(ax, windows[0]): return 'draft'
             state = busy()
             if state != 'idle': return state
+            _phase('menu')
+            menu = ax.attribute(target, 'AXMenuBar')
+            if menu is None: return 'unavailable'
+            reload = _reload_menu(ax, menu)
+            palette = _palette_menu(ax, menu) if reload is None else None
+            if reload is None and palette is None:
+                _phase('no-named-command'); return 'unavailable'
             if reload is not None:
                 _phase('native-menu-press')
                 ax.press(reload); return 'requested'
