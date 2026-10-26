@@ -1,0 +1,30 @@
+name: Isolated public Copilot UI probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install pyobjc-framework-Cocoa
+      - name: Prepare checksum-pinned public app in disposable directory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/copilot-probe
+          gh release download v1.1.32 --repo github/app --pattern GitHub-Copilot-darwin-arm64.zip --dir artifacts/copilot-probe
+          echo '2ff7d054e8ebde8e40cce1d38a57e8b88b85e4eda53d8ec599687e1cc11fcbde  artifacts/copilot-probe/GitHub-Copilot-darwin-arm64.zip' | shasum -a 256 -c -
+          ditto -x -k artifacts/copilot-probe/GitHub-Copilot-darwin-arm64.zip artifacts/copilot-probe/app
+      - name: Read signed-out native control labels only
+        run: python scripts/probe_copilot_ui.py --app 'artifacts/copilot-probe/app/GitHub Copilot.app' --report artifacts/copilot-probe/controls.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-copilot-control-labels
+          path: artifacts/copilot-probe/controls.json
