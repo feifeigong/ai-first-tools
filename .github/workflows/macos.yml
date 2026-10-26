@@ -1,6 +1,11 @@
 name: macOS preview
 on:
   workflow_dispatch:
+    inputs:
+      local_preview:
+        description: Build an independent local preview without formal application identity
+        type: boolean
+        default: false
   push:
     paths:
       - 'macos/**'
@@ -23,7 +28,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: macos-preview-${{ github.ref }}
+  group: macos-preview-${{ github.ref }}-${{ inputs.local_preview && 'local' || 'release' }}
   cancel-in-progress: true
 jobs:
   build:
@@ -88,7 +93,7 @@ jobs:
       - name: Package and test actual Cocoa app and DMG
         env:
           AI_FIRST_CI_UPDATE_TOKEN: ${{ github.token }}
-        run: python scripts/package_macos.py --architecture '${{ matrix.architecture }}'
+        run: python scripts/package_macos.py --architecture '${{ matrix.architecture }}' ${{ inputs.local_preview && '--local-preview' || '' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -108,7 +113,7 @@ jobs:
           key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
   stage-release:
     needs: build
-    if: github.repository == 'feifeigong/ai-first-tools' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    if: github.repository == 'feifeigong/ai-first-tools' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && inputs.local_preview != true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

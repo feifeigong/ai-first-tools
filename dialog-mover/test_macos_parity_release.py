@@ -42,6 +42,22 @@ class MacParityReleaseTests(unittest.TestCase):
     def test_both_native_architectures_require_the_complete_feature_reports(self):
         self.assertEqual(len(validated_assets(self.root,self.release)),23)
 
+    def test_independent_previews_need_their_own_names_and_isolation_report(self):
+        for architecture in ('arm64','x86_64'):
+            directory = self.root/('macos-'+architecture)
+            ordinary = f'AI-First-Tools-{self.release}-macos-{architecture}.dmg'
+            preview = f'AI-First-Tools-{self.release}-local-parity-macos-{architecture}.dmg'
+            (directory/ordinary).rename(directory/preview)
+            (directory/f'SHA256SUMS-{architecture}.txt').write_text(hashlib.sha256(b'synthetic').hexdigest()+'  '+preview+'\n')
+            path = directory/'self-test.json'; result = json.loads(path.read_text())
+            result['version']['developmentPreview'] = True
+            result['checks']['developmentPreviewIsolation'] = True
+            path.write_text(json.dumps(result))
+        self.assertEqual(len(validated_assets(self.root,self.release,local_preview=True)),23)
+        path = self.root/'macos-arm64/self-test.json'; result = json.loads(path.read_text())
+        result['checks'].pop('developmentPreviewIsolation'); path.write_text(json.dumps(result))
+        with self.assertRaisesRegex(ValueError,'identities'): validated_assets(self.root,self.release,local_preview=True)
+
     def test_missing_compressed_history_check_or_non_mac_report_cannot_be_staged(self):
         for architecture in ('arm64','x86_64'):
             path=self.root/f'macos-{architecture}/codex-import-test.json'

@@ -22,14 +22,15 @@ REFRESH_CHECKS = {'nativeDraftPreserved','nativeEmptyComposerRecognized','native
                   'explicitNativeReloadExecuted','actualWebKitDocumentReloaded','sameApplicationKeptRunning'}
 
 
-def validated_assets(directory: Path, release: str) -> list[Path]:
+def validated_assets(directory: Path, release: str, *, local_preview: bool = False) -> list[Path]:
     if not re.fullmatch(r"\d+\.\d+\.\d+-macos-preview\.\d+", release):
         raise ValueError("Invalid Mac preview version")
     assets = []
     sums = []
     for architecture in ("arm64", "x86_64"):
         source = directory / f"macos-{architecture}"
-        name = f"AI-First-Tools-{release}-macos-{architecture}.dmg"
+        suffix = '-local-parity' if local_preview else ''
+        name = f"AI-First-Tools-{release}{suffix}-macos-{architecture}.dmg"
         dmg = source / name
         with dmg.open("rb") as handle:
             digest = hashlib.file_digest(handle, "sha256").hexdigest()
@@ -44,6 +45,9 @@ def validated_assets(directory: Path, release: str) -> list[Path]:
             result = json.loads(report.read_text())
             if result.get("passed") is not True or not result.get("checks") or not all(value is True for value in result["checks"].values()):
                 raise ValueError("Native app checks did not pass")
+            if kind == 'self' and ((result.get('version',{}).get('developmentPreview') is True) != local_preview
+                    or local_preview and result['checks'].get('developmentPreviewIsolation') is not True):
+                raise ValueError('Development preview and formal application identities must not be mixed')
             if kind == "update" and not {"nativeUpdateClick", "bridgeDrained", "nativeParentExit"}.issubset(result["checks"]):
                 raise ValueError("Native update click and bridge handoff checks are required")
             if kind == 'resume' and not {'nativeRuntimeWithoutExternalInstallation','singlePackagedWatcher','startupSwitchIndependent','stopBlocksStartupRelaunch','updateRestoresRunningAndStartup','realLaunchAgentStopsWithoutRelaunch','finderRemovalCleansBackgroundAndStartup','cleanupPreservesUserSettings'} <= set(result['checks']):

@@ -11,8 +11,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-def audit(report: Path) -> int:
-    if sys.platform != 'darwin' or not getattr(sys, 'frozen', False):
+def audit(report: Path, *, frozen_required: bool = True) -> int:
+    if sys.platform != 'darwin' or frozen_required and not getattr(sys, 'frozen', False):
         raise RuntimeError('Run the frozen Mac app')
     import webview
     import entry
@@ -50,6 +50,14 @@ def audit(report: Path) -> int:
         def require(value):
             if not value: raise AssertionError('Native refresh fixture assertion failed')
 
+        def composer_state():
+            with native.Accessibility() as ax:
+                application = ax.ax.AXUIElementCreateApplication(os.getpid()); ax.owned.append(application)
+                ax.ax.AXUIElementSetMessagingTimeout(application,.3)
+                windows = ax.children(application,'AXWindows')
+                if len(windows)!=1: raise native.Unavailable('window_count')
+                return native._draft(ax,windows[0])
+
         def check():
             failure = None
             try:
@@ -57,15 +65,23 @@ def audit(report: Path) -> int:
                 window.show(); window.restore()
                 app = NSRunningApplication.runningApplicationWithProcessIdentifier_(os.getpid())
                 with patch.object(native, '_application', return_value=app):
+                    deadline=time.monotonic()+8
+                    while time.monotonic()<deadline:
+                        try:
+                            if composer_state() is True: break
+                        except native.Unavailable: pass
+                        time.sleep(.1)
                     outcome['draftState']=native.refresh(busy=lambda:'idle')
                     require(outcome['draftState'] == 'draft')
                     require(outcome['calls'] == 0); checks['nativeDraftPreserved'] = True
                     window.evaluate_js('document.querySelector("[role=textbox]").textContent=""')
-                    with native.Accessibility() as ax:
-                        application = ax.ax.AXUIElementCreateApplication(os.getpid()); ax.owned.append(application)
-                        ax.ax.AXUIElementSetMessagingTimeout(application,.3)
-                        windows = ax.children(application,'AXWindows')
-                        require(len(windows)==1 and native._draft(ax,windows[0]) is False)
+                    deadline=time.monotonic()+8
+                    while time.monotonic()<deadline:
+                        try:
+                            if composer_state() is False: break
+                        except native.Unavailable: pass
+                        time.sleep(.1)
+                    require(composer_state() is False)
                     checks['nativeEmptyComposerRecognized'] = True
                     outcome['busyState']=native.refresh(busy=lambda:'busy')
                     require(outcome['busyState'] == 'busy')
@@ -84,10 +100,12 @@ def audit(report: Path) -> int:
                     require(not app.isTerminated()); checks['sameApplicationKeptRunning'] = True
             except Exception as error:
                 failure = type(error).__name__
+                outcome['errorCode'] = str(error)[:120]
             finally:
                 result={'passed':failure is None and len(checks)==6,'checks':checks,'errorType':failure,
-                    'architecture':platform.machine(),'version':entry.version_info(),'host':platform.system(),'frozen':True,
+                    'architecture':platform.machine(),'version':entry.version_info(),'host':platform.system(),'frozen':bool(getattr(sys,'frozen',False)),
                     'modelRequests':0,'officialLoggedInSidebarVerified':False,
+                    'errorCode':outcome.get('errorCode'),
                     'nativeStates':{key:value for key,value in outcome.items() if key.endswith('State')},
                     'scope':'Actual frozen Cocoa/WebKit/AX controls; only our synthetic editor and labelled native reload menu. Vendor identity discovery and logged-in Copilot sidebar remain separate.'}
                 report.parent.mkdir(parents=True,exist_ok=True)

@@ -64,7 +64,7 @@ class Accessibility:
         value = ctypes.c_void_p()
         error = self.ax.AXUIElementCopyAttributeValue(element, self.string(name), ctypes.byref(value))
         if error in (-25205, -25212): return None  # Unsupported attribute / no value.
-        if error: raise Unavailable()
+        if error: raise Unavailable(f'attribute_{name}_{error}')
         self.owned.append(value.value); return value.value
 
     def text(self, value):
@@ -138,9 +138,9 @@ def _draft(ax, window):
         if role == 'AXWebArea': web = True
         if role in {'AXTextArea', 'AXTextField', 'AXSearchField', 'AXComboBox'}:
             text = ax.text(ax.attribute(element, 'AXValue'))
-            if text is None: raise Unavailable()
+            if text is None: raise Unavailable('editor_value_unavailable')
             if text.strip(): return True
-    if not web: raise Unavailable()
+    if not web: raise Unavailable('web_area_unavailable')
     return False
 
 

@@ -345,6 +345,12 @@ def self_check(report: Path) -> bool:
     checks['bundledAutoResumeRuntime'] = bundled_codex().is_file()
     result = subprocess.run([str(ROOT / "bin" / "txcript"), "--version"], capture_output=True, text=True, timeout=30)
     checks["native_engine"] = result.returncode == 0 and "txcript" in result.stdout
+    if info.get('developmentPreview') is True:
+        import plistlib
+        with (Path(sys.executable).parents[1]/'Info.plist').open('rb') as stream:
+            bundle = plistlib.load(stream)
+        checks['developmentPreviewIsolation'] = (bundle.get('CFBundleIdentifier') == 'cn.aifirst.tools.preview'
+            and MacApi().workspace_info()['automaticChecks'] is False)
     report.parent.mkdir(parents=True, exist_ok=True)
     passed = all(checks.values())
     report.write_text(json.dumps({"passed": passed, "checks": checks, "version": info, "architecture": platform.machine(),
