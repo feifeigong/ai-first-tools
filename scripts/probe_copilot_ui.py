@@ -107,6 +107,7 @@ def main():
                 for label,key,flags in [('command-r',15,1<<20),('command-shift-r',15,(1<<20)|(1<<17)),('f5',96,0)]:
                     areas=[element for element,role,_ in ax.walk(app) if role=='AXWebArea']
                     before=areas[0] if len(areas)==1 else None
+                    previous_controls=[element for element,role,_ in ax.walk(app) if role in {'AXButton','AXTextField'}]
                     for down in (True,False):
                         event=quartz.CGEventCreateKeyboardEvent(None,key,down)
                         quartz.CGEventSetFlags(event,flags);quartz.CGEventPostToPid(process.pid,event);ax.cf.CFRelease(event)
@@ -116,7 +117,8 @@ def main():
                         after=[element for element,role,_ in ax.walk(app) if role=='AXWebArea']
                         if len(after)==1 and not ax.cf.CFEqual(before,after[0]):replaced=True;break
                         time.sleep(.2)
-                    result['reloadShortcuts'][label]={'documentReplaced':replaced,'initialWebAreas':len(areas)}
+                    invalidated=sum(ax.attribute(element,'AXRole') is None for element in previous_controls)
+                    result['reloadShortcuts'][label]={'documentReplaced':replaced,'initialWebAreas':len(areas),'previousControls':len(previous_controls),'invalidatedControls':invalidated}
                 areas=[element for element,role,_ in ax.walk(app) if role=='AXWebArea']
                 if len(areas)==1:
                     names=ctypes.c_void_p()
@@ -129,10 +131,18 @@ def main():
                         result['showMenuCode']=ax.ax.AXUIElementPerformAction(areas[0],ax.string('AXShowMenu'))
                         time.sleep(.5)
                         result['contextLabels']=[title for _,role,title in ax.walk(app) if role=='AXMenuItem' and title]
+                        focused=ax.attribute(app,'AXFocusedUIElement')
+                        result['focusedContext']=[{'role':role,'title':title} for _,role,title in ax.walk(focused)] if focused else []
                 menu=ax.attribute(app,'AXMenuBar')
                 if menu:
                     controls=list(ax.walk(menu))
                     result['controlLabels']=[{'role':role,'title':title} for _,role,title in controls if title]
+                    for element,role,title in controls:
+                        if role=='AXMenuItem' and title=='Keyboard Shortcuts':
+                            ax.ax.AXUIElementPerformAction(element,ax.string('AXPress'));time.sleep(1)
+                            result['reloadShortcutLabels']=[ax.text(ax.attribute(element,'AXValue')) for element,role,_ in ax.walk(app)
+                                if role=='AXStaticText' and any(word in ax.text(ax.attribute(element,'AXValue')).lower() for word in ('reload','refresh','重载','刷新'))]
+                            break
                     for element,role,title in controls:
                         if role=='AXMenuItem' and title.lower().rstrip('….') in {'healthcheck','health check','run health check'}:
                             result['healthcheckOpened']=ax.ax.AXUIElementPerformAction(element,ax.string('AXPress'))==0
