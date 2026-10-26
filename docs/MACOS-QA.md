@@ -1,5 +1,17 @@
 # Mac 移植验证记录
 
+## 2026-10-26 当前两芯片运行包
+
+安装包提交：`fc54ad45e8f348f94bc717d5abf6d99e765ab8de`。独立预览构建[40266306041](https://github.com/feifeigong/ai-first-tools/actions/runs/40266306041)、普通候选[40266303179](https://github.com/feifeigong/ai-first-tools/actions/runs/40266303179)的Apple/Intel任务全部成功。独立预览未执行正式暂存；普通任务没有匹配preview.19草稿，未改公开资产。Windows当前源检查[40266303160](https://github.com/feifeigong/ai-first-tools/actions/runs/40266303160)亦成功，已有独立Windows包继续固定37d7525，不用它冒充新Mac包的构建来源。
+
+独立包每芯片10份原生报告：资源/独立身份17、完整原档及检索15、导入兼容7、提醒生命周期8、共用规则35、原生刷新保护6、Cocoa页面/桥12、网络3、更新交接9、续跑生命周期8。安装前后合成资料、系统launchd、外部独立Cocoa/WebKit进程、正常窗口关闭及实际DMG验证均运行；不发送模型请求，不读取真实聊天或认证。当前Windows源与页面检查405项（35+252+79+39）、0失败/跳过，源指纹一致。
+
+冻结续跑故障有两段证据：旧ps时间在跨TZ source LaunchAgent中不稳定；改用内核时间后，302cfc7冻结报告显示PID、内核时间、OS锁、目录均匹配，仅ps程序路径不匹配。fc54ad4用proc_pidpath固定实际程序映像，命令与包身份检查仍独立保留；原先失败的launchAgentReady及其后停止、防拉起、移除清理均实际通过。未放宽格式、身份或任务保护，也不靠增加超时通过。
+
+运行包仍不是全部真实客户端体验已验收。官方Copilot1.1.32空白runner停在登录页，只能确认未找到安全刷新命令；冻结合成6项证明保护及明确菜单重载机制，不证明已登录侧栏。用户已同意稍后在Mac继续核对命令可用性、显示/切走找回/重复一份。真实模型多轮、额度节省与长期消息覆盖保持未验收。接续见MACOS-NEXT-VALIDATION.md。
+
+开发草稿只上传通过23项资产验证器的独立DMG；20份原生报告与源/Windows报告合为Validation-Reports-fc54ad4.zip，另附统一SHA256SUMS。旧Mac源码ZIP退出当前交付，正式Windows v0.3.16与公开Mac preview.18保持。以下为历史检查过程，以本节与GitHub实际结果为准。
+
 ## 2026-10-26：继续原生验收，preview.19候选
 
 4e4fdec 的两芯片共享/原生读取检查通过，但冻结续跑检查在 launchAgentReady 失败，未产出可发布DMG。诊断确认实际后台正在运行且归属/命令正确，控制端报 identity_unverified。隔离真实 LaunchAgent 的不同时区反例（40260449677）复现同 PID/锁但启动时间不同；换用 proc_pidinfo 后同一检查（40260766927）六项为true。保留所有失败报告，不调整就绪超时或降低归属门槛。通知也改用内核启动时间，防止工作台与提醒跨时区误判。
