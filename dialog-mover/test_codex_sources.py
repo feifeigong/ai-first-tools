@@ -22,7 +22,7 @@ STAMP = 1791600000000
 
 class CodexSourceTests(unittest.TestCase):
     def setUp(self):
-        self.base = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="codex-source-fixture-")))
+        self.base = Path(self.enterContext(tempfile.TemporaryDirectory(prefix="codex-source-fixture-"))).resolve()
         self.env = isolated_env(self.base)
         self.root = Path(self.env["CODEX_HOME"])
         (self.root / "sessions").mkdir()

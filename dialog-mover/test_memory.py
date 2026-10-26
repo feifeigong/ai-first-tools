@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import sqlite3
 import tempfile
 import time
@@ -42,6 +43,22 @@ class MemoryTests(unittest.TestCase):
 
     def plan(self, target="copilot_desktop"):
         return deploy.build_plan(self.workspace, target, self.library, [self.info["id"]])
+
+    def test_owned_workspace_path_aliases_do_not_bypass_or_break_project_protection(self):
+        marker = self.workspace / memory_workspace.MARKER
+        before = marker.read_bytes()
+        aliased = self.workspace / '..' / self.workspace.name
+        library = self.library / '..' / self.library.name
+        self.assertTrue(memory_workspace.validate(aliased, library).samefile(self.workspace))
+        if os.name == 'nt':
+            extended = Path('\\\\?\\' + str(self.workspace))
+            self.assertTrue(memory_workspace.validate(extended, self.library).samefile(self.workspace))
+        existing = self.base/'existing-project'/self.workspace.name
+        existing.mkdir(parents=True)
+        (existing/memory_workspace.MARKER).write_bytes(before)
+        with self.assertRaises(ValueError):
+            memory_workspace.validate(existing/'..'/existing.name,library)
+        self.assertEqual(marker.read_bytes(),before)
 
     def test_frozen_audit_scope_guard_rejects_outside_before_opening_any_database(self):
         with patch.object(sqlite3, "connect", wraps=sqlite3.connect) as opened:

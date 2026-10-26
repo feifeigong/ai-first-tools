@@ -70,10 +70,17 @@ def run(name, args, cwd=ROOT, timeout=600):
 
 
 def main():
+    global WORK
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument('--build-directory', type=Path)
     parser.add_argument("--replace-preview", action="store_true")
     arguments = parser.parse_args()
+    if arguments.build_directory is not None:
+        requested = arguments.build_directory.resolve()
+        if not requested.is_relative_to(ROOT / 'artifacts') or requested.exists():
+            raise RuntimeError('Use a fresh build directory within checkout artifacts')
+        WORK = requested
     destination = arguments.output.resolve()
     if destination == ROOT or destination.is_relative_to(ROOT):
         raise RuntimeError("Choose a dedicated user-facing output folder outside the source checkout")
@@ -126,6 +133,14 @@ def main():
     memory_report = json.loads((WORK / "frozen-memory-check.json").read_text(encoding="utf-8"))
     if memory_report.get("passed") is not True:
         raise RuntimeError("The frozen memory service check did not pass")
+    compatibility_report_path = WORK / 'codex-import-checks.json'
+    run('frozen-history-check', [package / 'tools/dialog-mover-v0.3/对话搬家.exe',
+        '--codex-import-self-test', compatibility_report_path], timeout=120)
+    compatibility = json.loads(compatibility_report_path.read_text(encoding='utf-8'))
+    if (compatibility.get('passed') is not True or len(compatibility.get('checks', {})) < 7
+            or any(value is not True for value in compatibility['checks'].values())
+            or compatibility.get('modelRequests') != 0):
+        raise RuntimeError('The frozen history compatibility check did not pass')
     resume_report_path = WORK / "frozen-resume-check.json"
     resume_report_path.unlink(missing_ok=True)
     run("frozen-resume-check", [package / "tools/auto-resume/AI一手续跑后台.exe", "--runtime-self-test", resume_report_path], timeout=180)

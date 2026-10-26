@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import uuid
 from pathlib import Path
@@ -33,8 +34,19 @@ def validate(workspace: Path, library: Path) -> Path:
     workspace, library = workspace.absolute(), library.absolute()
     no_links(workspace)
     no_links(library)
+    # Check links before canonicalizing. A Windows 8.3 alias is the same owned
+    # directory, but a junction/symlink must never bypass the ownership gate.
+    workspace, library = workspace.resolve(), library.resolve()
+    def key(path: Path) -> Path:
+        value = str(path)
+        if os.name == 'nt':
+            if value.startswith('\\\\?\\UNC\\'):
+                value = '\\\\' + value[8:]
+            elif value.startswith('\\\\?\\'):
+                value = value[4:]
+        return Path(value)
     if (not workspace.is_dir() or not re.fullmatch(r"[0-9a-f]{32}", workspace.name)
-            or workspace.parent != library / "copilot-workspaces"):
+            or key(workspace.parent) != key(library / "copilot-workspaces")):
         raise ValueError("智能搬家只能使用工作台新建的资料项目，已有项目不会被写入。")
     marker = workspace / MARKER
     no_links(marker)
