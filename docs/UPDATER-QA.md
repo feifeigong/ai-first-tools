@@ -1,5 +1,11 @@
 # Windows 更新功能验收
 
+## 2026-10-26 v0.3.18 工具箱更名与原位升级
+
+[完整发布构建](https://github.com/feifeigong/ai-first-tools/actions/runs/40310499437)固定f000df659569ecc6c5cca8e128f8dfd7c4f418a2成功，WPF154项、新装/重装/卸载、后台交接、完整更新与工具重开通过。增加系统产品元信息、新快捷方式、旧自有链接清理及用户改作其他目标的旧链接保留检查；英文系统使用原生IShellLinkW读取Unicode归属，测试夹具仅在ASCII临时文件保存后用Unicode文件操作放到目标路径。
+
+[正式v0.3.18](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.18)的Setup、Portable和SHA256SUMS远端摘要一致。本机使用匿名公开下载的Setup原位升级，1282个当前清单文件逐个核实；新窗口与内嵌搬家就绪，系统名称和桌面/开始菜单显示AI一手工具箱。原资料绑定、续跑运行选择和开机自启选择保留，未读取或迁移Agent聊天/认证，不发模型请求。旧程序集与资料目录作为兼容身份保留，见BRANDING.md。
+
 ## 2026-10-26 v0.3.17 正式包检查
 
 完整Windows流水线40286412155固定44b7e21成功，自检154/0失败，安装、重复安装、保留额外文件、正确版本登记、安全卸载、后台升级/卸载及完整更新与原生工具重开均通过。GitHub正式v0.3.17的Setup/Portable、SHA256SUMS和验证ZIP远端摘要核对通过。资料绑定保护是程序能力，非删除预览标记后冒充正式。
