@@ -15,6 +15,8 @@ from auto_resume import Controller, LABEL, WATCH
 
 def audit(report: Path) -> int:
     checks={}
+    phase='setup'
+    diagnostics={}
     def require(value):
         if not value: raise AssertionError('Auto-resume native assertion failed')
     def wait(test, seconds=15):
@@ -78,16 +80,22 @@ def audit(report: Path) -> int:
             require(not controller.action('prepare-update')['running'])
             require(controller.action('finish-update')['watcherCount']==1 and controller.status()['autostart'])
             checks['updateRestoresRunningAndStartup']=True
+            phase='launchAgentBootstrap'
             controller.stop()
             value=controller.registration()
             value['EnvironmentVariables'].update({'HOME':str(home),'CODEX_HOME':str(codex_home)})
             import plistlib
             with controller.plist.open('wb') as stream: plistlib.dump(value,stream)
             result=controller.launchctl('bootstrap',controller.domain,str(controller.plist))
+            diagnostics['bootstrapReturnCode']=result.returncode
+            diagnostics['bootstrapError']=(result.stderr.decode('utf-8',errors='replace').strip()[:200].replace(str(root),'[fixture]') if result.stderr else '')
             require(result.returncode==0)
+            phase='launchAgentReady'
             wait(lambda:len(controller.watchers())==1)
+            phase='launchAgentStop'
             require(not controller.action('stop')['running'] and not controller.plist.exists())
             checks['realLaunchAgentStopsWithoutRelaunch']=True
+            phase='finderRemoval'
             controller.action('start')
             controller.action('autostart-on')
             moved=root/'Removed.app'
@@ -95,6 +103,7 @@ def audit(report: Path) -> int:
             wait(lambda:not controller.watchers() and not controller.plist.exists())
             require(not controller.enabled())
             checks['finderRemovalCleansBackgroundAndStartup']=True
+            phase='uninstall'
             moved.rename(bundle)
             controller.action('start')
             controller.action('autostart-on')
@@ -108,7 +117,7 @@ def audit(report: Path) -> int:
             with contextlib.suppress(Exception): controller.action('uninstall')
             os.environ.clear();os.environ.update(old_env)
     passed=failure is None and len(checks)==8 and all(checks.values())
-    report.write_text(json.dumps({'passed':passed,'checks':checks,'errorType':failure,'architecture':platform.machine(),
+    report.write_text(json.dumps({'passed':passed,'checks':checks,'errorType':failure,'failurePhase':phase if failure else None,'diagnostics':diagnostics,'architecture':platform.machine(),
                                  'version':json.loads((Path(sys._MEIPASS)/'version.json').read_text()),
                                  'scope':'real frozen process and launchd, isolated disabled workload and signed-out Codex profile; no model request'},indent=2))
     return 0 if passed else 1
