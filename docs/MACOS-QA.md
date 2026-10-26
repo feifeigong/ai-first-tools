@@ -1,5 +1,42 @@
 # Mac 移植验证记录
 
+## 2026-10-24 当前修复专项检查（本机为Windows）
+
+最终固定源码报告 `artifacts/macos-current-fixes-checked/report.json`：**385项通过、0失败、0跳过**，含共享重置规则35、共享/Mac后端236、续跑安全75、页面39，源码检查前后摘要一致。已查看上轮7条项目合成页面，本轮实际页面桥与Mac日历/窄布局交互也通过。报告明确host=Windows、nativeMacVerified=false、functionalParityComplete=false，保留Copilot自动刷新缺口；本轮没有Mac运行包或真实模型续聊结论。
+
+新增MacApi与实际本地导出引擎的合成检查，复现并确认当前桌面项目7条完整显示、5条压缩/2条普通记录可读、终端独占记录保留、项目中文空格与大小写边界正确，以及原文/原项目保持。共用v4冻结审计通过Mac入口生成带版本、架构、host/frozen边界的报告；新增CLI分派与缺报告拒绝、依赖与指纹覆盖检查。
+
+Mac打包必须执行 `--codex-import-test`；未来preview.19起缺7项中任何一项、Windows报告、非冻结报告、存在模型请求或声称真实模型续聊通过的报告均不能暂存。这是新增检查门槛，不是本轮已经生成了Mac安装包。Apple/Intel两芯片仍须分别构建，当前没有调度CI、提交或发布。
+
+本轮统一验证在 `artifacts/macos-current-fixes-checked/`，检查前后源码摘要须一致；先前Windows预览保持运行，不替换用户安装、不启停续跑、不读真实正文或认证。仍明确记录 `functionalParityComplete=false` 和 `nativeMacVerified=false`：Copilot自动刷新是已知缺失，真实Cocoa/通知/launchd/目标列表与在线续聊尚未执行，不能拿合成回读代替。
+
+2026-10-24后续：共用ChatGPT项目目录和压缩原文读取/完整导出已更新，Mac冻结加入固定zstandard依赖。Windows隔离专项和页面检查见CODEX-SOURCE-QA.md；Mac须重建后验本地压缩项目的列表、完整/智能搬家及临时目录清理，不以Windows成功替代两芯片原生检查。下述整体对等未通过及安全刷新缺口不变。
+
+2026-10-24：Day18分类、已完成帖后时间预告、双记录日历及过期预告不弹通知已修改直接共用的 Windows C# 源码；便携 ResetBridge35项通过。没有更改 Cocoa/launchd，也没有在 Mac 运行；既有列表自动刷新缺口和原生验收未因此完成。最新 Windows 包保留 v4 搬家修订，但用户第二轮续聊错误仍未根因确认。详见 RESET-NOTICES-QA.md、CHATGPT-IMPORT-QA.md。先前导出的 Mac ZIP 不含这次更新，不能当当前交付。
+
+
+## 2026-10-23：功能对等复核发现遗漏，整体尚未通过
+
+上轮 355 项成功是源码合成检查，不是 Mac 功能对等验收。此次隔离合成复现：保存完整原档/独立项目后，Darwin 的刷新结果是 unsupported，智能自动打开返回错误、未打开目标；完整搬家在 Mac 也仍是手动重开提示。这个路径此前没被报告覆盖，实际缺口不能归为单纯的“原生待测”。功能清单和 Mac 接续说明已把安全自动刷新、列表切走找回、重复一份列为优先未完成项。
+
+已修正独立预览标识读取错误和失败检查误标消息更新时间，增加相应合成校验；正式更新校验规则不放宽，更新审计仅调整临时副本。新的源码复测在 `artifacts/macos-parity-recheck/`，检查通过仍必须记录 `functionalParityComplete=false` 和明确缺口。当前原生 Mac 仍未运行，不能声明完全满足用户要求。
+
+本轮修正后固定源码复测：组件构建通过，共享规则 34、后端 211、续跑安全 75、页面 38，共 **358 项通过、0 失败、0 跳过**，检查前后指纹一致。该报告保留 `functionalParityComplete=false` 和自动刷新缺口；不把源码通过冒称功能对等。独立接续开发包位于 `artifacts/macos-parity-recheck-delivery/`，内含当前全部修改、此份报告及逐文件摘要；上一份交付 ZIP 不包含本轮复核修正。
+
+## 2026-10-23：Windows 功能同步，源码完成、原生验证待执行
+
+本轮直接在现有未提交改动上同步；Windows 同条重复搬家只显示一份已获用户确认，未获得提交/发布授权。当前连接 Windows，用户确认后续有 Mac 接续。公开 preview.18 未更换，不把下方历史报告用于本轮。
+
+共用完整搬家/来源分类、memory 系列后端和 UI；Mac 新增同 APP 的 headless 只读 MCP，智能写入与更新/关闭相互保护。重置组件直接编译 Windows 当前四份 C# 规则，并复用其发现/核对测试；Mac 原生提醒和前端日历通过 JSON 桥使用这些结果。自动续跑增加 Mac 精确身份与 OS 锁、启动就绪、提交前停止保护和正常退出，不再以 SIGTERM 兜底。另一包的更新/卸载保留已核对的现有后台。
+
+本机验证含共享规则、MacApi、实际 headless JSON-RPC、原档与去重、停止/身份/另一包/物理退出、两开关独立、明确按钮才暂停、日历时区和过期文案、键盘与宽窄恢复。界面图均为合成数据，不是真实 Mac 截图。最后固定源码执行 `python scripts/check_macos_parity.py --ui --report artifacts/macos-parity-final-checked/report.json`：共享组件构建通过，规则 **33**、后端 **209**、续跑安全 **75**、页面 **38**，共 **355** 项通过、0 失败、0 跳过；检查前后源码指纹一致。报告明确 `host=Windows`、`syntheticOnly=true`、`modelRequests=0`、`nativeMacVerified=false`；原生 Mac 状态仍为未运行。
+
+新增冻结报告门槛：`--memory-test` 保存完整原档、只读服务、重复与撤销；`--reset-test` 实际独立 Cocoa 通知进程、启动者退出后保留、原生窗口关闭、中文模态提醒、模态中正常交接、另一包保护；`reset-rules-test` 在本机架构运行共用规则；smoke 新增日历及独立提醒开关。所有原生检查只使用带标记的临时资料。两个架构都须有通过报告；未来 preview.19 暂存检查拒绝缺失项，当前没有运行发布流程。
+
+首轮统一检查被扩展 smoke 用例的旧 mock 回复数量/状态不完整拦截，报告保留在 `artifacts/macos-parity-source/`、`artifacts/macos-parity-final/`。更新合成替身以明确提供新增日历与开关状态，保持原生内容挂载失败必须失败；没有放宽实际门槛。之后检查期间又有源码修改，统一入口现对检查前后指纹进行核对；只接受最后固定源码的成功报告，不累计旧轮次数。
+
+功能对照、Mac 构建和真实验收边界详见 [MACOS-WINDOWS-PARITY.md](MACOS-WINDOWS-PARITY.md)。独立源码包由 `scripts/package_macos_development.py` 导出至 `artifacts/macos-parity-delivery/`，包含当前全部修改与逐文件校验清单、最终合成报告和合成页面图，不包含认证、真实聊天、数据库、构建缓存或本机日志。导出脚本逐文件回读核对并生成 ZIP 的 SHA-256；不交付伪造 DMG，不覆盖安装、不提交或发布。
+
 ## 2026-10-18：preview.18 已发布，Copilot 原生图片与历史过程
 
 [公开版本](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.18)，不可变标签与两架构包固定源码 `851887ba4903d3bb8b79e8b344950223f915737f`，发布 ID `416425797`。v2 转换用户内嵌图片为原生附件、合并正常文字并保留原角色；工具与系统记录归入默认折叠且已完成的历史归档，完整源另存回读。旧格式允许重搬一次，源与旧副本不改动。Mac 保留完整内置续跑与现有自动更新；Windows 同轮 v0.3.15 的更新阶段窗口和重开前清理调整不冒称 Mac 功能。

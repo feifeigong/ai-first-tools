@@ -13,7 +13,7 @@ ROOT = Path(__file__).parent
 ASSETS = ROOT / "ui" / "assets" / "agents"
 AGENTS = [
     ("cursor_desktop", "Cursor"), ("workbuddy", "WorkBuddy"), ("workbuddy_ai", "WorkBuddy AI"),
-    ("qwen_work", "千问办公"), ("doubao_work", "豆包工作"), ("chatgpt", "ChatGPT"),
+    ("qwen_work", "千问办公"), ("doubao_work", "豆包工作"), ("chatgpt", "ChatGPT"), ("codex_cli", "Codex CLI"),
     ("claude_code", "Claude Code"), ("claude_desktop", "Claude"), ("cowork", "Cowork"),
     ("antigravity", "Antigravity"), ("grok", "Grok"), ("opencode", "OpenCode"), ("hermes", "Hermes"),
     ("copilot_desktop", "GitHub Copilot"),

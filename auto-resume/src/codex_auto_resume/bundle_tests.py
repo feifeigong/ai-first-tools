@@ -60,9 +60,20 @@ def run(report: Path) -> int:
                     time.sleep(0.1)
                 require(process.poll() is None and (state / "watch.pid").read_text().strip() == str(process.pid))
                 require(json.loads((state / "state.json").read_text())["last_status"] == "disabled")
-                (state / "stop.request").write_text("stop\n", encoding="utf-8")
+                status_report = root / "watch-status.json"
+                protected = {name: (state / name).read_bytes() for name in ("config.json", "watch.pid", "watch.owner.json")}
+                probe = hidden_popen([sys.executable, "--watch-status", str(status_report)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+                require(probe.wait(timeout=10) == 0)
+                status = json.loads(status_report.read_text(encoding="utf-8"))
+                require(status["ok"] and status["running"] and status["ready"] and status["pid"] == process.pid)
+                require(Path(status["executable"]).resolve() == Path(sys.executable).resolve())
+                require(all((state / name).read_bytes() == content for name, content in protected.items()))
+                stop = hidden_popen([sys.executable, "--request-stop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+                require(stop.wait(timeout=10) == 0)
                 require(process.wait(timeout=10) == 0)
                 require(not (state / "watch.pid").exists())
+                probe = hidden_popen([sys.executable, "--watch-status", str(status_report)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+                require(probe.wait(timeout=10) == 0 and not json.loads(status_report.read_text(encoding="utf-8"))["running"])
             finally:
                 if process.poll() is None:
                     process.kill()

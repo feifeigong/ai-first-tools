@@ -33,28 +33,32 @@ def hidden_popen(args: list[str], **kwargs: Any) -> subprocess.Popen:
 
 
 def claim_watch_pid(path: Path) -> bool:
-    if path.exists():
-        try:
-            old = int(path.read_text(encoding="utf-8").strip().split()[0])
-        except (OSError, ValueError):
-            old = 0
-        if process_running(old) and old != os.getpid():
-            return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"{os.getpid()}\n", encoding="utf-8")
-    return True
+    if sys.platform not in {"win32", "darwin"}:
+        if path.exists():
+            try:
+                old = int(path.read_text(encoding="utf-8").strip().split()[0])
+            except (OSError, ValueError):
+                old = 0
+            if process_running(old) and old != os.getpid():
+                return False
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+        return True
+    from .watch_control import claim
+    return claim(path)
 
 
 def release_watch_pid(path: Path) -> None:
-    try:
-        current = int(path.read_text(encoding="utf-8").strip().split()[0])
-    except (OSError, ValueError):
-        return
-    if current == os.getpid():
+    if sys.platform not in {"win32", "darwin"}:
         try:
-            path.unlink()
-        except OSError:
+            current = int(path.read_text(encoding="utf-8").strip().split()[0])
+            if current == os.getpid():
+                path.unlink()
+        except (OSError, ValueError):
             pass
+        return
+    from .watch_control import release
+    release(path)
 
 
 class _FILETIME(ctypes.Structure):

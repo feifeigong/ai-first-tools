@@ -30,6 +30,72 @@ class CodexHistoryTests(unittest.TestCase):
         self.imported_id = str(uuid.uuid4())
         self.meta = record("session_meta", {"id": self.imported_id})
 
+    def test_foreign_reasoning_is_preserved_as_history_without_an_unverified_native_state(self):
+        thinking = {'type':'reasoning','summary':[{'type':'summary_text','text':'历史思考\n完整内容 ' * 800}],
+                    'content':[{'type':'reasoning_text','text':'来源补充思考'}],'encrypted_content':None}
+        records = [self.meta,message('user','起点'),record('response_item',thinking),message('assistant','终点')]
+        before = copy.deepcopy(records)
+        converted = codex_import.paginated_history(records,self.imported_id)
+        payloads = [entry['payload'] for entry in converted if entry['type']=='response_item']
+        self.assertFalse(any(payload['type']=='reasoning' for payload in payloads))
+        note = next(entry for entry in converted if entry.get('dialog_mover_original',{}).get('reason')=='foreign_reasoning')
+        self.assertEqual(note['dialog_mover_original']['response_item'],thinking)
+        text = note['payload']['content'][0]['text']
+        self.assertIn(thinking['summary'][0]['text'],text)
+        self.assertIn('来源补充思考',text)
+        self.assertIn('历史思考',text)
+        displayed = [entry['payload']['item'] for entry in converted if entry.get('payload',{}).get('type')=='item_completed']
+        self.assertTrue(all(item['type']!='Reasoning' for item in displayed))
+        self.assertEqual(displayed[1]['type'],'AgentMessage')
+        self.assertEqual(records,before)
+        self.assertEqual(payloads[0]['role'],'user')
+        self.assertEqual(payloads[-1]['content'][0]['text'],'终点')
+
+    def test_frozen_compatibility_audit_uses_no_model_and_reports_its_actual_scope(self):
+        from core.codex_audit import run
+        with tempfile.TemporaryDirectory() as temporary:
+            report = Path(temporary)/'check.json'
+            self.assertEqual(run(report),0)
+            result = json.loads(report.read_text(encoding='utf-8'))
+            self.assertTrue(result['passed'])
+            self.assertEqual(len(result['checks']),7)
+            self.assertEqual(result['savedFollowupRoundTrips'],2)
+            self.assertEqual(result['modelRequests'],0)
+            self.assertFalse(result['nativeContinuationVerified'])
+
+    def test_normal_import_audit_rejects_the_old_unportable_writer(self):
+        from core.codex_audit import normal_import_with_saved_followups
+        def require(value):
+            if not value: raise AssertionError('Synthetic assertion')
+        with patch.object(codex_import,'_archive_nonportable',return_value=False):
+            with self.assertRaises(AssertionError): normal_import_with_saved_followups(require)
+
+    def test_import_registration_rejects_context_or_display_state_before_writing_or_indexing(self):
+        bad_context = record('response_item',{'type':'reasoning','summary':[],'encrypted_content':None})
+        bad_display = record('event_msg',{'type':'item_completed','item':{'type':'Reasoning'}})
+        for bad in (bad_context,bad_display):
+            with tempfile.TemporaryDirectory(prefix='ai-first-register-guard-') as temporary:
+                root = Path(temporary);path = root/'sessions/new.jsonl';path.parent.mkdir()
+                rows = [self.meta,message('user','synthetic question'),bad,message('assistant','synthetic answer')]
+                path.write_text('\n'.join(json.dumps(r) for r in rows),encoding='utf-8');before=path.read_bytes()
+                with patch.object(codex_import,'validate'), patch.object(codex_import,'paginated_history',side_effect=lambda value,_id:value), \
+                        patch.object(codex_import.sqlite3,'connect',side_effect=AssertionError('Index opened before compatibility guard')):
+                    with self.assertRaisesRegex(ValueError,'不可移植|兼容转换'):
+                        codex_import.register(path,self.imported_id,{'cwd':temporary,'title':'Synthetic title'},'chatgpt_work',{'CODEX_HOME':temporary,'APPDATA':temporary})
+                self.assertEqual(path.read_bytes(),before)
+
+    def test_hosted_search_and_compaction_are_archived_without_replaying_opaque_state(self):
+        payloads = [{'type':'web_search_call','id':'old-search','status':'completed',
+                     'action':{'type':'search','query':'合成历史问题'}},
+                    {'type':'compaction','id':'old-compaction','encrypted_content':'opaque-synthetic-only'}]
+        records = [self.meta,message('user','起点'),*(record('response_item',p) for p in payloads),message('assistant','终点')]
+        converted = codex_import.paginated_history(records,self.imported_id)
+        self.assertFalse(any(entry.get('type')=='response_item' and entry['payload']['type'] in {'web_search_call','compaction'} for entry in converted))
+        archived = [entry['dialog_mover_original']['response_item'] for entry in converted if entry.get('dialog_mover_original',{}).get('reason') in {'foreign_hosted_tool','foreign_compaction'}]
+        self.assertEqual(archived,payloads)
+        self.assertIn('合成历史问题',json.dumps(converted,ensure_ascii=False))
+        self.assertEqual(sum(entry.get('payload',{}).get('type')=='task_started' for entry in converted),1)
+
     def test_long_history_has_stable_unique_turns_items_and_contiguous_ordinals(self):
         records = [self.meta]
         for index in range(151):
@@ -181,7 +247,7 @@ class CodexHistoryTests(unittest.TestCase):
             history.write_text(json.dumps({key: 123}))
             with patch.object(mover, "_history_file", return_value=history):
                 self.assertFalse(mover.already_moved("cursor_desktop", source_id, "chatgpt_work", scratch))
-                for previous in ("paginated-import-v1", "paginated-import-v2"):
+                for previous in ("paginated-import-v1", "paginated-import-v2", "paginated-import-v3"):
                     history.write_text(json.dumps({key: {"time": 123, "format": previous}}))
                     self.assertFalse(mover.already_moved("cursor_desktop", source_id, "chatgpt_work", scratch))
                 mover._record_move("cursor_desktop", source_id, "chatgpt_work", scratch)

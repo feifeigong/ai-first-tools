@@ -10,10 +10,16 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from codex_auto_resume.cli import main
 from codex_auto_resume.workspace_control import allow_background_watch
 
 if __name__ == "__main__":
+    # These controls never load/save ordinary CLI settings or enter the quota loop.
+    if len(sys.argv) == 3 and sys.argv[1] == "--watch-status":
+        from codex_auto_resume.watch_control import write_status
+        raise SystemExit(write_status(Path(sys.argv[2])))
+    if sys.argv[1:] == ["--request-stop"]:
+        from codex_auto_resume.watch_control import request_stop
+        raise SystemExit(request_stop())
     if getattr(sys, "frozen", False):
         native = Path(sys._MEIPASS) / "bin"
         os.environ["CODEX_MANAGED_PACKAGE_ROOT"] = str(native)
@@ -25,12 +31,7 @@ if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--runtime-self-test":
         from codex_auto_resume.bundle_tests import run
         raise SystemExit(run(Path(sys.argv[2])))
-    if sys.argv[1:] == ["--request-stop"]:
-        from codex_auto_resume.config import load_config
-        state = load_config().resolved_state_dir()
-        state.mkdir(parents=True, exist_ok=True)
-        (state / "stop.request").write_text("stop\n", encoding="utf-8")
-        raise SystemExit(0)
     if not allow_background_watch(sys.argv[1:]):
         raise SystemExit(0)
+    from codex_auto_resume.cli import main
     raise SystemExit(main())

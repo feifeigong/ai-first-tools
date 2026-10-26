@@ -12,11 +12,17 @@ from pathlib import Path
 
 import webview
 
-from core import chatgpt, copilot_import, copilot_refresh, imports, mover, sources
+from core import chatgpt, copilot_import, copilot_refresh, imports, mover, sources, memory_store, memory_deploy, memory_jobs, memory_workspace
 from core.common import open_external
 from embedded_startup import EmbeddedStartup
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+
+if getattr(sys, "frozen", False):
+    executable_root = Path(sys.executable).resolve().parent
+    if any((parent / "development-preview.json").is_file() for parent in (executable_root, *list(executable_root.parents)[:3])):
+        from core.common import localappdata
+        os.environ.setdefault("AI_FIRST_MOVER_PREVIEW_DATA", str(localappdata() / "AI一手工具工作台" / "memory-preview" / "mover"))
 
 AGENTS = [
     {"id": "cursor_desktop", "name": "Cursor", "sub": "桌面版", "color": "#1f2933"},
@@ -24,7 +30,8 @@ AGENTS = [
     {"id": "workbuddy_ai", "name": "WorkBuddy AI", "sub": "海外版", "color": "#0c8599"},
     {"id": "qwen_work", "name": "千问办公", "sub": "通义千问", "color": "#6741d9"},
     {"id": "doubao_work", "name": "豆包工作", "sub": "字节跳动", "color": "#1971c2"},
-    {"id": "chatgpt", "name": "ChatGPT", "sub": "聊天、工作、Codex", "color": "#0b8f6f"},
+    {"id": "chatgpt", "name": "ChatGPT", "sub": "聊天、工作、桌面 Codex", "color": "#0b8f6f"},
+    {"id": "codex_cli", "name": "Codex CLI", "sub": "命令行记录", "color": "#0b8f6f", "sourceOnly": True},
     {"id": "claude_code", "name": "Claude Code", "sub": "Anthropic", "color": "#d97757"},
     {"id": "claude_desktop", "name": "Claude", "sub": "桌面版 · 聊天", "color": "#c15f3c"},
     {"id": "cowork", "name": "Cowork", "sub": "Claude 本机任务", "color": "#d97757"},
@@ -44,6 +51,11 @@ class Api:
         self._job: mover.Job | None = None
         self._window = None
         self._lock = threading.Lock()
+        self._memory_job = None
+        self._memory_context = None
+        self._memory_plan = None
+        self._memory_deployment = None
+        self._memory_saved_items = None
 
     def bind(self, window) -> None:
         self._window = window
@@ -66,6 +78,8 @@ class Api:
                 items.append({**agent, "canTarget": agent["id"] in mover.TARGETS})
         targets = []
         for agent in items:
+            if agent.get("sourceOnly"):
+                continue
             capability = mover.TARGETS.get(agent["id"])
             product = "chatgpt" if agent["id"] == "chatgpt" else "claude" if agent["id"] in ("claude_code", "claude_desktop", "cowork") else ""
             name = "ChatGPT · 云端 Chat / Work" if agent["id"] == "chatgpt" else "Claude · 普通聊天" if agent["id"] == "claude_desktop" else "Claude · 本机 Cowork" if agent["id"] == "cowork" else agent["name"]
@@ -78,6 +92,11 @@ class Api:
         return {
             "agents": items,
             "targets": targets,
+            "smartTargets": [{**item, "full": item["name"], "canTarget": sources.installed("copilot_desktop"),
+                "readOnlyReason": "请先打开 Copilot 桌面端完成初始化",
+                "folderHint": "会单独新建一个智能搬家资料项目。",
+                "notice": "对话会沿用原来的名称，并加上“智能搬家”标识。打开后，输入并发送下一步想做的事即可。"}
+                for item in memory_deploy.available_targets()],
             "unsupported": sources.unsupported_found(),
             "ready": mover.txcript_path() is not None,
         }
@@ -126,6 +145,195 @@ class Api:
         return chosen[0] if chosen else ""
 
     # ---- moving
+
+    def prepare_memory(self, source: str, ids: list[str], target: str, directory: str = "") -> dict:
+        with self._lock:
+            if self._job is not None and not self._job.snapshot()["finished"]:
+                return {"error": "正在处理，请等这一批完成。"}
+            if target not in memory_deploy.TARGETS or directory:
+                return {"error": "智能搬家只使用独立资料项目，不写入已有项目。请返回重新选择软件。"}
+            if not isinstance(ids, list): return {"error": "会话列表不正确。"}
+            known = {s["id"]: s for g in self._groups.get(source, []) for s in g["sessions"]}
+            chosen = [known[i] for i in dict.fromkeys(ids) if i in known and known[i]["movable"]]
+            if not chosen: return {"error": "没有可以读取的对话。"}
+            self._memory_context = {"target": target, "directories": {}}
+            self._memory_plan = None
+            self._memory_deployment = None
+            self._memory_saved_items = None
+            self._memory_job = memory_jobs.PrepareJob(source, chosen)
+            self._job = self._memory_job
+            return {"ok": True, "total": len(chosen)}
+
+    def memory_status(self) -> dict:
+        return self._memory_job.snapshot() if self._memory_job else {"finished": True, "items": [], "total": 0}
+
+    def memory_plan(self) -> dict:
+        with self._lock:
+            if self._memory_job is None or not self._memory_job.snapshot()["finished"]:
+                return {"error": "请先等待历史读取完成。"}
+            items = self._memory_job.snapshot()["items"]
+            if not items or any(i["state"] != "ok" for i in items):
+                return {"error": "有旧对话没能完整保存，请返回后重试；Copilot 项目还没有改动。"}
+            try:
+                plans = []
+                for item in items:
+                    directory = self._memory_context["directories"].get(item["bundle"])
+                    plan = memory_deploy.prepare_entry(memory_jobs.library(), self._memory_context["target"],
+                        item["bundle"], Path(directory) if directory else None)
+                    self._memory_context["directories"][item["bundle"]] = plan["workspace"]
+                    plans.append(plan)
+                self._memory_context["directory"] = plans[-1]["workspace"]
+                self._memory_plan = {"entries": plans}
+                previews = [memory_deploy.entry_preview(plan) for plan in plans]
+                return {"ok": True, **previews[-1], "entries": previews,
+                        "reused_count": sum(bool(p.get("reused")) for p in previews)}
+            except memory_deploy.SavedEntryError as error:
+                return {"error": str(error), "error_stage": "existing-entry"}
+            except Exception as error:
+                return {"error": str(error) if isinstance(error, ValueError) else "暂时无法准备好搬家，请返回后重试；项目还没有改动。"}
+
+    def deploy_memory(self) -> dict:
+        with self._lock:
+            if self._memory_plan is None or self._memory_deployment is not None:
+                return {"error": "请先返回，保存旧对话并确认这次搬家的内容。"}
+            try:
+                items = self._memory_job.snapshot()["items"]
+                results = []
+                for planned in self._memory_plan["entries"]:
+                    plan = memory_deploy.prepare_entry(memory_jobs.library(), self._memory_context["target"],
+                        planned["bundle"], Path(planned["workspace"]))
+                    if "reuse" not in plan and plan["fingerprint"] != planned["fingerprint"]:
+                        raise ValueError("刚才有项目文件发生变化，请返回重新确认；已保存的对话仍保留。")
+                    result = memory_deploy.install(plan, memory_jobs.library())
+                    results.append({**result, "bundle": planned["bundle"]})
+                self._memory_deployment = results[-1]
+                self._memory_saved_items = [i for i in items if i["bundle"] == results[-1]["bundle"]]
+                return {"ok": True, **self._memory_deployment, "entries": results,
+                        "reused_count": sum(bool(r.get("reused")) for r in results)}
+            except Exception as error:
+                return {"error": str(error) if isinstance(error, ValueError) else "这次搬家没有完成，已停止写入。完整旧记录仍保存在工作台，请返回后重试。"}
+
+    def confirm_memory_facts(self, updates: dict) -> dict:
+        """Optional review after moving; changes only the workbench's own index."""
+        with self._lock:
+            if not self._memory_deployment:
+                return {"error": "请先完成这次搬家。"}
+            try:
+                valid = {i["bundle"] for i in self._saved_memory_items() if i["state"] == "ok"}
+                if not isinstance(updates, dict) or set(updates) - valid:
+                    raise ValueError("这条要求不在本次选择的旧对话中。")
+                for identity, entries in updates.items():
+                    memory_store.update_facts(memory_jobs.library() / "bundles" / identity, entries)
+                return {"ok": True}
+            except (OSError, ValueError, sqlite3.Error):
+                return {"error": "没有保存成功，请重新查看要保留的要求。"}
+
+    def _saved_memory_items(self) -> list[dict]:
+        if self._memory_saved_items is not None:
+            return self._memory_saved_items
+        return self._memory_job.snapshot()["items"] if self._memory_job else []
+
+    def memory_records(self) -> dict:
+        try:
+            return {"items": memory_deploy.saved_records(memory_jobs.library())}
+        except (OSError, ValueError):
+            return {"error": "暂时无法读取搬家记录，请稍后重试。"}
+
+    def select_memory_record(self, identity: str) -> dict:
+        with self._lock:
+            if self._job is not None and not self._job.snapshot()["finished"]:
+                return {"error": "请等当前搬家完成，再查看以前的记录。"}
+            try:
+                record = memory_deploy.saved_record(memory_jobs.library(), identity)
+                reader = memory_store.HistoryReader(Path(record["location"]))
+                items = []
+                for bundle, path in reader.bundles.items():
+                    info = memory_store.summary(path)
+                    items.append({"bundle": bundle, "title": info["title"], "state": "ok",
+                                  "facts": info["facts"][:100], "facts_total": len(info["facts"])})
+                self._memory_deployment = record
+                self._memory_saved_items = items
+                self._memory_plan = None
+                return {"ok": True, "deployment": record, "items": items}
+            except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
+                return {"error": "这次搬家的资料暂时无法打开，已保留现有内容。"}
+
+    def search_memory(self, query: str) -> dict:
+        if not self._memory_deployment: return {"error": "请先完成这次搬家，再查找旧对话。"}
+        try:
+            return memory_store.HistoryReader(Path(self._memory_deployment["location"])).search(query)
+        except Exception:
+            return {"error": "暂时无法查找旧对话，请稍后重试。完整记录仍保留在本机。"}
+
+    def read_memory(self, message_id: str, offset: int = 0) -> dict:
+        if not self._memory_deployment: return {"error": "请先完成这次搬家，再查看旧对话。"}
+        try:
+            return memory_store.HistoryReader(Path(self._memory_deployment["location"])).read(message_id, offset)
+        except Exception:
+            return {"error": "无法读取这条历史消息。"}
+
+    def open_memory_folder(self) -> dict:
+        if not self._memory_deployment: return {"error": "请先完成这次搬家，再打开保存位置。"}
+        try:
+            open_external(self._memory_deployment.get("archive_location", self._memory_deployment["location"]))
+            return {"ok": True}
+        except OSError:
+            return {"error": "暂时无法打开旧对话的保存位置，请稍后重试。"}
+
+    def open_memory_desktop(self, identity: str = "") -> dict:
+        with self._lock:
+            if not self._memory_deployment: return {"error": "请先完成历史准备。"}
+            if identity and identity != self._memory_deployment["id"]:
+                return {"error": "当前查看的对话已切换，请在原记录旁重新打开。"}
+            if self._job is not None and not self._job.snapshot()["finished"]:
+                return {"error": "请先等待当前任务完成。"}
+            try:
+                url = memory_deploy.desktop_link(memory_jobs.library(), self._memory_deployment["id"])
+                refreshed = copilot_refresh.refresh(passive=True)
+                if refreshed in {"busy", "draft"}:
+                    return {"ok": True, "pending": True, "refresh_status": refreshed}
+                if refreshed not in {"requested", "not-running"}:
+                    return {"error": "旧对话已保存，暂时无法安全更新 Copilot 左侧列表。请稍后重试，原记录仍保留。"}
+                if refreshed == "requested":
+                    time.sleep(1)
+                open_external(url)
+                return {"ok": True, "refreshed": refreshed == "requested", "refresh_status": refreshed}
+            except (OSError, ValueError, sqlite3.Error):
+                return {"error": "暂时无法自动打开。请在 Copilot 左侧展开对应项目，找到原名称后带“智能搬家”标识的对话。"}
+
+    def rollback_memory(self) -> dict:
+        with self._lock:
+            if not self._memory_deployment: return {"error": "当前没有可撤销的搬家记录。"}
+            try:
+                result = memory_deploy.rollback(memory_jobs.library(), self._memory_deployment["id"])
+                self._memory_deployment = None
+                self._memory_plan = None
+                return result
+            except Exception as error:
+                return {"error": str(error) if isinstance(error, ValueError) else "无法撤销，请先检查目标项目。"}
+
+    def start_full_from_memory(self, target: str, directory: str) -> dict:
+        with self._lock:
+            if self._job is not None and not self._job.snapshot()["finished"]:
+                return {"error": "请等待当前任务完成。"}
+            if target not in mover.TARGETS or not sources.installed(target) or not directory or not Path(directory).is_dir():
+                return {"error": "请选择可用的完整迁移目标和文件夹。"}
+            try:
+                imports.preflight(target, mover.destination_env(target))
+                items = self._saved_memory_items()
+                if not items: raise ValueError("没有保存的原始档案。")
+                if any(i["state"] != "ok" for i in items): raise ValueError("原始记录未能完整保存。")
+                documents = []
+                for item in items:
+                    root = memory_jobs.library() / "bundles" / item["bundle"]
+                    data = memory_store.summary(root)
+                    original = root / "archive/original.json"
+                    if memory_store.digest(original.read_bytes()) != data["sha256"]: raise ValueError("原始档案校验失败。")
+                    documents.append({**data, "original": original})
+                self._job = mover.DocumentJob(documents, target, directory)
+                return {"ok": True, "total": len(documents)}
+            except Exception as error:
+                return {"error": str(error) if isinstance(error, ValueError) else "完整迁移准备失败，档案已保留。"}
 
     def start_move(self, source: str, ids: list[str], target: str, directory: str) -> dict:
         with self._lock:
@@ -207,6 +415,12 @@ class Api:
 
 
 def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "--codex-import-self-test":
+        from core.codex_audit import run
+        raise SystemExit(run(Path(sys.argv[2]).resolve()))
+    if len(sys.argv) == 3 and sys.argv[1] == "--memory-self-test":
+        from core.memory_audit import run
+        raise SystemExit(run(Path(sys.argv[2]).resolve()))
     if sys.platform == "win32" and len(sys.argv) == 3 and sys.argv[1] == "--copilot-refresh-self-test":
         from core.copilot_refresh_audit import run
         raise SystemExit(run(Path(sys.argv[2]).resolve()))

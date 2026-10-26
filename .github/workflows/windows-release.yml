@@ -58,7 +58,7 @@ jobs:
         env:
           PYTHONPATH: src
         run: python -m unittest discover -s tests -v
-      - name: Freeze and verify internal auto-resume runtime
+      - name: Freeze internal auto-resume runtime
         shell: pwsh
         run: |
           python scripts/prepare_auto_resume.py
@@ -67,11 +67,6 @@ jobs:
           python -m PyInstaller --noconfirm --distpath ../artifacts/windows/auto-resume --workpath ../artifacts/windows/auto-resume-build AI一手续跑后台.spec
           if ($LASTEXITCODE) { throw 'Auto-resume freezing failed' }
           Pop-Location
-          $backend=Join-Path $PWD 'artifacts/windows/auto-resume/AI一手续跑后台/AI一手续跑后台.exe'
-          $report=Join-Path $PWD 'artifacts/windows/resume-runtime-test.json'
-          $test=Start-Process -FilePath $backend -ArgumentList @('--runtime-self-test',$report) -Wait -PassThru -WindowStyle Hidden
-          $checks=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
-          if ($test.ExitCode -ne 0 -or $checks.failed -ne 0 -or $checks.passed -ne 4) { throw 'Frozen background runtime checks failed' }
       - name: Get official installer tools
         shell: python
         run: |
@@ -100,10 +95,21 @@ jobs:
           rustup toolchain install 1.96.0 --profile minimal
           rustup default 1.96.0
           Push-Location dialog-mover
+          python -m PyInstaller --noconfirm --distpath ../artifacts/windows/memory --workpath ../artifacts/windows/memory-build 记忆服务.spec
+          if ($LASTEXITCODE) { throw 'Memory service freezing failed' }
+          Copy-Item '../artifacts/windows/memory/AI一手记忆服务.exe' 'bin/AI一手记忆服务.exe' -Force
           python -m PyInstaller --noconfirm --distpath ../artifacts/windows/mover --workpath ../artifacts/windows/build 对话搬家.spec
           if ($LASTEXITCODE) { throw 'Mover freezing failed' }
           Pop-Location
           $mover=Join-Path $PWD 'artifacts/windows/mover/对话搬家/对话搬家.exe'
+          $memoryReport=Join-Path $PWD 'artifacts/windows/memory-package-test.json'
+          $memoryCheck=Start-Process -FilePath $mover -ArgumentList @('--memory-self-test',$memoryReport) -PassThru -Wait -WindowStyle Hidden
+          if ($memoryCheck.ExitCode -ne 0 -or (Get-Content -LiteralPath $memoryReport -Raw | ConvertFrom-Json).passed -ne $true) { throw 'Frozen memory retrieval audit failed' }
+          $compatReport=Join-Path $PWD 'artifacts/windows/codex-import-test.json'
+          $compat=Start-Process -FilePath $mover -ArgumentList @('--codex-import-self-test',$compatReport) -PassThru -Wait -WindowStyle Hidden
+          $compatChecks=Get-Content -LiteralPath $compatReport -Raw | ConvertFrom-Json
+          $compatResults=@($compatChecks.checks.PSObject.Properties.Value)
+          if ($compat.ExitCode -ne 0 -or $compatChecks.passed -ne $true -or $compatResults.Count -lt 7 -or @($compatResults | Where-Object { $_ -ne $true }).Count -ne 0 -or $compatChecks.modelRequests -ne 0 -or $compatChecks.nativeContinuationVerified -ne $false) { throw 'Frozen history compatibility audit failed' }
           $guardReport=Join-Path $PWD 'artifacts/windows/copilot-refresh-test.json'
           $guard=Start-Process -FilePath $mover -ArgumentList @('--copilot-refresh-self-test',$guardReport) -PassThru -WindowStyle Hidden
           if (!$guard.WaitForExit(30000)) { throw 'Frozen draft guard audit timed out' }
@@ -111,6 +117,15 @@ jobs:
           if ($guard.ExitCode -ne 0 -or $guardChecks.passed -ne $true) { throw 'Frozen draft guard audit failed' }
           $version=([xml](Get-Content workspace/AIFirst.Workspace.csproj -Raw)).Project.PropertyGroup.Version
           ./scripts/package.ps1 -Version $version -Python python -MoverPackage (Join-Path $PWD 'artifacts/windows/mover/对话搬家') -ResumePackage (Join-Path $PWD 'artifacts/windows/auto-resume/AI一手续跑后台') -AnalysisToc (Join-Path $PWD 'artifacts/windows/build/对话搬家/Analysis-00.toc') -NsisDirectory (Join-Path $PWD 'artifacts/build-tools/nsis/nsis-3.12') -WebViewBootstrapper (Join-Path $PWD 'artifacts/build-tools/MicrosoftEdgeWebview2Setup.exe')
+      - name: Verify frozen auto-resume in the complete workspace package
+        shell: pwsh
+        run: |
+          $backend=Join-Path $PWD 'artifacts/package/AI-First-Tools/tools/auto-resume/AI一手续跑后台.exe'
+          $report=Join-Path $PWD 'artifacts/windows/resume-runtime-test.json'
+          $test=Start-Process -FilePath $backend -ArgumentList @('--runtime-self-test',$report) -Wait -PassThru -WindowStyle Hidden
+          $checks=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+          $results=@($checks.results)
+          if ($test.ExitCode -ne 0 -or $checks.failed -ne 0 -or $results.Count -lt 4 -or $checks.passed -ne $results.Count -or @($results | Where-Object { $_.passed -ne $true }).Count -ne 0) { throw 'Frozen background runtime checks failed' }
       - name: Audit silent install, reinstall, self checks and safe uninstall
         shell: pwsh
         run: |

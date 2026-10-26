@@ -1,0 +1,30 @@
+<UserControl x:Class="AIFirst.Workspace.ResetCalendarView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Foreground="#202D3A" FontFamily="Microsoft YaHei UI" UseLayoutRounding="True" SizeChanged="CalendarSizeChanged">
+  <UserControl.Resources>
+    <Style x:Key="CalendarAction" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="MinHeight" Value="44" /><Setter Property="MinWidth" Value="44" /><Setter Property="Padding" Value="10,5" /><Setter Property="FontSize" Value="12" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#5B6B7E" /></Style>
+    <Style x:Key="CalendarDay" TargetType="Button">
+      <Setter Property="MinHeight" Value="48" /><Setter Property="Margin" Value="2" /><Setter Property="Cursor" Value="Hand" /><Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#202D3A" />
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="DaySurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="9"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="DaySurface" Property="Background" Value="#EDF4FC" /></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="DaySurface" Property="Background" Value="#DCEBFB" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="RecentDay" TargetType="Button" BasedOn="{StaticResource CalendarDay}"><Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="MinHeight" Value="48" /><Setter Property="Margin" Value="0,2" /><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="RecentSurface" Background="{TemplateBinding Background}" CornerRadius="8" Padding="10,8"><ContentPresenter /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="RecentSurface" Property="Background" Value="#EDF4FC" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
+  </UserControl.Resources>
+  <StackPanel>
+    <Grid x:Name="CalendarLayout">
+      <Grid.ColumnDefinitions><ColumnDefinition x:Name="MonthColumn" Width="*" /><ColumnDefinition x:Name="GutterColumn" Width="28" /><ColumnDefinition x:Name="DetailColumn" Width="0.86*" /></Grid.ColumnDefinitions>
+      <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+      <StackPanel x:Name="MonthPanel">
+        <Grid Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><StackPanel VerticalAlignment="Center"><TextBlock x:Name="MonthHeading" FontSize="17" FontWeight="SemiBold" /><TextBlock Text="北京时间" FontSize="11" Foreground="#5B6B7E" Margin="0,4,0,0" /></StackPanel><StackPanel Orientation="Horizontal" Grid.Column="1"><Button Style="{StaticResource CalendarAction}" Click="PreviousMonthClick" AutomationProperties.Name="上一个月" ToolTip="上一个月"><Path Data="M7,1 L2,6 L7,11" Stroke="#5B6B7E" StrokeThickness="1.5" Width="12" Height="12" /></Button><Button Style="{StaticResource CalendarAction}" Content="今天" Click="TodayClick" /><Button Style="{StaticResource CalendarAction}" Click="NextMonthClick" AutomationProperties.Name="下一个月" ToolTip="下一个月"><Path Data="M2,1 L7,6 L2,11" Stroke="#5B6B7E" StrokeThickness="1.5" Width="12" Height="12" /></Button></StackPanel></Grid>
+        <UniformGrid Columns="7" Margin="0,0,0,5"><TextBlock Text="一" /><TextBlock Text="二" /><TextBlock Text="三" /><TextBlock Text="四" /><TextBlock Text="五" /><TextBlock Text="六" /><TextBlock Text="日" /><UniformGrid.Resources><Style TargetType="TextBlock"><Setter Property="FontSize" Value="12" /><Setter Property="Foreground" Value="#5B6B7E" /><Setter Property="TextAlignment" Value="Center" /><Setter Property="Margin" Value="0,6" /></Style></UniformGrid.Resources></UniformGrid>
+        <UniformGrid x:Name="DaysGrid" Columns="7" Rows="6" KeyboardNavigation.DirectionalNavigation="Contained" AutomationProperties.Name="重置消息月历" />
+        <WrapPanel Margin="4,14,0,0"><StackPanel Orientation="Horizontal" Margin="0,0,18,0"><Ellipse Width="6" Height="6" Fill="#207A58" Margin="0,0,6,0" /><TextBlock Text="完成公告" FontSize="11" Foreground="#5B6B7E" /></StackPanel><StackPanel Orientation="Horizontal" Margin="0,0,18,0"><Ellipse Width="6" Height="6" Fill="#0073E6" Margin="0,0,6,0" /><TextBlock Text="预告" FontSize="11" Foreground="#5B6B7E" /></StackPanel><StackPanel Orientation="Horizontal" Margin="0,0,18,0"><Ellipse Width="6" Height="6" Fill="#7252A3" Margin="0,0,6,0" /><TextBlock Text="重置卡" FontSize="11" Foreground="#5B6B7E" /></StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="6" Height="6" Fill="#7C8795" Margin="0,0,6,0" /><TextBlock Text="历史预告 / 待核实" FontSize="11" Foreground="#5B6B7E" /></StackPanel></WrapPanel>
+      </StackPanel>
+      <StackPanel x:Name="DetailsPanel" Grid.Column="2">
+        <TextBlock x:Name="SelectedHeading" FontSize="17" FontWeight="SemiBold" Margin="0,11,0,18" />
+        <StackPanel x:Name="SelectedEvents" />
+        <Border Height="1" Background="#E9EDF3" Margin="0,20,0,14" />
+        <TextBlock Text="最近记录" FontSize="12" FontWeight="SemiBold" Foreground="#5B6B7E" Margin="10,0,0,7" />
+        <StackPanel x:Name="RecentEvents" />
+      </StackPanel>
+    </Grid>
+    <TextBlock Text="仅展示已获取的消息；没有标记的日期不代表当天没有重置。" Foreground="#5B6B7E" FontSize="11" TextWrapping="Wrap" Margin="3,20,3,0" />
+  </StackPanel>
+</UserControl>

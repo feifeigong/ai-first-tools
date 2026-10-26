@@ -46,7 +46,7 @@ def _has_draft(parent: int) -> bool | None:
         return None
 
 
-def refresh() -> str:
+def refresh(*, passive: bool = False) -> str:
     if sys.platform != "win32":
         return "unsupported"
     # A reload only reconnects the UI, but do not do it while a task is active.
@@ -58,10 +58,10 @@ def refresh() -> str:
                 return "busy"
     except (OSError, sqlite3.Error, ValueError):
         return "unavailable"
-    return _windows()
+    return _windows(passive=True) if passive else _windows()
 
 
-def _windows() -> str:
+def _windows(*, passive: bool = False) -> str:
     from ctypes import wintypes as w
 
     user = ctypes.WinDLL("user32", use_last_error=True)
@@ -121,6 +121,11 @@ def _windows() -> str:
     if len(targets) != 1 or not owned(targets[0][0]):
         return "unavailable"
     parent, _ = targets[0]
+    if passive:
+        # Waiting for a draft to be sent must not repeatedly steal keyboard focus.
+        draft = _has_draft(parent)
+        if draft is not False:
+            return "draft" if draft else "unavailable"
     if user.IsIconic(parent):
         user.ShowWindow(parent, 9)
     user.SetForegroundWindow(parent)

@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from .common import appdata, codex_home, localappdata, norm, proxy_env, user_env
-from . import codex_import, copilot_import, copilot_local, doubao, imports
+from . import codex_history, codex_import, copilot_import, copilot_local, doubao, imports
 
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 SAFE_ID = re.compile(r"^[0-9A-Za-z_-]{6,80}$")
@@ -31,6 +31,7 @@ SOURCES = {
     "antigravity": "antigravity",
     "antigravity_cli": "antigravity",
     "codex": "codex",
+    "codex_cli": "codex",
     "chatgpt_work": "codex",
     "claude_code": "claude_code",
     "cowork": "cowork",
@@ -50,6 +51,11 @@ def app_dir() -> Path:
 
 
 def data_dir() -> Path:
+    preview = os.environ.get("AI_FIRST_MOVER_PREVIEW_DATA")
+    if preview:
+        path = Path(preview)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
     path = appdata() / "对话搬家"
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -119,6 +125,19 @@ def _run(args: list[str], extra_env: dict | None = None, timeout: int = 240):
         env=_env(extra_env),
         creationflags=CREATE_NO_WINDOW,
     )
+
+
+def _export(source: str, sid: str, path: Path, extra: dict):
+    args = ['export', sid, '--from', SOURCES[source], '--out', str(path)]
+    if SOURCES[source] == 'codex':
+        # Override only the export subprocess, never the destination environment.
+        env = _env({**TEST_ENV, **extra})
+        root = Path(env['CODEX_HOME']) if env.get('CODEX_HOME') else codex_home()
+        if root is None:
+            raise ValueError('没有找到本地记录，请先在原软件打开对话。')
+        with codex_history.export_home(root, sid) as snapshot:
+            return _run(args, {**extra, **({'CODEX_HOME': str(snapshot)} if snapshot else {})}, timeout=300)
+    return _run(args, extra, timeout=300)
 
 
 def _history_file() -> Path:
@@ -354,7 +373,7 @@ def move_one(source: str, session: dict, target: str, directory: str, details: d
         if source == "copilot_desktop":
             document = copilot_local.document(sid)
         else:
-            exported = _run(["export", sid, "--from", SOURCES[source], "--out", str(path)], src_env, timeout=300)
+            exported = _export(source, sid, path, src_env)
             if exported.returncode != 0:
                 detail = (exported.stderr or exported.stdout or "").strip()
                 log(f"export failed {source}/{sid}: {detail[-400:]}")
@@ -381,6 +400,78 @@ def move_one(source: str, session: dict, target: str, directory: str, details: d
         return "failed", "这条对话暂时不能搬。"
     finally:
         path.unlink(missing_ok=True)
+
+
+def export_document(source: str, session: dict) -> dict:
+    """Read a source once for the independent smart route; never write the source."""
+    source = str(session.get("source") or source)
+    sid = str(session.get("id", ""))
+    if source not in SOURCES or not SAFE_ID.fullmatch(sid):
+        raise ValueError("来源或会话编号不正确。")
+    if source == "claude_desktop":
+        from . import sources
+        turns = sources.claude_body(sid)
+        if not turns: raise ValueError("这条对话的正文不在本机。")
+        document = {"id": sid, "messages": [{"role": t["role"], "content": t["content"], **({"timestamp": t["timestamp"]} if t.get("timestamp") else {})} for t in turns]}
+    elif source == "copilot_desktop":
+        document = copilot_local.document(sid)
+    else:
+        extra = {}
+        if source == "doubao_work": extra["DOUBAO_WORK_DIR"] = str(doubao.workspace())
+        if SOURCES[source] == "antigravity" and session.get("root"): extra["ANTIGRAVITY_DIR"] = str(session["root"])
+        if source == "cowork":
+            from . import sources
+            root = sources._cowork_root()
+            if root is not None: extra["COWORK_SESSIONS_DIR"] = str(root)
+        if source == "chatgpt": extra["TXCRIPT_CHATGPT_ACTIVE_ONLY"] = "1"
+        with tempfile.TemporaryDirectory(prefix="ai-first-memory-export-") as scratch:
+            path = Path(scratch) / "source.json"
+            result = _export(source, sid, path, extra)
+            if result.returncode:
+                raise ValueError(_friendly(result.stderr or result.stdout or ""))
+            document = json.loads(path.read_text(encoding="utf-8"))
+    if not imports.has_conversation_body(document):
+        raise ValueError("这条对话没有可读取的正文。")
+    return document
+
+
+class DocumentJob:
+    """Full migration from a saved original archive, without another source export."""
+    def __init__(self, documents: list[dict], target: str, directory: str):
+        self.target, self.directory = target, directory
+        self.items = []
+        self.finished = False
+        self._lock = threading.Lock()
+        for item in documents:
+            self.items.append({"id": item["source_id"], "title": item["title"], "state": "waiting", "message": ""})
+        self.documents = documents
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        try:
+            for index, item in enumerate(self.documents):
+                details = {}
+                with self._lock: self.items[index]["state"] = "running"
+                try:
+                    if already_moved(item["source"], item["source_id"], self.target, self.directory):
+                        state, message = "skipped", "之前已经完整迁移到这里。"
+                    else:
+                        document = json.loads(item["original"].read_text(encoding="utf-8"))
+                        document["cwd"] = self.directory
+                        document["title"] = item["title"]
+                        with tempfile.TemporaryDirectory(prefix="ai-first-full-") as scratch:
+                            path = Path(scratch) / "source.json"
+                            path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+                            state, message = _import_document(path, document, self.target, details)
+                        if state == "ok": _record_move(item["source"], item["source_id"], self.target, self.directory)
+                except Exception as error:
+                    state, message = "failed", str(error) if isinstance(error, ValueError) else "完整迁移失败，原始档案已保留。"
+                with self._lock: self.items[index].update(state=state, message=message, **details)
+        finally:
+            with self._lock: self.finished = True
+
+    def snapshot(self):
+        return Job.snapshot(self)
 
 
 class Job:

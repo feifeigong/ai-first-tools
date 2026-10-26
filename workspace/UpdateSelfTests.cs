@@ -192,7 +192,7 @@ internal static class UpdateSelfTests
             File.WriteAllText(Path.Combine(area, "updates", "latest-release.json"), "null");
             var requests = 0;
             var window = new MainWindow(Path.Combine(area, "tools.json"), null, null, true,
-                new UpdateClient(new FakeHttp(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(++requests == 1 ? "[]" : JsonSerializer.Serialize(new[] { Release("0.3.99") })) })), () => now);
+                new UpdateClient(new FakeHttp(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(++requests == 1 ? "[]" : JsonSerializer.Serialize(new[] { Release("0.3.99") })) })), () => now, allowSyntheticUpdates: true);
             try
             {
                 Wait(window.CheckUpdatesAsync(false));
@@ -215,7 +215,7 @@ internal static class UpdateSelfTests
             var now = DateTimeOffset.UtcNow;
             var requests = 0;
             var window = new MainWindow(Path.Combine(root, "automatic-retry", "tools.json"), null, null, true,
-                new UpdateClient(new FakeHttp(_ => ++requests == 1 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new[] { Release("0.3.99") })) })), () => now);
+                new UpdateClient(new FakeHttp(_ => ++requests == 1 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new[] { Release("0.3.99") })) })), () => now, allowSyntheticUpdates: true);
             try
             {
                 Wait(window.CheckUpdatesAsync(false));
@@ -225,6 +225,15 @@ internal static class UpdateSelfTests
                 require(requests == 2 && ((System.Windows.Controls.TextBlock)window.FindName("UpdateTitle")).Text == "发现新版本 v0.3.99");
                 require(((System.Windows.Controls.Button)window.FindName("InstallUpdateButton")).IsEnabled);
             }
+            finally { window.ReleaseTools(); }
+        });
+
+        if (App.IsDevelopmentPreview) check("Development preview keeps real update requests disabled", () =>
+        {
+            var requests = 0;
+            var window = new MainWindow(Path.Combine(root, "preview-updates-disabled", "tools.json"), null, null, true,
+                new UpdateClient(new FakeHttp(_ => { requests++; return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[]") }; })));
+            try { Wait(window.CheckUpdatesAsync(true)); require(requests == 0); }
             finally { window.ReleaseTools(); }
         });
 

@@ -9,6 +9,15 @@ import subprocess
 from pathlib import Path
 
 REPOSITORY = "feifeigong/ai-first-tools"
+CODEX_IMPORT_CHECKS = {
+    'foreign_reasoning_is_lossless_history_not_provider_state',
+    'hosted_and_compaction_payloads_are_archived_not_replayed',
+    'complete_tool_pairs_and_identifier_protection_are_preserved',
+    'old_import_can_be_copied_once_and_new_import_still_deduplicates',
+    'unknown_or_malformed_history_is_still_rejected',
+    'normal_cursor_import_and_two_saved_followups_round_trip',
+    'compressed_project_history_listing_export_and_truncation_guard',
+}
 
 
 def validated_assets(directory: Path, release: str) -> list[Path]:
@@ -25,7 +34,9 @@ def validated_assets(directory: Path, release: str) -> list[Path]:
         expected = f"{digest}  {name}"
         if (source / f"SHA256SUMS-{architecture}.txt").read_text().strip() != expected:
             raise ValueError("DMG digest mismatch")
-        kinds = ("self", "smoke", "network", "update", 'resume') if int(release.rsplit('.',1)[1]) >= 15 else ("self", "smoke", "network", "update")
+        number = int(release.rsplit('.',1)[1])
+        kinds = ("self", "smoke", "network", "update", 'resume') if number >= 15 else ("self", "smoke", "network", "update")
+        if number >= 19: kinds += ('memory', 'reset', 'reset-rules', 'codex-import')
         for kind in kinds:
             report = source / f"{kind}-test.json"
             result = json.loads(report.read_text())
@@ -37,6 +48,18 @@ def validated_assets(directory: Path, release: str) -> list[Path]:
                 raise ValueError('Actual bundled auto-resume lifecycle checks are required')
             if kind=='smoke' and int(release.rsplit('.',1)[1])>=15 and result['checks'].get('autoResumeControlBridge') is not True:
                 raise ValueError('Native auto-resume page and bridge check is required')
+            if kind == 'smoke' and number >= 19 and not {'resetCalendarBridge','independentReminderSwitch'} <= set(result['checks']):
+                raise ValueError('Native reset calendar and independent switch checks are required')
+            if kind == 'memory' and not {'database_scope_guard','original_archive','bundled_stdio_mcp_handshake','discarded_legacy_entry_no_longer_blocks_move','source_badge_uses_current_entry','current_schema_rollback_preserves_legacy_orphan'} <= set(result['checks']):
+                raise ValueError('Native complete archive, read-only memory and repeat-move checks are required')
+            if kind == 'reset' and not {'frozenSharedRuleBridgeAndSwitch','independentAfterLauncherExit','singleOwnedNotifier','nativeWindowClosePreservesNotifier','nativeChinesePopupHasNoAutomaticResumeAction','anotherPackageCannotStopNotifier','cooperativeUpdateRestoresNotifier','stopPreservesPreferences'} <= set(result['checks']):
+                raise ValueError('Native reset notification lifecycle checks are required')
+            if kind == 'reset-rules' and (len(result['checks']) < 20 or set(result.get('sharedWindowsSources',{})) != {'ResetNewsService.cs','ResetNewsDiscovery.cs','ResetNewsPresentation.cs','ResetCalendarModel.cs'}):
+                raise ValueError('Actual shared Windows reset rule checks are required')
+            if kind == 'codex-import' and (not CODEX_IMPORT_CHECKS <= set(result['checks'])
+                    or result.get('modelRequests') != 0 or result.get('nativeContinuationVerified') is not False
+                    or result.get('host') != 'Darwin' or result.get('frozen') is not True):
+                raise ValueError('Packaged Mac history compatibility and compressed export checks are required')
             if kind != "smoke" and (result.get("architecture") != architecture or result.get("version", {}).get("release") != release):
                 raise ValueError("Native report version or architecture mismatch")
             target = directory / f"{kind}-test-{architecture}.json"

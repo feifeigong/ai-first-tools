@@ -41,6 +41,8 @@ def check(package: Path):
             if path.stat().st_size != entry["size"] or digest != entry["sha256"]:
                 errors.append("Update manifest hash mismatch: " + entry["path"])
     engine = package / "tools" / "dialog-mover-v0.3" / "_internal" / "bin"
+    if not (engine / "AI一手记忆服务.exe").is_file():
+        errors.append("Missing bundled memory retrieval service")
     for relative in ("tools/auto-resume/AI一手续跑后台.exe", "tools/auto-resume/_internal/python313.dll", "tools/auto-resume/_internal/bin/vendor/x86_64-pc-windows-msvc/bin/codex.exe", "assets/auto-resume-bundled.ps1", "THIRD-PARTY-LICENSES/Codex-LICENSE.txt", "THIRD-PARTY-LICENSES/Codex-NOTICE.txt", "THIRD-PARTY-LICENSES/Codex-runtime.json"):
         if not (package / relative).is_file():
             errors.append("Missing bundled auto-resume dependency: " + relative)

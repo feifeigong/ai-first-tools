@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import asdict
+from typing import Callable
 
 from .app_server import AppServerClient, fetch_live_rate_limits
 from .config import AppConfig
@@ -27,10 +28,21 @@ def tick(
     cfg: AppConfig,
     state: AppState | None = None,
     quota_reader: "LiveQuota | None" = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> AppState:
     now = time.time()
     state_dir = cfg.resolved_state_dir()
     state = state or load_state(state_dir)
+
+    def stopping() -> bool:
+        if should_stop is not None and should_stop():
+            state.last_status = "stopping"
+            save_state(state_dir, state)
+            return True
+        return False
+
+    if stopping():
+        return state
     if not cfg.enabled:
         state.last_status = "disabled"
         save_state(state_dir, state)
@@ -41,11 +53,18 @@ def tick(
     reader = quota_reader or LiveQuota(cfg)
     try:
         snapshot = reader.read(now)
+        if stopping():
+            return state
         if cfg.auto_redeem_weekly_reset and snapshot:
             previous_note = state.last_reset_credit_note
-            snapshot, redeem_note = reader.try_redeem(snapshot, state, now)
+            if should_stop is None:
+                snapshot, redeem_note = reader.try_redeem(snapshot, state, now)
+            else:
+                snapshot, redeem_note = reader.try_redeem(snapshot, state, now, should_stop=should_stop)
             if redeem_note and redeem_note != previous_note:
                 _log(cfg, redeem_note)
+        if stopping():
+            return state
         recovered, reason = (
             quota_recovered(
                 previous,
@@ -84,6 +103,8 @@ def tick(
             else []
         )
         _log(cfg, f"quota={reason} source={state.last_quota_source} waiting={len(waiting)}")
+        if stopping():
+            return state
         for item in waiting:
             current = state.threads.get(item.thread_id)
             if current and not current.enabled:
@@ -100,6 +121,8 @@ def tick(
             )
 
         for thread_id, task in list(state.threads.items()):
+            if stopping():
+                return state
             if not task.enabled:
                 continue
             if process_running(task.pid, started_at=task.last_resume_at or None):
@@ -127,7 +150,7 @@ def tick(
                 if snapshot:
                     task.resets_at = hint_reset_at(snapshot, cfg.ready_used_percent) or task.resets_at
                 continue
-            _resume_one(cfg, state, task, match, now)
+            _resume_one(cfg, state, task, match, now, should_stop=should_stop)
 
         save_state(state_dir, state)
         return state
@@ -148,7 +171,7 @@ def watch_forever(cfg: AppConfig) -> None:
     try:
         while not stop_file.exists():
             try:
-                state = tick(cfg, quota_reader=reader)
+                state = tick(cfg, quota_reader=reader, should_stop=stop_file.exists)
             except Exception as exc:
                 _log(cfg, f"tick failed: {exc}")
                 _wait_or_stop(stop_file, max(5.0, float(cfg.poll_seconds)))
@@ -201,6 +224,7 @@ class LiveQuota:
         snapshot: QuotaSnapshot,
         state: AppState,
         now: float,
+        should_stop: Callable[[], bool] | None = None,
     ) -> tuple[QuotaSnapshot, str]:
         if self.client is None:
             return snapshot, ""
@@ -210,6 +234,7 @@ class LiveQuota:
             state=state,
             now=now,
             client=self.client,
+            should_stop=should_stop,
         )
 
     def _live_payload(self) -> dict:
@@ -260,17 +285,29 @@ def _resume_one(
     task,
     waiting: WaitingSession | None,
     now: float,
+    should_stop: Callable[[], bool] | None = None,
 ) -> None:
+    if should_stop is not None and should_stop():
+        state.last_status = "stopping"
+        return
     if waiting:
         task.mark = waiting.mark
         task.cwd = waiting.cwd or task.cwd
         task.resets_at = waiting.resets_at
     log_file = cfg.resolved_state_dir() / "logs" / f"{task.thread_id}.log"
+    previous = (task.phase, task.status, task.last_resume_at)
     task.phase = "submitting"
     task.status = "resuming"
     task.last_resume_at = now
     save_state(cfg.resolved_state_dir(), state)
     try:
+        # The write-ahead record is not a submitted turn. If the user stopped us
+        # during that save, restore it rather than leaving a false pending turn.
+        if should_stop is not None and should_stop():
+            task.phase, task.status, task.last_resume_at = previous
+            state.last_status = "stopping"
+            save_state(cfg.resolved_state_dir(), state)
+            return
         pid, mode = spawn_resume(
             thread_id=task.thread_id,
             prompt=cfg.resume_prompt,

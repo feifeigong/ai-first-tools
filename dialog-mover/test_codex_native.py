@@ -101,9 +101,18 @@ class NativeCodexImportTests(unittest.TestCase):
             try:
                 server.request("initialize", {"clientInfo": {"name": "dialog_mover_test", "version": "1.0"}, "capabilities": {"experimentalApi": True}})
                 server.request("thread/list", {"limit": 1})
-                with patch.dict(os.environ, env, clear=True), patch.object(mover, "TEST_ENV", env):
+                cursor_root = Path(env['HOME']) / ('Library/Application Support/Cursor/User' if sys.platform=='darwin' else 'AppData/Roaming/Cursor/User')
+                env['CURSOR_DESKTOP_USER_DIR'] = str(cursor_root)
+                with patch.dict(os.environ, env, clear=True), patch.object(mover, "TEST_ENV", env), patch.object(mover,'_history_file',return_value=base/'history.json'):
+                    seeded = {}
+                    self.assertEqual(mover._import_document(source,document,'cursor_desktop',seeded)[0],'ok')
+                    cursor_database = cursor_root / 'globalStorage/state.vscdb'
+                    original_cursor = hashlib.sha256(cursor_database.read_bytes()).hexdigest()
                     details = {}
-                    self.assertEqual(mover._import_document(source, document, "chatgpt_work", details)[0], "ok")
+                    with patch.object(mover,'log') as diagnostics:
+                        result = mover.move_one('cursor_desktop',{'id':seeded['importedId'],'title':'合成含历史思考的对话'},'chatgpt_work',str(directory),details)
+                    self.assertEqual(result[0],'ok',(result,str(diagnostics.call_args)))
+                    self.assertEqual(hashlib.sha256(cursor_database.read_bytes()).hexdigest(),original_cursor)
                 server.request("thread/resume", {"threadId": details["importedId"], "cwd": str(directory), "excludeTurns": True,
                                                  "sandbox": "read-only", "approvalPolicy": "on-request"})
                 turns = server.request("thread/turns/list", {"threadId": details["importedId"], "itemsView": "full"})["data"]
@@ -116,7 +125,15 @@ class NativeCodexImportTests(unittest.TestCase):
                     self.assertEqual(item["arguments"], {"index": index})
                     self.assertEqual(item["contentItems"][0]["text"], f"Synthetic result {index}")
                 self.assertEqual(items[-1]["item"]["text"], "Synthetic final answer")
-                self.assertEqual(sum(entry["item"]["type"] == "reasoning" for entry in items), 3)
+                self.assertFalse(any(entry['item']['type']=='reasoning' for entry in items))
+                historical_thinking = [entry['item']['text'] for entry in items if entry['item']['type']=='agentMessage'
+                                       and entry['item']['text'].startswith('[迁入的历史思考')]
+                self.assertEqual(len(historical_thinking),3)
+                for index,text in enumerate(historical_thinking): self.assertIn(f'Synthetic reasoning {index}',text)
+                records = [json.loads(line) for line in Path(details['location']).read_text(encoding='utf-8').splitlines()]
+                archived = [entry['dialog_mover_original']['response_item'] for entry in records
+                            if entry.get('dialog_mover_original',{}).get('reason')=='foreign_reasoning']
+                self.assertEqual([item['summary'][0]['text'] for item in archived],[f'Synthetic reasoning {index}' for index in range(3)])
             finally:
                 server.close()
 

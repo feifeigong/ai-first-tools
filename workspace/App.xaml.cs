@@ -8,6 +8,7 @@ namespace AIFirst.Workspace;
 
 public partial class App : Application
 {
+    internal static bool IsDevelopmentPreview => File.Exists(Path.Combine(AppContext.BaseDirectory, "development-preview.json"));
     private Mutex? instance;
     private Mutex? installationGuard;
     private InstanceActivation? activation;
@@ -15,6 +16,31 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs args)
     {
         base.OnStartup(args);
+        if (args.Args.Contains("--reset-monitor"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            try
+            {
+                using var service = new ResetNewsService();
+                Shutdown(await ResetMonitorHost.RunAsync(service, new AutoResumeControl()));
+            }
+            catch (Exception exception) { Log(exception); Shutdown(1); }
+            return;
+        }
+        if (args.Args.Contains("--render-reset-ui"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var output = Option(args.Args, "--render-reset-ui");
+            Shutdown(output is null ? 2 : ResetVisualTests.Render(output));
+            return;
+        }
+        if (args.Args.Contains("--check-public-reset-feed"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var output = Option(args.Args, "--check-public-reset-feed");
+            Shutdown(output is null ? 2 : await ResetPublicCheck.RunAsync(output));
+            return;
+        }
         if (args.Args.Contains("--update-handoff-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -43,6 +69,7 @@ public partial class App : Application
         }
         if (args.Args.Contains("--self-test"))
         {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
             var report = Option(args.Args, "--report") ?? Path.Combine(AppContext.BaseDirectory, "self-test.json");
             var code = SelfTests.Run(report);
             Shutdown(code);
@@ -55,7 +82,9 @@ public partial class App : Application
             Shutdown();
             return;
         }
-        var configuration = Option(args.Args, "--config") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AI一手工具工作台", "tools.json");
+        var configuration = Option(args.Args, "--config") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AI一手工具工作台", IsDevelopmentPreview ? "memory-preview" : "", "tools.json");
+        if (IsDevelopmentPreview)
+            Environment.SetEnvironmentVariable("AI_FIRST_MOVER_PREVIEW_DATA", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AI一手工具工作台", "memory-preview", "mover"));
         var key = ToolRepository.ConfigurationKey(configuration);
         instance = new Mutex(true, "Local\\AI_FIRST_TOOL_WORKSPACE_" + key, out var isNew);
         if (!isNew)
@@ -65,15 +94,16 @@ public partial class App : Application
             return;
         }
         installationGuard = new Mutex(false, "Local\\AI_FIRST_TOOLS_RUNNING");
+        var selection = ResolveToolSelection(args.Args);
         MainWindow window;
         var updateFixture = Option(args.Args, "--update-fixture");
         if (updateFixture is not null)
         {
             if (Option(args.Args, "--config") is null || UpdateRunner.IsInstalled(AppContext.BaseDirectory)) { Shutdown(2); return; }
-            window = new MainWindow(configuration, Option(args.Args, "--tool"), Option(args.Args, "--health-report"), true, UpdateSelfTests.FixtureClient(updateFixture));
+            window = new MainWindow(configuration, selection.Executable, Option(args.Args, "--health-report"), true, UpdateSelfTests.FixtureClient(updateFixture));
         }
-        else window = new MainWindow(configuration, Option(args.Args, "--tool"), Option(args.Args, "--health-report"), Option(args.Args, "--config") is not null);
-        window.InitialToolId = Option(args.Args, "--page");
+        else window = new MainWindow(configuration, selection.Executable, Option(args.Args, "--health-report"), Option(args.Args, "--config") is not null);
+        window.InitialToolId = selection.Page;
         MainWindow = window;
         activation = new InstanceActivation(key, () => Dispatcher.BeginInvoke(() =>
         {
@@ -91,7 +121,7 @@ public partial class App : Application
             Shutdown(1);
         };
         window.Show();
-        try { await AutoResumeRuntime.RestoreAsync(AppContext.BaseDirectory); }
+        try { if (!IsDevelopmentPreview) await AutoResumeRuntime.RestoreAsync(AppContext.BaseDirectory); }
         catch (Exception exception) { Log(exception); window.ShowStatus("后台续跑暂未恢复，请打开“Codex 自动续跑”后重新开启。"); }
     }
 
@@ -99,6 +129,19 @@ public partial class App : Application
     {
         var position = Array.IndexOf(arguments, name);
         return position >= 0 && position + 1 < arguments.Length ? arguments[position + 1] : null;
+    }
+
+    internal static (string? Executable, string? Page) ResolveToolSelection(string[] arguments)
+    {
+        var executable = Option(arguments, "--tool");
+        var page = Option(arguments, "--page");
+        // Built-in IDs select catalog pages. Only executable paths override a tool.
+        if (executable is "dialog-mover" or "auto-resume")
+        {
+            page ??= executable;
+            executable = null;
+        }
+        return (executable, page);
     }
 
     internal static void Log(Exception exception)

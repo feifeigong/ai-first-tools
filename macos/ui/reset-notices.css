@@ -1,0 +1,76 @@
+.resume-page { padding: 40px 32px; background: #f5f7fb; }
+.resume-inner { max-width: 1040px; }
+.resume-heading { display: flex; align-items: center; gap: 18px; margin: 0 0 30px; }
+.resume-heading > img { flex: 0 0 56px; padding: 10px; background: #fff; border: 1px solid #e0e7f0; border-radius: 16px; object-fit: contain; }
+.resume-heading h1 { margin: 0 0 5px; font-size: 29px; font-weight: 700; letter-spacing: -.5px; }
+.resume-heading p, .resume-card p { margin: 7px 0; }
+.resume-card { margin-bottom: 24px; padding: 28px 30px; border: 1px solid #dfe6ef; border-radius: 18px; background: #fff; }
+.resume-card h2 { margin: 0; font-size: 20px; font-weight: 650; }
+.resume-card h3 { margin: 0; font-size: 15px; font-weight: 650; }
+.resume-card-top, .resume-title-line, .resume-actions, .resume-startup, .reset-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.resume-title-line { justify-content: flex-start; flex-wrap: wrap; gap: 12px; }
+.resume-actions { flex-shrink: 0; }
+.resume-muted { font-size: 14px; color: #63738a; line-height: 1.65; }
+.resume-status { color: #52637a; background: #f0f3f7; padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 6px; }
+.resume-status[data-state="on"] { color: #1c7457; background: #eaf5ef; }
+.resume-explanation { padding-top: 16px; }
+.resume-startup { border-top: 1px solid #e8edf3; margin-top: 22px; padding-top: 20px; }
+.resume-startup p { margin: 3px 0 0; }
+.resume-switch { width: 52px; height: 30px; padding: 4px; border-radius: 16px; cursor: pointer; transition: background .16s; }
+.resume-switch::after { width: 22px; height: 22px; box-shadow: 0 1px 3px #172a4019; transition: transform .16s; }
+.resume-switch[aria-checked="true"]::after { margin-left: 0; transform: translateX(22px); }
+.resume-switch:disabled { cursor: default; opacity: .45; }
+.resume-outline { border: 1px solid #dce4ef; background: #fff; border-radius: 10px; padding-inline: 16px; }
+.resume-error { margin: 14px 0 0; line-height: 1.6; }
+.reset-card { padding-bottom: 18px; }
+.reset-card .resume-card-top { margin-bottom: 24px; }
+.reset-status { padding: 15px 18px; border-radius: 11px; background: #f5f7fa; margin-bottom: 26px; color: #35485e; }
+.reset-status strong { font-size: 14px; font-weight: 600; }
+.reset-status p { margin: 3px 0 0; }
+.reset-status[hidden] { display: none; }
+.reset-calendar-layout { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(245px, .94fr); gap: 30px; }
+.reset-month-nav { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 20px; }
+.reset-kicker { color: #738198; font-size: 12px; }
+.reset-month-nav h3 { font-size: 22px; letter-spacing: -.2px; margin-top: 4px; }
+.reset-calendar-actions { display: flex; align-items: center; gap: 2px; }
+.reset-icon-button { width: 36px; height: 40px; border: 0; background: transparent; color: #64758d; border-radius: 8px; padding: 8px; cursor: pointer; }
+.reset-icon-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.reset-icon-button:hover { background: #eef4fc; color: #0068d9; }
+.reset-weekdays, .reset-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.reset-weekdays { padding-bottom: 10px; color: #748198; text-align: center; font-size: 12px; }
+.reset-day { min-width: 0; min-height: 65px; padding: 8px 2px; border-radius: 9px; border: 1px solid transparent; background: transparent; cursor: pointer; color: #26374a; }
+.reset-day:hover { background: #f5f8fc; }
+.reset-day[aria-pressed="true"] { background: #eaf3ff; border-color: #bcd7f5; color: #0068d9; }
+.reset-day[data-outside="true"] { color: #a4afbc; }
+.reset-day[data-today="true"] .reset-day-number { color: #0068d9; font-weight: 700; }
+.reset-day-number { display: block; font-size: 17px; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.reset-day-label { display: block; min-height: 17px; line-height: 1.4; font-size: 11px; margin-top: 5px; white-space: nowrap; }
+[data-kind="upcoming"] { color: #0068d9; }
+[data-kind="completed"] { color: #207a58; }
+[data-kind="banked"] { color: #7252a3; }
+[data-kind="history"] { color: #65758b; }
+.reset-legend { display: flex; gap: 10px 16px; flex-wrap: wrap; border-top: 1px solid #edf0f5; padding-top: 15px; margin-top: 14px; font-size: 12px; }
+.reset-legend > span::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin: 0 6px 1px 0; }
+.reset-details { border-left: 1px solid #e8edf3; padding: 4px 0 0 28px; min-width: 0; scroll-margin-top: 16px; }
+.reset-details > h3 { margin-bottom: 25px; font-size: 20px; }
+.reset-event + .reset-event { margin-top: 26px; border-top: 1px solid #edf0f5; padding-top: 22px; }
+.reset-event h4 { margin: 14px 0 8px; font-size: 17px; line-height: 1.5; }
+.reset-badge { display: inline-block; border-radius: 6px; padding: 5px 9px; font-size: 12px; background: #eff2f6; color: #65758b; }
+.reset-badge[data-kind="completed"] { background: #eaf5ef; color: #207a58; }
+.reset-badge[data-kind="upcoming"] { background: #eaf3ff; color: #0068d9; }
+.reset-badge[data-kind="banked"] { background: #f1ecf8; color: #7252a3; }
+.reset-event .reset-time { margin-top: 14px; font-size: 17px; font-weight: 600; color: #344d69; line-height: 1.5; }
+.reset-event .reset-note { font-size: 12px; margin-top: 12px; }
+.reset-post { padding: 0; margin-top: 13px; min-height: 36px; text-align: left; color: #0068d9; }
+.reset-recent { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.reset-recent:empty { display: none; }
+.reset-recent > button { padding: 9px 12px; border: 1px solid #e1e7f0; border-radius: 9px; background: #fff; color: #52657e; font-size: 12px; cursor: pointer; }
+.reset-recent > button:hover { background: #f4f8fd; }
+.reset-footer { border-top: 1px solid #e8edf3; padding-top: 17px; margin-top: 23px; }
+.reset-footer p { font-size: 12px; }
+.resume-bottom-note { font-size: 13px; color: #718097; line-height: 1.7; margin: 2px 2px 18px; }
+.reset-day:focus, .reset-icon-button:focus, .reset-recent > button:focus { outline: none; }
+.reset-day:focus-visible, .reset-icon-button:focus-visible, .reset-recent > button:focus-visible { outline: 2px solid #0068d9; outline-offset: 2px; }
+@media (max-width: 1120px) { :root { --workspace-rail: 164px; } .resume-page { padding: 28px 24px; } .resume-card { padding: 24px; } .reset-calendar-layout { gap: 22px; } .reset-details { padding-left: 22px; } }
+@media (max-width: 930px) { .reset-calendar-layout { grid-template-columns: 1fr; } .reset-details { border-left: 0; border-top: 1px solid #e8edf3; padding: 24px 0 0; } .reset-day { min-height: 64px; } .resume-heading h1 { font-size: 26px; } }
+@media (max-width: 680px) { .resume-page { padding: 22px 16px; } .resume-card { padding: 22px 18px; } .resume-card-top { gap: 12px; } .resume-actions { gap: 9px; } .resume-actions .resume-outline { padding-inline: 10px; } .resume-heading { gap: 12px; } .resume-title-line { gap: 6px; } .resume-card h2 { font-size: 18px; } }

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from .config import AppConfig
 from .quota import (
@@ -29,6 +29,7 @@ def try_redeem_weekly_reset(
     state: AppState,
     now: float,
     client: QuotaClient,
+    should_stop: Callable[[], bool] | None = None,
 ) -> tuple[QuotaSnapshot, str]:
     """Use a reset credit only after confirming weekly quota is exhausted.
 
@@ -36,6 +37,8 @@ def try_redeem_weekly_reset(
     live app-server client; unit tests never construct that client.
     """
     ready = cfg.ready_used_percent
+    if should_stop is not None and should_stop():
+        return snapshot, "stopped-before-redeem"
     need, reason = weekly_needs_reset(snapshot, ready)
     if not need:
         return snapshot, ""
@@ -48,6 +51,8 @@ def try_redeem_weekly_reset(
         source="app-server",
         fetched_at=now,
     )
+    if should_stop is not None and should_stop():
+        return fresh or snapshot, "stopped-before-redeem"
     if fresh is None:
         return snapshot, "redeem-reread-failed"
 
@@ -63,6 +68,10 @@ def try_redeem_weekly_reset(
         state.last_reset_credit_note = f"skip-{credit_reason}"
         return fresh, state.last_reset_credit_note
 
+    # The final cancellation boundary is before sending consume. A request that has
+    # already reached the service cannot be recalled; its result is still recorded.
+    if should_stop is not None and should_stop():
+        return fresh, "stopped-before-redeem"
     state.last_reset_credit_at = now
     try:
         result = client.consume_reset_credit(fresh.reset_credit_id)

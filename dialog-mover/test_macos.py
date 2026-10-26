@@ -24,6 +24,29 @@ import updates
 
 
 class MacPathsTests(unittest.TestCase):
+    def test_preview_bundle_identity_uses_prepared_metadata_without_changing_formal_source_version(self):
+        import ast
+        tree = ast.parse((ROOT/'macos/AI-First-Tools.spec').read_text(encoding='utf-8'))
+        assignments = [node for node in tree.body if isinstance(node,ast.Assign)
+                       and any(isinstance(target,ast.Name) and target.id in {'root','resources','version'} for target in node.targets)]
+        bundle = next(node.value for node in tree.body if isinstance(node,ast.Assign)
+                      and any(isinstance(target,ast.Name) and target.id=='app' for target in node.targets))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root/'macos').mkdir()
+            resources = root/'artifacts/macos/resources';resources.mkdir(parents=True)
+            formal = {'version':'0.4.0','release':'synthetic'}
+            (root/'macos/version.json').write_text(json.dumps(formal))
+            for preview in (True,False):
+                (resources/'version.json').write_text(json.dumps({**formal,'developmentPreview':preview}))
+                namespace={'json':json,'Path':Path,'SPECPATH':str(root/'macos')}
+                exec(compile(ast.Module(body=assignments,type_ignores=[]),'<bundle-metadata>','exec'),namespace)
+                namespace.update(collection=object(),BUNDLE=lambda *args,**kwargs:kwargs)
+                actual=eval(compile(ast.Expression(bundle),'<bundle-identity>','eval'),namespace)
+                self.assertEqual(actual['bundle_identifier'],'cn.aifirst.tools.preview' if preview else 'cn.aifirst.tools')
+                self.assertEqual('本地预览' in actual['info_plist']['CFBundleDisplayName'],preview)
+            self.assertEqual(json.loads((root/'macos/version.json').read_text()),formal)
+
     def test_smoke_profile_is_empty_without_initializing_destination_stores(self):
         from entry import isolate_profile
         from main import AGENTS
@@ -364,13 +387,18 @@ class MacResourceTests(unittest.TestCase):
         window.events.loaded.wait.return_value = True
         window._ai_first_content_attached = True
         window._ai_first_bundled_file_load = True
-        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True, None, True]
+        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True, None, True, None, True]
         api = MacApi(smoke=True)
         api._smoke_check_calls = 1
+        api.auto_resume_control('status')
+        api.reset_news_control('status')
         with tempfile.TemporaryDirectory() as temporary:
             report = Path(temporary) / "smoke.json"
             smoke_check(window, api, report)
-            self.assertTrue(json.loads(report.read_text())["passed"])
+            result=json.loads(report.read_text())
+            self.assertTrue(result["passed"])
+            self.assertTrue(result['checks']['resetCalendarBridge'])
+            self.assertTrue(result['checks']['independentReminderSwitch'])
         self.assertEqual(window.mock_calls[0], unittest.mock.call.events.loaded.wait(45))
         window.destroy.assert_called_once()
 
@@ -380,9 +408,11 @@ class MacResourceTests(unittest.TestCase):
         window = Mock()
         window._ai_first_content_attached = False
         window.events.loaded.wait.return_value = True
-        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True, None, True]
+        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True, None, True, None, True]
         api = MacApi(smoke=True)
         api._smoke_check_calls = 1
+        api.auto_resume_control('status')
+        api.reset_news_control('status')
         with tempfile.TemporaryDirectory() as temporary:
             report = Path(temporary) / "smoke.json"
             smoke_check(window, api, report)

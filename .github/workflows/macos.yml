@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'macos/**'
+      - 'workspace/Reset*.cs'
       - 'auto-resume/**'
       - 'dialog-mover/**'
       - 'txcript/**'
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - 'macos/**'
+      - 'workspace/Reset*.cs'
       - 'auto-resume/**'
       - 'dialog-mover/**'
       - 'txcript/**'
@@ -42,8 +44,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
       - name: Install native Python dependencies
         run: python -m pip install -r macos/requirements.txt
+      - name: Build shared reset rules for isolated platform checks
+        run: dotnet build macos/ResetBridge/ResetBridge.csproj -c Release
       - name: Install Rust toolchain
         run: rustup toolchain install 1.96.0 --profile minimal && rustup default 1.96.0
       - uses: actions/cache/restore@v4
@@ -62,7 +69,7 @@ jobs:
       - name: Shared safety, Mac paths and isolated native imports
         working-directory: dialog-mover
         run: |
-          python -m unittest test_chatgpt test_close_safety test_doubao test_copilot test_copilot_import test_macos test_macos_updater test_macos_native test_codex_history test_macos_resume -v
+          python -m unittest test_memory test_codex_sources test_codex_compressed test_chatgpt test_close_safety test_doubao test_copilot test_copilot_import test_macos test_macos_updater test_macos_native test_codex_history test_macos_resume test_macos_reset test_macos_memory test_macos_parity_release test_macos_history -v
       - name: Prepare official Copilot test runtime with pinned integrity
         run: python scripts/prepare_copilot_audit.py
       - name: Native Copilot full history and strict resume without model requests
@@ -75,9 +82,9 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Prepare checksum-pinned native history reader for tests only
         run: python scripts/prepare_native_history_audit.py --architecture '${{ matrix.architecture }}'
-      - name: Native pagination and loopback-only continuation without model requests
+      - name: Native pagination without model requests
         working-directory: dialog-mover
-        run: python -m unittest test_codex_native test_codex_replay -v
+        run: python -m unittest test_codex_native -v
       - name: Package and test actual Cocoa app and DMG
         env:
           AI_FIRST_CI_UPDATE_TOKEN: ${{ github.token }}

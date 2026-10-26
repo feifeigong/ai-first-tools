@@ -14,6 +14,7 @@ from unittest.mock import patch
 from audit_import_targets import isolated_env
 from core import chatgpt, codex_import, imports, mover, sources
 from main import Api
+from test_copilot_import import desktop_index
 
 
 QWEN_SCHEMA = """
@@ -59,6 +60,8 @@ class ImportTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name)
         self.env = isolated_env(self.base)
+        self.env["COPILOT_HOME"] = str(self.base / "copilot")
+        desktop_index(Path(self.env["COPILOT_HOME"]))
         self.env.pop("ANTIGRAVITY_DIR")
         self.directory = self.base / "目的地"
         self.directory.mkdir()
@@ -198,7 +201,7 @@ class ImportTests(unittest.TestCase):
         self.assertFalse(items[0]["movable"])
         self.assertTrue(items[1]["movable"])
 
-    def test_api_exposes_all_supported_targets_without_splitting_source_chatgpt(self):
+    def test_api_exposes_existing_targets_and_separate_cli_source_only(self):
         with patch.object(sources, "installed", return_value=True), patch.object(sources, "unsupported_found", return_value=[]):
             result = Api().agents()
         targets = {item["id"]: item for item in result["targets"]}
@@ -209,6 +212,8 @@ class ImportTests(unittest.TestCase):
             self.assertTrue(targets[target]["readOnlyReason"])
         self.assertEqual([item["id"] for item in result["agents"]].count("chatgpt"), 1)
         self.assertNotIn("codex", [item["id"] for item in result["agents"]])
+        self.assertEqual([item["id"] for item in result["agents"]].count("codex_cli"), 1)
+        self.assertNotIn("codex_cli", targets)
 
     def test_api_validation_blocks_invalid_folder_and_uninstalled_targets(self):
         api = Api()

@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
+import plistlib
 import re
 import shutil
 import subprocess
@@ -15,6 +16,34 @@ import updater
 import updates
 
 STEPS = ["mounting", "checking_current", "checking_package", "copying", "preparing_helper", "verifying", "fingerprinting", "unmounting"]
+
+
+def standard_fixture(bundle: Path, root: Path) -> None:
+    """Test the formal updater with an isolated formal-identity copy of a preview.
+
+    The actual preview keeps its separate identity. Production validation still
+    rejects preview packages; only these dedicated temporary copies are changed.
+    """
+    root = root.resolve()
+    if (not root.name.startswith('ai-first-update-audit-')
+            or not root.is_relative_to(Path(tempfile.gettempdir()).resolve())
+            or bundle.is_symlink() or not bundle.resolve().is_relative_to(root)
+            or bundle.name != updater.APP_NAME):
+        raise updater.UpdateError('更新审计只能调整专用临时副本。')
+    info_path = bundle / 'Contents/Info.plist'
+    metadata_path = bundle / 'Contents/Resources/version.json'
+    if any(path.is_symlink() or not path.resolve().is_relative_to(root) for path in (info_path, metadata_path)):
+        raise updater.UpdateError('更新审计副本位置无效。')
+    info = plistlib.loads(info_path.read_bytes())
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+    if (info.get('CFBundleIdentifier') not in {'cn.aifirst.tools', 'cn.aifirst.tools.preview'}
+            or info.get('CFBundleExecutable') != updater.EXECUTABLE):
+        raise updater.UpdateError('更新审计副本归属不匹配。')
+    info['CFBundleIdentifier'] = 'cn.aifirst.tools'
+    info['CFBundleDisplayName'] = 'AI一手工具工作台'
+    metadata.pop('developmentPreview', None)
+    info_path.write_bytes(plistlib.dumps(info))
+    metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
 
 
 def load_fixture(path: Path, target: Path, report: Path) -> dict:
@@ -127,11 +156,14 @@ def audit_update(app: Path, report: Path) -> None:
             diagnostics["phase"] = "fixture"
             target = root / updater.APP_NAME
             fixture_command("copy_old_app", ["/usr/bin/ditto", str(app), str(target)])
+            standard_fixture(target, root)
             (target / "Contents/Resources/version.json").write_text(json.dumps({"version": "0.4.0", "release": "0.4.0-macos-preview.2"}))
             fixture_command("sign_old_app", ["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(target)])
             fixture = root / "fixture"
             fixture.mkdir()
             fixture_command("copy_new_app", ["/usr/bin/ditto", str(app), str(fixture / updater.APP_NAME)])
+            standard_fixture(fixture / updater.APP_NAME, root)
+            fixture_command("sign_new_app", ["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(fixture / updater.APP_NAME)])
             dmg = root / "fixture.dmg"
             fixture_command("create_dmg", ["/usr/bin/hdiutil", "create", "-volname", "AI First Update Audit", "-srcfolder", str(fixture), "-format", "UDZO", str(dmg)])
             with dmg.open("rb") as stream:

@@ -24,6 +24,31 @@ try {
     $initial=Invoke-BundledAction 'status'; Require($initial.installed -and !$initial.running)
     $value=Invoke-BundledAction 'start'; Require($value.running -and $value.watcherCount -eq 1);$checks.startWithoutExternalRuntime=$true
     $value=Invoke-BundledAction 'start'; Require($value.watcherCount -eq 1);$checks.singleInstance=$true
+    # Two independent packages share one synthetic state. An unused preview must
+    # reuse that owner and must not stop it while updating/removing itself.
+    $firstExecutable=$script:bundledExecutable
+    $secondRoot=Join-Path $fixture 'second-workspace'
+    New-Item -ItemType Directory -Path (Join-Path $secondRoot 'tools'),(Join-Path $secondRoot 'assets') -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $Package 'tools\auto-resume') -Destination (Join-Path $secondRoot 'tools\auto-resume') -Recurse
+    Copy-Item -LiteralPath (Join-Path $Package 'AI一手工具工作台.exe') -Destination $secondRoot
+    foreach($name in @('auto-resume-bundled.ps1','auto-resume-control.ps1','tool-catalog.json')) { Copy-Item -LiteralPath (Join-Path $Package ('assets\'+$name)) -Destination (Join-Path $secondRoot 'assets') }
+    [IO.File]::WriteAllText((Join-Path $secondRoot 'update-manifest.json'),'{"version":"test","files":[]}')
+    $script:bundledExecutable=Join-Path $secondRoot 'tools\auto-resume\AI一手续跑后台.exe'
+    $ownerBefore=@(Get-BundledWatchers)[0].ProcessId
+    $value=Invoke-BundledAction 'start';Require($value.running -and $value.watcherCount -eq 1)
+    Require(@(Get-BundledWatchers)[0].ProcessId -eq $ownerBefore)
+    $value=Invoke-BundledAction 'autostart-on';Require($value.autostart -and $script:fakeRun -eq ('"'+$firstExecutable+'" watch --quiet'))
+    $value=Invoke-BundledAction 'autostart-off';Require(!$value.autostart -and $value.running)
+    $null=Invoke-BundledAction 'prepare-update';$null=Invoke-BundledAction 'uninstall'
+    Require(@(Get-BundledWatchers)[0].ProcessId -eq $ownerBefore)
+    $checks.secondPackageReusesOwnerAndLeavesItsWorkAlone=$true
+    $value=Invoke-BundledAction 'stop';Require(!$value.running)
+    $value=Invoke-BundledAction 'start';Require($value.running)
+    Require(@(Get-BundledWatchers)[0].ExecutablePath -eq $script:bundledExecutable)
+    $script:bundledExecutable=$firstExecutable
+    $value=Invoke-BundledAction 'stop';Require(!$value.running)
+    $value=Invoke-BundledAction 'start';Require($value.running)
+    $checks.explicitSwitchControlsSharedOwnerFromEitherPackage=$true
     $value=Invoke-BundledAction 'autostart-on';Require($value.autostart -and $value.running)
     $value=Invoke-BundledAction 'stop';Require(!$value.running -and !$value.autostart)
     Start-Sleep -Seconds 2;Require(!(Invoke-BundledAction 'status').running);$checks.stopRemainsStopped=$true

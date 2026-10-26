@@ -13,8 +13,10 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 
 from .common import appdata, as_millis, codex_home, make_group, make_session, read_db
+from . import codex_history
 
 
 _WEB_CACHE = {"stamp": 0.0, "data": None, "force": False}
@@ -153,6 +155,144 @@ def _catalog(root: Path) -> tuple[list[dict], bool]:
     return [], False
 
 
+def thread_metadata(path: Path | None) -> dict:
+    return codex_history.metadata(path)
+
+
+def project_layout(root: Path) -> dict:
+    """Project association metadata only; never load authentication/account atoms."""
+    path = root / '.codex-global-state.json'
+    if not path.is_file():
+        return {}
+    try:
+        raw = path.read_text(encoding='utf-8')
+        result = {}
+        with closing(sqlite3.connect(':memory:')) as db:
+            for key in ('local-projects', 'thread-project-assignments', 'projectless-thread-ids', 'thread-workspace-root-hints'):
+                value = db.execute('SELECT json_extract(?, ?)', (raw, '$."' + key + '"')).fetchone()[0]
+                if value:
+                    result[key] = json.loads(value)
+        return result
+    except (OSError, ValueError, sqlite3.Error):
+        return {}
+
+
+def _project_for_thread(state, by_id, by_path, thread_id, row, cached):
+    assignment = (state.get('thread-project-assignments') or {}).get(thread_id) or {}
+    if assignment.get('projectOrigin') == 'chatgpt' or assignment.get('projectKind', 'local') != 'local':
+        return None
+    project = by_id.get(assignment.get('projectId'))
+    project = project or by_id.get(cached.get('project_id')) or by_id.get(row.get('project_id'))
+    if project is None and thread_id not in (state.get('projectless-thread-ids') or []):
+        hint = (state.get('thread-workspace-root-hints') or {}).get(thread_id) or cached.get('cwd') or row.get('cwd') or ''
+        matches = by_path.get(_norm(hint), [])
+        project = matches[0] if matches else None
+    return project
+
+
+def _project_maps(root, state):
+    by_id, by_path = {}, {}
+    for key, item in (state.get('local-projects') or {}).items():
+        project = {'id': key, 'title': item.get('name')}
+        by_id[key] = project
+        for path in item.get('rootPaths') or []:
+            by_path.setdefault(_norm(path), []).append(project)
+    database = root / 'state_5.sqlite'
+    if database.is_file():
+        for item in _rows(database, 'SELECT p.id, p.name, r.path FROM projects p JOIN project_roots r ON r.project_id=p.id'):
+            matches = by_path.get(_norm(item['path']), [])
+            if matches:
+                by_id[item['id']] = next((p for p in matches if p['title'] == item['name']), matches[0])
+    return by_id, by_path
+
+
+def terminal_history_ids(root: Path) -> set[str]:
+    """Read only native TUI history prefixes; do not decode or retain prompt text."""
+    ids = set()
+    path = root / "history.jsonl"
+    if not path.is_file() or path.is_symlink():
+        return ids
+    prefix = re.compile(rb'^\s*\{\s*"session_id"\s*:\s*"([0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})"\s*,\s*"ts"\s*:\s*\d+\s*,\s*"text"\s*:')
+    try:
+        with path.open("rb") as stream:
+            while start := stream.readline(256):
+                match = prefix.match(start)
+                tail = start
+                while tail and not tail.endswith(b"\n"):
+                    tail = stream.readline(65536)
+                if match and tail.endswith(b"\n") and tail.rstrip().endswith(b"}"):
+                    ids.add(match[1].decode("ascii").lower())
+    except OSError:
+        pass
+    return ids
+
+
+def is_cli_thread(row: dict, cached: dict, metadata: dict, *, terminal_history: bool = False) -> bool:
+    if terminal_history:
+        return True
+    # The persisted header wins over a stale desktop index. TUI origin names
+    # changed across versions; a desktop cache must not mask a native CLI source.
+    for item in (metadata, row, cached):
+        origin = str(item.get("originator") or "").strip().casefold()
+        source = item.get("source") or item.get("source_kind")
+        if source == "cli" or origin in {"codex_cli_rs", "codex-tui"}:
+            return True
+        if origin in {"codex desktop", "codex_work_desktop"} or source == "vscode":
+            return False
+    return False
+
+
+def cli_sessions(root: Path | None = None) -> list[dict]:
+    """Local CLI history only: no desktop account state or cloud reads."""
+    root = root or codex_home()
+    if root is None:
+        return []
+    files = codex_history.files(root)
+    archived = set(codex_history.files(root, 'archived_sessions'))
+    rows = {str(row["id"]).lower(): row for row in _rows(root / "state_5.sqlite", "SELECT * FROM threads")}
+    catalog, complete = _catalog(root)
+    cached = {str(row["thread_id"]).lower(): row for row in catalog}
+    layout = project_layout(root)
+    by_id, by_path = _project_maps(root, layout)
+    terminal_ids = terminal_history_ids(root)
+    names = {}
+    index = root / "session_index.jsonl"
+    if index.is_file():
+        with index.open("r", encoding="utf-8", errors="replace") as stream:
+            for line in stream:
+                try:
+                    item = json.loads(line)
+                    if isinstance(item, dict) and isinstance(item.get("id"), str):
+                        names[item["id"].lower()] = item
+                except ValueError:
+                    continue
+    sessions = []
+    for sid in dict.fromkeys([*rows, *cached, *files]):
+        row, entry = rows.get(sid, {}), cached.get(sid, {})
+        if sid in archived or row.get("archived") or entry.get("missing_candidate"):
+            continue
+        path = codex_history.resolve(root, sid, row.get('rollout_path') or '', files)
+        meta = thread_metadata(path)
+        if any(item.get("thread_source") in ("subagent", "guardian_review") or isinstance(item.get("source"), dict)
+               or str(item.get("source", "")).startswith("{") for item in (row, entry, meta)):
+            continue
+        # Current Desktop project membership beats historical launch origin.
+        # A shared cwd alone, without a complete Desktop catalog entry, does not.
+        if complete and entry and _project_for_thread(layout, by_id, by_path, sid, row, entry):
+            continue
+        if not is_cli_thread(row, entry, meta, terminal_history=sid in terminal_ids):
+            continue
+        renamed = names.get(sid, {})
+        title = renamed.get("thread_name") or row.get("name") or entry.get("display_title") or row.get("title") or ""
+        stamp = max(as_millis(row.get("recency_at_ms") or row.get("recency_at")), as_millis(entry.get("source_recency_at")))
+        stamp = stamp or as_millis(renamed.get("updated_at") or row.get("updated_at_ms") or row.get("updated_at"))
+        stamp = stamp or (int(path.stat().st_mtime * 1000) if path else 0)
+        cwd = str(row.get("cwd") or meta.get("cwd") or entry.get("cwd") or "")
+        sessions.append(make_session(sid, str(title), stamp, cwd, movable=path is not None, source="codex_cli",
+                                     note="" if path else "本地记录暂时无法读取，请在原软件打开后刷新"))
+    return sessions
+
+
 def local_data(root: Path | None = None) -> dict:
     root = root or codex_home()
     result = {"projects": [], "pinned": [], "recent": [], "mirrors": {}}
@@ -190,14 +330,14 @@ def local_data(root: Path | None = None) -> dict:
     catalog_by_id = {row["thread_id"]: row for row in catalog}
     candidates = [row["thread_id"] for row in catalog]
     candidates += [row["id"] for row in thread_rows if row["id"] not in catalog_by_id]
-    files = {path.stem[-36:]: path for path in (root / "sessions").rglob("rollout-*.jsonl")}
-    assignments = state.get("thread-project-assignments") or {}
-    projectless = set(state.get("projectless-thread-ids") or [])
+    files = codex_history.files(root)
+    archived = set(codex_history.files(root, 'archived_sessions'))
     pinned_ids = list(state.get("pinned-thread-ids") or [])
+    terminal_ids = terminal_history_ids(root)
     for thread_id in candidates:
         row = threads.get(thread_id) or {}
         cached = catalog_by_id.get(thread_id) or {}
-        if cached.get("missing_candidate") or row.get("archived"):
+        if cached.get("missing_candidate") or row.get("archived") or str(thread_id).lower() in archived:
             continue
         source = cached.get("source_kind") or row.get("source")
         provenance = row.get("thread_source") or cached.get("thread_source")
@@ -205,24 +345,21 @@ def local_data(root: Path | None = None) -> dict:
             continue
         if not row and not complete:
             continue
+        rollout = codex_history.resolve(root, str(thread_id), row.get('rollout_path') or '', files)
+        metadata = thread_metadata(rollout)
+        project = _project_for_thread(state, by_id, by_path, thread_id, row, cached)
+        desktop_project = bool(complete and cached and project)
+        if not desktop_project and is_cli_thread(row, cached, metadata, terminal_history=str(thread_id).lower() in terminal_ids):
+            continue
         cwd = str(row.get("cwd") or cached.get("cwd") or "")
         title = cached.get("display_title") or row.get("name") or row.get("title") or ""
         if row.get("name") and as_millis(row.get("updated_at_ms") or row.get("updated_at")) > as_millis(cached.get("source_updated_at")):
             title = row["name"]
         stamp = max(as_millis(row.get("recency_at_ms") or row.get("recency_at")), as_millis(cached.get("source_recency_at")))
         stamp = stamp or as_millis(row.get("updated_at_ms") or row.get("updated_at") or cached.get("source_updated_at"))
-        assignment = assignments.get(thread_id) or {}
-        project = by_id.get(assignment.get("projectId")) if assignment.get("projectKind", "local") == "local" else None
-        if project is None:
-            project = by_id.get(row.get("project_id"))
-        if project is None and thread_id not in projectless and assignment.get("projectOrigin") != "chatgpt":
-            hint = (state.get("thread-workspace-root-hints") or {}).get(thread_id) or cwd
-            matches = by_path.get(_norm(hint), [])
-            project = matches[0] if matches else None
-        work = row.get("originator") == "codex_work_desktop" or bool(re.search(r"[\\/]Documents[\\/]Codex[\\/]\d{4}-\d{2}-\d{2}[\\/]", cwd, re.I))
-        rollout = Path(row["rollout_path"]) if row.get("rollout_path") else files.get(thread_id)
+        work = (metadata.get('originator') or row.get('originator')) == "codex_work_desktop" or bool(re.search(r"[\\/]Documents[\\/]Codex[\\/]\d{4}-\d{2}-\d{2}[\\/]", cwd, re.I))
         available = bool(rollout and rollout.is_file())
-        session = make_session(thread_id, str(title), stamp, project["path"] if project and not project.get("mirror") else "", movable=available, note="" if available else "正文尚未保存在本机，暂时不能搬运", kind="work" if work else "codex", source="chatgpt_work")
+        session = make_session(thread_id, str(title), stamp, project["path"] if project and not project.get("mirror") else "", movable=available, note="" if available else "本地记录暂时无法读取，请在 ChatGPT 打开后刷新", kind="work" if work else "codex", source="chatgpt_work")
         session["key"] = f"codex:thread:local:{thread_id}"
         if row.get("is_pinned") or thread_id in pinned_ids:
             result["pinned"].append(session)

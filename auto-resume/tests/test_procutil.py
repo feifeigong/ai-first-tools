@@ -36,8 +36,12 @@ class ProcessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             path = Path(raw) / "watch.pid"
             path.write_text("8\n", encoding="utf-8")
-            with patch("codex_auto_resume.procutil.process_running", return_value=True):
-                self.assertFalse(claim_watch_pid(path))
+            if sys.platform == "win32":
+                with patch("codex_auto_resume.watch_control._inspect_process", return_value={"pid": 8}), patch("codex_auto_resume.watch_control._watcher", return_value=True):
+                    self.assertFalse(claim_watch_pid(path))
+            else:
+                with patch("codex_auto_resume.procutil.process_running", return_value=True):
+                    self.assertFalse(claim_watch_pid(path))
 
     def test_watch_pid_takes_over_stale_file(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -34,6 +34,7 @@ public partial class MainWindow : Window
     private bool closing;
     private bool allowClose;
     private readonly UpdateClient updates;
+    private readonly bool suppressUpdates;
     private readonly string updateSettings;
     private readonly string? updateConfiguration;
     private readonly string? updateTool;
@@ -49,19 +50,32 @@ public partial class MainWindow : Window
     private bool checkingUpdates;
     private bool restartingForUpdate;
     private AutoResumePage? autoResumePage;
+    private readonly ResetNewsService? resetNews;
+    private readonly DispatcherTimer resetTimer = new() { Interval = TimeSpan.FromSeconds(3) };
+    private bool startingResetMonitor;
+    private DateTimeOffset lastResetStartAttempt;
+    private bool resetWasEnabled;
     internal string? InitialToolId { get; set; }
 
     public MainWindow(string configuration, string? toolOverride, string? report = null, bool developmentTools = false) : this(configuration, toolOverride, report, developmentTools, new UpdateClient()) { }
 
-    internal MainWindow(string configuration, string? toolOverride, string? report, bool developmentTools, UpdateClient updateClient, Func<DateTimeOffset>? updateClock = null)
+    internal MainWindow(string configuration, string? toolOverride, string? report, bool developmentTools, UpdateClient updateClient, Func<DateTimeOffset>? updateClock = null, bool allowSyntheticUpdates = false)
     {
         updates = updateClient;
+        suppressUpdates = App.IsDevelopmentPreview && !allowSyntheticUpdates;
         this.updateClock = updateClock ?? (() => DateTimeOffset.UtcNow);
         updateSettings = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(configuration))!, "updates");
         updateConfiguration = developmentTools ? configuration : null;
         updateTool = toolOverride;
         InitializeComponent();
-        VersionText.Text = "v" + UpdateClient.CurrentVersion;
+        if (!developmentTools && toolOverride is null)
+        {
+            resetNews = new ResetNewsService();
+            resetWasEnabled = resetNews.Snapshot.Enabled;
+            resetNews.Changed += ResetNewsChanged;
+            resetTimer.Tick += (_, _) => { resetNews.ReadCached(); _ = EnsureResetMonitorAsync(); };
+        }
+        VersionText.Text = "v" + UpdateClient.CurrentVersion + (App.IsDevelopmentPreview ? " · 本地预览" : "");
         Icon = BrandAssets.LoadWindowIcon();
         StateChanged += (_, _) => UpdateCaption();
         UpdateCaption();
@@ -91,13 +105,22 @@ public partial class MainWindow : Window
             HostSlot.Children.Add(host);
             Dispatcher.BeginInvoke(() => ToolsList.SelectedIndex = Math.Max(0, tools.ToList().FindIndex(tool => tool.Id == InitialToolId)), DispatcherPriority.Loaded);
             monitor.Start();
-            ReadUpdateReceipt();
-            _ = CheckAfterOpeningAsync();
-            updateTimer.Start();
+            if (resetNews is not null) { resetTimer.Start(); _ = EnsureResetMonitorAsync(); }
+            if (!suppressUpdates)
+            {
+                ReadUpdateReceipt();
+                _ = CheckAfterOpeningAsync();
+                updateTimer.Start();
+            }
         };
         monitor.Tick += MonitorSessions;
         updateTimer.Tick += async (_, _) => await CheckUpdatesAsync(false);
         Activated += WakeUpdateCheck;
+        Activated += async (_, _) =>
+        {
+            try { if (!released && !closing && autoResumePage?.IsVisible == true) await autoResumePage.RefreshAsync(); }
+            catch (OperationCanceledException) when (released || closing) { }
+        };
         NetworkChange.NetworkAvailabilityChanged += NetworkUpdateCheck;
         Microsoft.Win32.SystemEvents.PowerModeChanged += PowerUpdateCheck;
     }
@@ -107,6 +130,30 @@ public partial class MainWindow : Window
         BrandLogo.Source = image;
         BrandLogo.Visibility = image is null ? Visibility.Collapsed : Visibility.Visible;
         BrandText.Visibility = image is null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ResetNewsChanged(ResetNewsSnapshot value)
+    {
+        if (released || Dispatcher.HasShutdownStarted) return;
+        if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(() => ResetNewsChanged(value))); return; }
+        if (value.Enabled && !resetWasEnabled) lastResetStartAttempt = default;
+        resetWasEnabled = value.Enabled;
+        _ = EnsureResetMonitorAsync();
+    }
+
+    private async Task EnsureResetMonitorAsync()
+    {
+        if (released || closing || resetNews is null || !resetNews.Snapshot.Enabled || startingResetMonitor ||
+            DateTimeOffset.UtcNow - lastResetStartAttempt < TimeSpan.FromSeconds(30)) return;
+        if (ResetMonitorHost.IsRunning(resetNews.DataDirectory)) return;
+        startingResetMonitor = true;
+        lastResetStartAttempt = DateTimeOffset.UtcNow;
+        try { await ResetMonitorHost.EnsureStartedAsync(resetNews); }
+        catch (Exception)
+        {
+            if (!released && !closing) ShowStatus("重置提醒暂时没有开启，稍后会重试。自动续跑仍可正常使用。");
+        }
+        finally { startingResetMonitor = false; }
     }
 
     private void UpdateSidebar()
@@ -173,7 +220,7 @@ public partial class MainWindow : Window
             HostSlot.Visibility = BlankState.Visibility = LoadingView.Visibility = Visibility.Collapsed;
             if (autoResumePage is null)
             {
-                autoResumePage = new AutoResumePage();
+                autoResumePage = resetNews is null ? new AutoResumePage() : new AutoResumePage(resetNews);
                 NativeSlot.Children.Add(autoResumePage);
             }
             NativeSlot.Visibility = Visibility.Visible;
@@ -222,7 +269,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task OpenToolAsync(ToolDefinition tool)
+    internal async Task OpenToolAsync(ToolDefinition tool, Action<Exception>? logFailure = null)
     {
         if (opening.Contains(tool.Id) || closing || released) return;
         opening.Add(tool.Id);
@@ -247,9 +294,10 @@ public partial class MainWindow : Window
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception exception) when (exception is IOException or Win32Exception or InvalidOperationException or TimeoutException)
+        catch (Exception exception) when (exception is IOException or InvalidDataException or Win32Exception or InvalidOperationException
+            or TimeoutException or ArgumentException or UnauthorizedAccessException or NotSupportedException)
         {
-            App.Log(exception);
+            (logFailure ?? App.Log)(exception);
             WriteHealth(tool, null, exception.Message);
             tool.Status = "没打开";
             if (selected?.Id == tool.Id && !closing) ShowBlank(tool.Name + "还没打开", exception.Message, true);
@@ -324,6 +372,8 @@ public partial class MainWindow : Window
         if (released) return;
         released = true;
         autoResumePage?.Dispose();
+        resetTimer.Stop();
+        if (resetNews is not null) { resetNews.Changed -= ResetNewsChanged; resetNews.Dispose(); }
         lifetime.Cancel();
         monitor.Stop();
         updateTimer.Stop();
@@ -420,6 +470,11 @@ public partial class MainWindow : Window
 
     internal async Task CheckUpdatesAsync(bool manual, bool wake = false)
     {
+        if (suppressUpdates)
+        {
+            if (manual) ShowStatus("这是本地开发预览，验收后再发布更新。");
+            return;
+        }
         if (released || closing || checkingUpdates || downloading is not null) return;
         if (!manual && !updateSchedule.IsDue(updateClock(), wake)) return;
         var timestamp = Path.Combine(updateSettings, "checked-at.txt");

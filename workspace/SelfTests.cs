@@ -25,6 +25,43 @@ internal static class SelfTests
         var path = Path.Combine(root, "settings", "tools.json");
         var store = new ToolRepository(path);
         AutoResumeTests.Run(Check, Require);
+        ResetNewsTests.Run(Check, Require);
+        ResetNewsPresentationTests.Run(Check, Require);
+        ResetCalendarTests.Run(Check, Require);
+        ResetMonitorTests.Run(Check, Require);
+        Check("Built-in startup IDs select catalog pages instead of overriding executable paths", () =>
+        {
+            foreach (var id in new[] { "dialog-mover", "auto-resume" })
+            {
+                var selection = App.ResolveToolSelection(new[] { "--tool", id });
+                Require(selection.Executable is null && selection.Page == id);
+            }
+            var normal = App.ResolveToolSelection(new[] { "--page", "dialog-mover" });
+            Require(normal.Executable is null && normal.Page == "dialog-mover");
+            Require(App.ResolveToolSelection(Array.Empty<string>()) == (null, null));
+        });
+        Check("Explicit startup page and custom executable overrides keep their original meaning", () =>
+        {
+            var custom = Path.Combine(root, "synthetic-custom.exe");
+            var selection = App.ResolveToolSelection(new[] { "--tool", custom, "--page", "synthetic-custom" });
+            Require(selection.Executable == custom && selection.Page == "synthetic-custom");
+            var explicitPage = App.ResolveToolSelection(new[] { "--tool", "dialog-mover", "--page", "auto-resume" });
+            Require(explicitPage.Executable is null && explicitPage.Page == "auto-resume");
+        });
+        Check("Invalid tool opening is recoverable and retryable without escaping to the application dispatcher", () =>
+        {
+            var window = new MainWindow(Path.Combine(root, "startup-check", "tools.json"), null, null, true, new UpdateClient());
+            var errors = new List<Exception>();
+            var invalid = new ToolDefinition { Id = "synthetic-bad-tool", Name = "合成启动检查", Executable = "dialog-mover" };
+            try
+            {
+                window.OpenToolAsync(invalid, errors.Add).GetAwaiter().GetResult();
+                Require(invalid.Status == "没打开" && errors.Single() is InvalidDataException);
+                window.OpenToolAsync(invalid, errors.Add).GetAwaiter().GetResult();
+                Require(invalid.Status == "没打开" && errors.Count == 2 && errors.All(error => error is InvalidDataException));
+            }
+            finally { window.ReleaseTools(); window.Close(); }
+        });
         Check("Bundled brand image and multi-size Windows icon load", () => { Require(new BrandAssets(path).Load() is not null); Require(File.Exists(Path.Combine(AppContext.BaseDirectory, "assets", "ai-first-logo.ico"))); });
         Check("Brand wordmark has a compact horizontal layout", () => { var image = (System.Windows.Media.Imaging.BitmapSource)new BrandAssets(path).Load()!; Require(image.PixelWidth > image.PixelHeight * 1.8 && image.PixelWidth < image.PixelHeight * 2.2); });
         Check("Window icon retains multiple size frames including a high resolution frame", () => { var frame = BrandAssets.LoadWindowIcon(); Require(frame.PixelWidth == 256 && frame.Decoder!.Frames.Count >= 7); Require(frame.Decoder.Frames.Any(image => image.PixelWidth == 32)); });

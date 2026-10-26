@@ -244,14 +244,15 @@
       startRetryCount = 0;
       if (initializationNotice && message.textContent === initializationNotice) notice.hidden = true;
       initializationNotice = null;
-      document.getElementById("workspace-version").textContent = `Mac · v${info.release || info.version}`;
+      document.getElementById("workspace-version").textContent = info.developmentPreview ? 'Mac · 本地预览' : `Mac · v${info.release || info.version}`;
       checker.disabled = false;
+      checker.hidden = Boolean(info.developmentPreview);
       if (info.automaticChecks) {
         automaticChecks = true;
         if (info.updateMessage) show(info.updateMessage);
         scheduleCheck(2000);
       }
-      if (info.smokeAudit || !info.automaticChecks) {
+      if (info.smokeAudit) {
         const agents = await window.pywebview.api.agents();
         toggle.click();
         const hidden = getComputedStyle(document.getElementById("workspace-nav")).display === "none";

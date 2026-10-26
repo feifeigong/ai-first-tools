@@ -14,8 +14,58 @@ from pathlib import Path
 from .chatgpt import _norm
 
 
-HISTORY_FORMAT = "paginated-import-v3"
+HISTORY_FORMAT = "paginated-import-v4"
 REPLAY_IDENTIFIER = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
+NONPORTABLE_ITEMS = {'reasoning':'foreign_reasoning','web_search_call':'foreign_hosted_tool','compaction':'foreign_compaction'}
+TOOL_NOTE_REASONS = {'missing_tool_result','missing_tool_call','ambiguous_tool_id'}
+
+
+def verify_compatible_history(records: list[dict]) -> None:
+    """Reject live foreign state before a new import is written or registered.
+
+    Both context and display are checked. This never rewrites genuine states
+    that the target creates after the copy has been saved.
+    """
+    for entry in records:
+        payload = entry.get('payload', {})
+        if entry.get('type') == 'response_item' and payload.get('type') in NONPORTABLE_ITEMS:
+            raise ValueError('历史内部状态未完成兼容转换，未登记搬运成功；原记录不变。')
+        if entry.get('type') == 'event_msg' and payload.get('type') == 'item_completed' \
+                and payload.get('item', {}).get('type') in {'Reasoning', 'WebSearch', 'ContextCompaction'}:
+            raise ValueError('历史显示仍带有不可移植状态，未登记搬运成功；原记录不变。')
+
+
+def _archive_nonportable(entry: dict) -> bool:
+    """Foreign summaries are history, never authenticated provider replay state.
+
+    Keep the complete source payload in the existing lossless annotation. The
+    active context and the native pageable view both receive an ordinary history
+    message, so a display-only Reasoning item cannot recreate the same problem.
+    """
+    payload = entry['payload']
+    kind = payload.get('type')
+    if kind not in NONPORTABLE_ITEMS:
+        return False
+    original = copy.deepcopy(payload)
+    if kind == 'reasoning':
+        text = []
+        for field in ('summary','content'):
+            parts = payload.get(field)
+            if parts is None: parts = []
+            if not isinstance(parts,list) or any(not isinstance(part,dict) or not isinstance(part.get('text'),str) for part in parts):
+                raise ValueError('历史思考格式无法完整保存，未登记搬运成功。')
+            text.extend(part['text'] for part in parts)
+        body = '[迁入的历史思考，仅供参考，不是新任务或当前模型的内部状态。]\n'
+        body += '\n\n'.join(text) if text else '原始内部记录已保留在本机历史中，无法作为当前模型的推理状态恢复。'
+    elif kind == 'web_search_call':
+        body = '[迁入的历史搜索记录，仅供参考，不重新执行，也不代表新的搜索结果。]\n'
+        body += json.dumps(original,ensure_ascii=False)
+    else:
+        body = '[迁入的历史上下文压缩记录已保存在本机；它不能作为新会话的内部状态恢复。接续以保存的原文对话和当前要求为准。]'
+    entry.setdefault('dialog_mover_original',{}).update(response_item=original,reason=NONPORTABLE_ITEMS[kind])
+    entry['payload'] = {'type':'message','role':'assistant','phase':'commentary',
+                        'content':[{'type':'output_text','text':body}]}
+    return True
 
 
 def _replay_safe_records(records: list[dict], imported_id: str) -> list[dict]:
@@ -90,6 +140,8 @@ def _replay_safe_records(records: list[dict], imported_id: str) -> list[dict]:
             continue
         payload = entry["payload"]
         kind = payload.get("type")
+        if _archive_nonportable(entry):
+            continue
         if index in notes:
             reason = notes[index]
             label = {"missing_tool_result": "来源未提供工具结果",
@@ -217,10 +269,7 @@ def paginated_history(records: list[dict], imported_id: str) -> list[dict]:
                         "content": [{"type": "Text", "text": part["text"]} for part in content],
                         "phase": "commentary"}
                 last_agent = item
-        elif kind == "reasoning":
-            item = {"type": "Reasoning", "id": item_id,
-                    "summary_text": [part["text"] for part in payload.get("summary", [])], "raw_content": []}
-        elif kind in ("function_call", "custom_tool_call", "web_search_call"):
+        elif kind in ("function_call", "custom_tool_call"):
             arguments = payload.get("arguments", payload.get("input", payload.get("action", {})))
             if isinstance(arguments, str):
                 try:
@@ -323,8 +372,11 @@ def register(path: Path, imported_id: str, document: dict, target: str, env: dic
                      "timestamp": timestamp, "history_mode": "paginated", "dialog_mover_import_format": HISTORY_FORMAT})
     records[0]["timestamp"] = timestamp
     records = paginated_history(records, imported_id)
-    historical_tool_notes = sum(bool(entry.get("dialog_mover_original", {}).get("reason")) for entry in records)
+    historical_tool_notes = sum(entry.get("dialog_mover_original", {}).get("reason") in TOOL_NOTE_REASONS for entry in records)
     records[0]["payload"]["dialog_mover_history_notes"] = historical_tool_notes
+    records[0]["payload"]["dialog_mover_compatibility_notes"] = sum(
+        entry.get('dialog_mover_original',{}).get('reason') in NONPORTABLE_ITEMS.values() for entry in records)
+    verify_compatible_history(records)
     temporary = path.with_suffix(".importing")
     try:
         temporary.write_text("".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records), encoding="utf-8")

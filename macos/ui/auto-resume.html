@@ -1,10 +1,30 @@
-<section id="auto-resume-page" class="resume-page" hidden aria-label="Codex 自动续跑">
+<section id="auto-resume-page" class="resume-page" hidden aria-label="续跑与重置">
   <div class="resume-inner">
-    <h1>Codex 自动续跑</h1><p class="resume-muted">额度用完后等待，恢复后在原来的对话里继续。</p>
-    <div class="resume-state"><div><h2 id="resume-title">正在读取运行状态…</h2><p id="resume-description" class="resume-muted">正在连接内置续跑组件。</p></div><button id="resume-refresh" class="workspace-button">刷新状态</button></div>
-    <div class="resume-option"><div><h2>自动续跑</h2><p class="resume-muted">关闭时同时取消登录自启。只控制续跑后台，不会关闭 Codex。</p></div><button id="resume-running" class="resume-switch" role="switch" aria-label="自动续跑开关" aria-checked="false" disabled></button></div>
-    <div class="resume-option"><div><h2>登录后自动开启</h2><p class="resume-muted">下次登录电脑后自动运行。关闭这一项，只影响下次登录。</p></div><button id="resume-startup" class="resume-switch" role="switch" aria-label="登录后自动开启开关" aria-checked="false" disabled></button></div>
-    <p id="resume-error" class="resume-error" role="status" hidden></p>
-    <div class="resume-help"><strong>关掉工作台，后台仍会运行</strong><p class="resume-muted">想停止自动续跑，请关闭上面的开关。后台和运行环境已经内置，不需要打开终端或另外安装工具。</p></div>
+    <header class="resume-heading"><img src="assets/codex.png" width="56" height="56" alt="Codex"><div><h1>续跑与重置</h1><p class="resume-muted">Codex 额度恢复后接着做，重置消息及时提醒你。</p></div></header>
+    <section class="resume-card" aria-labelledby="resume-name">
+      <div class="resume-card-top"><div class="resume-title-line"><h2 id="resume-name">自动续跑</h2><span id="resume-title" class="resume-status">正在确认</span></div><div class="resume-actions"><button id="resume-refresh" class="workspace-button resume-outline">刷新状态</button><button id="resume-running" class="resume-switch" role="switch" aria-label="自动续跑开关" aria-checked="false" disabled></button></div></div>
+      <p class="resume-muted resume-explanation">5 小时额度用完后等待恢复；周额度用完时，有重置卡就自动使用，恢复后接着做。</p>
+      <p id="resume-description" class="resume-muted">正在确认续跑状态。</p>
+      <p class="resume-muted">关掉工作台也有效，关闭开关才会停止续跑。</p>
+      <p id="resume-error" class="resume-error" role="status" hidden></p>
+      <div class="resume-startup"><div><h3>登录后自动开启</h3><p class="resume-muted">下次登录电脑时自动打开续跑。</p></div><button id="resume-startup" class="resume-switch" role="switch" aria-label="登录后自动开启开关" aria-checked="false" disabled></button></div>
+    </section>
+    <section class="resume-card reset-card" aria-labelledby="reset-name">
+      <div class="resume-card-top"><div><h2 id="reset-name">重置消息</h2><p class="resume-muted">关注 Tibo 的重置消息，关掉窗口也会提醒。</p></div><div class="resume-actions"><span class="resume-muted">提醒</span><button id="reset-enabled" class="resume-switch" role="switch" aria-label="重置消息提醒开关" aria-checked="false" disabled></button></div></div>
+      <div id="reset-status" class="reset-status" role="status" aria-live="polite"><strong>正在读取重置消息</strong><p class="resume-muted">最近的预告和完成公告会显示在日历里。</p></div>
+      <div class="reset-calendar-layout">
+        <div class="reset-calendar">
+          <div class="reset-month-nav"><div><span class="reset-kicker">北京时间</span><h3 id="reset-month"></h3></div><div class="reset-calendar-actions"><button id="reset-prev" class="reset-icon-button" aria-label="上个月"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button><button id="reset-today" class="workspace-button">今天</button><button id="reset-next" class="reset-icon-button" aria-label="下个月"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg></button></div></div>
+          <div class="reset-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+          <div id="reset-days" class="reset-days" role="group" aria-label="重置消息日历"></div>
+          <div class="reset-legend"><span data-kind="upcoming">重置预告</span><span data-kind="completed">完成公告</span><span data-kind="banked">重置卡</span><span data-kind="history">历史记录</span></div>
+        </div>
+        <div id="reset-details" class="reset-details" aria-live="polite"></div>
+      </div>
+      <div id="reset-recent" class="reset-recent" aria-label="最近的重置记录"></div>
+      <footer class="reset-footer"><p id="reset-updated" class="resume-muted">尚未更新</p><button id="reset-refresh" class="workspace-button resume-outline">刷新</button></footer>
+      <p id="reset-error" class="resume-error" role="status" hidden></p>
+    </section>
+    <p class="resume-bottom-note">想等 Tibo 的重置、保留还没使用的卡，可以先关闭续跑。</p>
   </div>
 </section>

@@ -76,6 +76,14 @@ def _opencode_db() -> Path | None:
 
 
 def installed(agent_id: str) -> bool:
+    if agent_id == "codex_cli":
+        root = codex_home()
+        if not root:
+            return False
+        try:
+            return bool(chatgpt.cli_sessions(root))
+        except (OSError, ValueError, sqlite3.Error):
+            return (root / "sessions").is_dir()  # Keep a broken index visible with its read error.
     if agent_id == "copilot_desktop":
         return copilot_local.installed()
     if agent_id in ("antigravity", "antigravity_ide", "antigravity_cli"):
@@ -1143,6 +1151,9 @@ def unsupported_found() -> list[dict]:
 # --------------------------------------------------------------------- API
 
 def list_groups(agent_id: str) -> list[dict]:
+    if agent_id == "codex_cli":
+        root = codex_home()
+        return _group_by_folder(chatgpt.cli_sessions(root)) if root else []
     if agent_id == "copilot_desktop":
         return copilot_local.groups()
     if agent_id == "cursor_desktop":

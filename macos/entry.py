@@ -24,6 +24,22 @@ PROJECT = Path(__file__).resolve().parent.parent
 if not getattr(sys, "frozen", False):
     sys.path.insert(0, str(PROJECT / "dialog-mover"))
     sys.path.insert(0, str(PROJECT / "dialog-mover" / "vendor"))
+    sys.path.insert(0, str(PROJECT / "auto-resume" / "src"))
+
+if '--memory-service' in sys.argv:
+    sys.argv.remove('--memory-service')
+    from core.memory_server import main as memory_main
+    memory_main()
+    raise SystemExit(0)
+
+if '--reset-monitor' in sys.argv:
+    import reset_notices
+    raise SystemExit(reset_notices.background_main())
+
+if len(sys.argv) == 3 and sys.argv[1] in {'--reset-monitor-audit', '--reset-launcher-audit'}:
+    from reset_audit import monitor_child, launcher_child
+    action = monitor_child if sys.argv[1] == '--reset-monitor-audit' else launcher_child
+    raise SystemExit(action(Path(sys.argv[2])))
 
 import webview
 
@@ -33,6 +49,7 @@ from main import Api
 import updates
 import updater
 import auto_resume
+import reset_notices
 
 ROOT = Path(getattr(sys, "_MEIPASS", PROJECT / "artifacts" / "macos" / "resources"))
 
@@ -42,6 +59,37 @@ def version_info() -> dict:
 
 
 class MacApi(Api):
+    def reset_news_control(self, operation: str = 'status') -> dict:
+        if operation not in {'status', 'refresh', 'enable', 'disable'}:
+            return {'error': '未知的提醒操作。'}
+        if self._smoke:
+            if not hasattr(self, '_notice_fixture'):
+                self._notice_fixture = {'enabled': True, 'fresh': False, 'partial': False,
+                    'today': '2026-10-23', 'events': [], 'lastCheckedLabel': '10-23 09:00',
+                    'statusText': '合成重置消息检查', 'detailText': '不联网、不读取真实资料。'}
+            if operation in {'enable', 'disable'}: self._notice_fixture['enabled'] = operation == 'enable'
+            return {**self._notice_fixture, 'ok': True}
+        try:
+            client = reset_notices.Client()
+            if operation in {'enable', 'disable'}:
+                value = client.request('enabled', enabled=operation == 'enable')
+                if operation == 'enable' and getattr(sys, 'frozen', False): reset_notices.Monitor(client=client).ensure()
+            else:
+                value = client.request('refresh', manual=True) if operation == 'refresh' else client.request()
+            if value['enabled'] and getattr(sys, 'frozen', False):
+                value['monitorReady'] = reset_notices.Monitor(client=client).live_owner() is not None
+                if not value['monitorReady']:
+                    value.update(fresh=False, statusText='提醒正在准备，稍后会自动更新状态',
+                                 detailText='已有历史仍可查看；若一直没有恢复，可以关闭提醒后再重新开启。')
+            return value
+        except Exception:
+            return {'error': '重置消息暂时无法更新，请稍后再试。'}
+
+    def open_reset_post(self, identity: str) -> dict:
+        if self._smoke: return {'ok': True}
+        try: return reset_notices.Client().open_post(identity)
+        except Exception: return {'error': '暂时无法打开原帖，请稍后再试。'}
+
     def auto_resume_control(self, operation: str = 'status') -> dict:
         if self._smoke:
             if not hasattr(self,'_resume_fixture'): self._resume_fixture={'installed':True,'running':False,'autostart':False,'watcherCount':0,'error':''}
@@ -82,8 +130,9 @@ class MacApi(Api):
 
     def workspace_info(self) -> dict:
         message = None
+        info = version_info()
         receipt = updater.state_root() / "result.json"
-        if receipt.is_file():
+        if info.get('developmentPreview') is not True and receipt.is_file():
             try:
                 result = json.loads(receipt.read_text(encoding="utf-8"))
                 if result.get("version") == version_info()["release"]:
@@ -91,7 +140,7 @@ class MacApi(Api):
                     receipt.unlink()
             except (OSError, ValueError):
                 pass
-        return {**version_info(), "platform": "macOS", "architecture": platform.machine(), "automaticChecks": True,
+        return {**info, "platform": "macOS", "architecture": platform.machine(), "automaticChecks": self._smoke or self._update_audit or info.get('developmentPreview') is not True,
                 "smokeAudit": self._smoke, "updateMessage": message}
 
     def check_update(self) -> dict:
@@ -100,6 +149,8 @@ class MacApi(Api):
         if self._smoke:
             self._smoke_check_calls += 1
             return {"available": True, "version": "synthetic-reminder-only", "canInstall": True}
+        if version_info().get('developmentPreview') is True:
+            return {'available': False, 'localPreview': True, 'canInstall': False}
         if not self._update_lock.acquire(blocking=False):
             return {"error": "正在检查更新，请稍等。"}
         try:
@@ -132,8 +183,30 @@ class MacApi(Api):
                 return {"error": "正在更新并重启，请稍等。"}
             return super().start_move(source, ids, target, directory)
 
+    def prepare_memory(self, source, ids, target, directory=''):
+        with self._update_gate:
+            if self._handing_off: return {'error': '正在更新并重启，请稍等。'}
+            return super().prepare_memory(source, ids, target, directory)
+
+    def deploy_memory(self):
+        with self._update_gate:
+            if self._handing_off: return {'error': '正在更新并重启，请稍等。'}
+            return super().deploy_memory()
+
+    def rollback_memory(self):
+        with self._update_gate:
+            if self._handing_off: return {'error': '正在更新并重启，请稍等。'}
+            return super().rollback_memory()
+
+    def start_full_from_memory(self, target, directory):
+        with self._update_gate:
+            if self._handing_off: return {'error': '正在更新并重启，请稍等。'}
+            return super().start_full_from_memory(target, directory)
+
     def start_update(self) -> dict:
         with self._update_gate:
+            if not self._update_audit and version_info().get('developmentPreview') is True:
+                return {'error': '这是独立本地预览，请在正式版中检查更新。'}
             if self._update_state["phase"] in ("downloading", "preparing", "ready", "starting", "restarting"):
                 return {"ok": True}
             if self._package is None:
@@ -255,6 +328,7 @@ class MacApi(Api):
     def can_close(self) -> bool:
         if getattr(self,'_resume_busy',False): return False
         permitted = super().can_close()
+        if not permitted: return False
         with self._update_gate:
             if self._handing_off:
                 return permitted and self._update_closing
@@ -265,7 +339,7 @@ class MacApi(Api):
 
 def self_check(report: Path) -> bool:
     info = version_info()
-    required = ("ui/index.html", "ui/app.js", "ui/workspace.js", "ui/workspace.css", "ui/assets/ai-first.png", "bin/txcript", 'ui/auto-resume.js','auto-resume-native/LICENSE','auto-resume-native/NOTICE')
+    required = ("ui/index.html", "ui/app.js", "ui/workspace.js", "ui/workspace.css", "ui/assets/ai-first.png", "bin/txcript", 'ui/auto-resume.js','ui/reset-notices.js','ui/reset-notices.css','ui/assets/codex.png','reset-news/AI.First.ResetBridge','reset-news/AI.First.ResetBridge.deps.json','auto-resume-native/LICENSE','auto-resume-native/NOTICE')
     checks = {name: (ROOT / name).is_file() for name in required}
     from codex_auto_resume.paths import bundled_codex
     checks['bundledAutoResumeRuntime'] = bundled_codex().is_file()
@@ -276,6 +350,28 @@ def self_check(report: Path) -> bool:
     report.write_text(json.dumps({"passed": passed, "checks": checks, "version": info, "architecture": platform.machine(),
                                   "scope": "bundle resources and native engine; no real conversation access"}, indent=2), encoding="utf-8")
     return passed
+
+
+def memory_check(report: Path) -> int:
+    from core.memory_audit import run as audit_memory
+    code = audit_memory(report)
+    result = json.loads(report.read_text(encoding='utf-8'))
+    details = result['checks']
+    result.update(checks={item['name']: item['passed'] for item in details}, details=details,
+                  architecture=platform.machine(), version=version_info())
+    report.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+    return code
+
+
+def codex_import_check(report: Path) -> int:
+    """Exercise the packaged shared converter/decoder, not a developer Python."""
+    from core.codex_audit import run as audit_history
+    code = audit_history(report)
+    result = json.loads(report.read_text(encoding='utf-8'))
+    result.update(architecture=platform.machine(), version=version_info(),
+                  host=platform.system(), frozen=bool(getattr(sys, 'frozen', False)))
+    report.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+    return code
 
 
 def network_check(report: Path) -> bool:
@@ -328,6 +424,27 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                         if resume_ui: break
                         time.sleep(.25)
                     result['checks']['autoResumeControlBridge']=bool(resume_ui)
+                    window.evaluate_js('''(async()=>{
+                      const poll=async(fn)=>{for(let i=0;i<200;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('reset_ui_timeout');};
+                      document.getElementById('workspace-resume').click();
+                      const toggle=document.getElementById('reset-enabled');await poll(()=>!toggle.disabled);
+                      toggle.click();await poll(()=>!toggle.disabled&&toggle.getAttribute('aria-checked')==='false');
+                      if(document.getElementById('resume-running').getAttribute('aria-checked')!=='false')throw Error('unexpected_resume');
+                      toggle.click();await poll(()=>!toggle.disabled&&toggle.getAttribute('aria-checked')==='true');
+                      document.getElementById('reset-today').click();
+                      window.__RESET_SMOKE__=document.querySelectorAll('.reset-day').length===42&&!!document.querySelector('.reset-day[aria-pressed="true"]');
+                      document.getElementById('workspace-mover').click();
+                    })().catch(()=>window.__RESET_SMOKE__=false);''')
+                    reset_ui=False
+                    for _ in range(80):
+                        reset_ui=window.evaluate_js('window.__RESET_SMOKE__===true')
+                        if reset_ui: break
+                        time.sleep(.25)
+                    result['checks']['resetCalendarBridge']=reset_ui is True
+                    notice_state=getattr(api,'_notice_fixture',None)
+                    resume_state=getattr(api,'_resume_fixture',None)
+                    result['checks']['independentReminderSwitch']=(reset_ui is True and isinstance(notice_state,dict)
+                        and notice_state.get('enabled') is True and isinstance(resume_state,dict) and resume_state.get('running') is False)
                     result["passed"] = all(result["checks"].values())
                     break
             time.sleep(0.25)
@@ -336,7 +453,7 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
             result.setdefault("checks", {})["automaticUpdateReminder"] = False
     except Exception as error:
         result = {"passed": False, "error": type(error).__name__,
-                  "checks": {"windowShown": window.events.shown.is_set(), "pageLoaded": window.events.loaded.is_set(),
+                  "checks": {"windowShown": window.events.shown.is_set() is True, "pageLoaded": window.events.loaded.is_set() is True,
                              "nativeContentAttached": getattr(window, "_ai_first_content_attached", False) is True}}
         try:
             from urllib.request import ProxyHandler, build_opener
@@ -423,17 +540,27 @@ def run() -> int:
     parser.add_argument("--network-test", action="store_true")
     parser.add_argument("--update-test", action="store_true")
     parser.add_argument('--resume-test', action='store_true')
+    parser.add_argument('--memory-test', action='store_true')
+    parser.add_argument('--codex-import-test', action='store_true')
+    parser.add_argument('--reset-test', action='store_true')
     parser.add_argument("--update-ui-audit", type=Path)
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("This entry point runs on macOS. Windows uses workspace/AIFirst.Workspace.csproj.")
-    if (args.self_test or args.smoke_test or args.network_test or args.update_test or args.resume_test or args.update_ui_audit) and args.report is None:
+    if (args.self_test or args.smoke_test or args.network_test or args.update_test or args.resume_test or args.memory_test or args.codex_import_test or args.reset_test or args.update_ui_audit) and args.report is None:
         parser.error("Tests require --report")
     if args.self_test:
         return 0 if self_check(args.report) else 1
     if args.resume_test:
         from auto_resume_audit import audit
+        return audit(args.report)
+    if args.memory_test:
+        return memory_check(args.report)
+    if args.codex_import_test:
+        return codex_import_check(args.report)
+    if args.reset_test:
+        from reset_audit import audit
         return audit(args.report)
     if args.network_test:
         return 0 if network_check(args.report) else 1
@@ -451,6 +578,10 @@ def run() -> int:
         import fcntl
 
         state = appdata() / "AI一手工具工作台"
+        development = version_info().get('developmentPreview') is True
+        if development and not args.smoke_test and not fixture:
+            state = state / 'memory-preview'
+            os.environ['AI_FIRST_MOVER_PREVIEW_DATA'] = str(state / 'mover')
         if fixture:
             state = fixture["root"] / "isolated-state"
             updater._audit_state = state / "updates"
@@ -462,7 +593,9 @@ def run() -> int:
                 return 0
             api = MacApi(args.smoke_test)
             if getattr(sys,'frozen',False) and not args.smoke_test and not fixture:
-                api.auto_resume_control('finish-update')
+                if not development: api.auto_resume_control('finish-update')
+                try: reset_notices.Monitor().ensure()
+                except (reset_notices.NoticeError, OSError, ValueError): pass
             if fixture:
                 update_audit.configure(api, fixture)
             window = webview.create_window("AI一手工具工作台", js_api=api,

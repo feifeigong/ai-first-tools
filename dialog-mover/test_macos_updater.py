@@ -20,6 +20,30 @@ import updates
 
 
 class MacUpdaterTests(unittest.TestCase):
+    def test_preview_is_rejected_by_production_updater_but_audit_uses_only_a_temporary_formal_copy(self):
+        from update_audit import standard_fixture
+        with tempfile.TemporaryDirectory(prefix='ai-first-update-audit-') as temporary:
+            root = Path(temporary).resolve()
+            preview = self.bundle(root / updater.APP_NAME, '0.4.1')
+            info_path = preview / 'Contents/Info.plist'
+            info = plistlib.loads(info_path.read_bytes())
+            info['CFBundleIdentifier'] = 'cn.aifirst.tools.preview'
+            info_path.write_bytes(plistlib.dumps(info))
+            metadata = preview / 'Contents/Resources/version.json'
+            metadata.write_text(json.dumps({'release':'0.4.1','developmentPreview':True}))
+            with patch.object(updater, 'command') as command:
+                with self.assertRaises(updater.UpdateError): updater.validate_app(preview, '0.4.1', 'arm64')
+                command.assert_not_called()
+            before = info_path.read_bytes(), metadata.read_bytes()
+            with self.assertRaises(updater.UpdateError): standard_fixture(preview, self.root)
+            self.assertEqual((info_path.read_bytes(),metadata.read_bytes()),before)
+            candidate = root / 'fixture' / updater.APP_NAME
+            shutil.copytree(preview, candidate)
+            standard_fixture(candidate, root)
+            self.assertEqual(plistlib.loads((candidate/'Contents/Info.plist').read_bytes())['CFBundleIdentifier'],'cn.aifirst.tools')
+            self.assertNotIn('developmentPreview',json.loads((candidate/'Contents/Resources/version.json').read_text()))
+            self.assertEqual((info_path.read_bytes(),metadata.read_bytes()),before)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="ai-first-updater-unit-")
         self.addCleanup(self.temporary.cleanup)

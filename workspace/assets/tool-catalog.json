@@ -8,7 +8,7 @@
   },
   {
     "id": "auto-resume",
-    "name": "Codex 自动续跑",
+    "name": "续跑与重置",
     "nativePage": "auto-resume"
   }
 ]

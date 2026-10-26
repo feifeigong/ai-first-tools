@@ -4,7 +4,6 @@ import contextlib
 import json
 import os
 import plistlib
-import signal
 import subprocess
 import sys
 import time
@@ -28,6 +27,7 @@ class Controller:
         self.preference = self.root / 'startup.json'
         self.receipt = self.root / 'update.json'
         self.domain = 'gui/' + str(os.getuid()) if hasattr(os,'getuid') else 'gui/synthetic'
+        self._foreign = None
 
     def write(self, path, value):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -49,13 +49,19 @@ class Controller:
         return value
 
     def watchers(self):
-        result=subprocess.run(['/bin/ps','-axww','-o','pid=,args='],capture_output=True,text=True,check=True,timeout=10)
-        expected={str(self.executable)+' '+WATCH,str(self.executable)+' '+WATCH+' --manual'}
-        found=[]
-        for line in result.stdout.splitlines():
-            parts=line.strip().split(None,1)
-            if len(parts)==2 and parts[1] in expected: found.append(int(parts[0]))
-        return found
+        from codex_auto_resume.watch_control import inspect_watch, state_path, WatchStateError
+        try: value = inspect_watch(state_path())
+        except (WatchStateError, OSError, ValueError) as error:
+            raise ControlError('续跑状态暂时无法确认，请稍后刷新。') from error
+        self._foreign = None
+        if not value['running']: return []
+        if Path(value['executable']).resolve() != self.executable:
+            executable = Path(value['executable']).resolve()
+            if (executable.name != 'AI First Tools' or executable.parent.name != 'MacOS'
+                    or executable.parent.parent.name != 'Contents' or executable.parent.parent.parent.name != APP):
+                raise ControlError('现有续跑程序的归属暂时无法确认，请稍后刷新。')
+            self._foreign = Controller(executable.parents[2], self.home)
+        return [value['pid']]
 
     def launchctl(self, *args):
         return subprocess.run(['/bin/launchctl',*args],capture_output=True,timeout=15)
@@ -77,6 +83,7 @@ class Controller:
 
     def status(self):
         pids=self.watchers()
+        if self._foreign is not None: return self._foreign.status()
         return {'installed':self.executable.is_file(),'running':bool(pids),'autostart':self.registration() is not None and self.enabled(),
                 'watcherCount':len(pids),'error':''}
 
@@ -87,26 +94,27 @@ class Controller:
         env['PYINSTALLER_RESET_ENVIRONMENT']='1'
         subprocess.Popen([str(self.executable),WATCH,'--manual'],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
                          stderr=subprocess.DEVNULL,env=env,start_new_session=True,close_fds=True)
-        time.sleep(.9)
-        deadline=time.monotonic()+8
+        deadline=time.monotonic()+15
         while time.monotonic()<deadline:
-            if len(self.watchers())==1: return
+            try:
+                if len(self.watchers())==1: return
+            except ControlError:
+                pass  # Ownership is established before the watcher is reported ready.
             time.sleep(.2)
-        raise ControlError('内置后台暂未保持运行，请刷新或重新安装完整工作台。')
+        raise ControlError('续跑暂时没能开启，请稍后重试。')
 
     def stop(self):
-        from codex_auto_resume.config import load_config
-        state=load_config().resolved_state_dir()
-        state.mkdir(parents=True,exist_ok=True)
-        (state/'stop.request').write_text('stop\n')
+        from codex_auto_resume.watch_control import request_stop
+        if not self.watchers(): return
+        if request_stop() != 0: raise ControlError('暂时无法确认续跑状态，没有停止其他任务。请刷新后重试。')
         deadline=time.monotonic()+12
-        while self.watchers() and time.monotonic()<deadline: time.sleep(.2)
-        for pid in self.watchers():
-            if pid in self.watchers():
-                with contextlib.suppress(ProcessLookupError): os.kill(pid,signal.SIGTERM)
-        deadline=time.monotonic()+5
-        while self.watchers() and time.monotonic()<deadline: time.sleep(.2)
-        if self.watchers(): raise ControlError('后台尚未停止，请稍后刷新。')
+        while time.monotonic()<deadline:
+            try:
+                if not self.watchers(): return
+            except ControlError:
+                pass
+            time.sleep(.2)
+        raise ControlError('续跑正在结束本次检查，请稍后刷新。不会强行停止正在处理的任务。')
 
     def legacy(self):
         path=self.home/'Library/LaunchAgents'/(LEGACY+'.plist')
@@ -118,6 +126,9 @@ class Controller:
         return path
 
     def act(self, operation):
+        self.watchers()
+        if self._foreign is not None and operation in {'start','stop','autostart-on','autostart-off'}:
+            return self._foreign.act(operation)  # Only an explicit user switch controls the verified running copy.
         if operation=='status': return self.status()
         if operation=='start': self.start()
         elif operation=='stop':
@@ -126,11 +137,17 @@ class Controller:
             self.launchctl('bootout',self.domain+'/'+LABEL)
         elif operation in ('autostart-on','autostart-off'): self.startup(operation=='autostart-on')
         elif operation=='prepare-update':
+            import reset_notices
+            reset_notices.Monitor(self.bundle, self.root.parent / 'reset-notices').stop_owned('update')
+            if self._foreign is not None: return self._foreign.status()
             if self.watchers():
                 self.write(self.receipt,{'program':str(self.executable),'restart':True})
                 self.stop()
                 self.launchctl('bootout',self.domain+'/'+LABEL)
         elif operation=='finish-update':
+            import reset_notices
+            reset_notices.Monitor(self.bundle, self.root.parent / 'reset-notices').restore()
+            if self._foreign is not None: return self._foreign.status()
             if self.receipt.exists():
                 value=json.loads(self.receipt.read_text())
                 if value.get('program')==str(self.executable) and value.get('restart') is True: self.start()
@@ -143,6 +160,9 @@ class Controller:
                     self.startup(True)
                     self.start()
         elif operation=='uninstall':
+            import reset_notices
+            reset_notices.Monitor(self.bundle, self.root.parent / 'reset-notices').stop_owned('uninstall')
+            if self._foreign is not None: return self._foreign.status()
             self.startup(False)
             self.stop()
             self.launchctl('bootout',self.domain+'/'+LABEL)

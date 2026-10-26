@@ -73,9 +73,30 @@ class MacResumeTests(unittest.TestCase):
 
     def test_process_identity_requires_exact_packaged_watch_command(self):
         self.controller=Controller(self.controller.bundle,self.controller.home)
-        output=f'10 {self.controller.executable} {WATCH}\n11 {self.controller.executable} --smoke-test\n12 /other/app {WATCH}\n13 {self.controller.executable} {WATCH} --manual\n'
-        with patch('auto_resume.subprocess.run',return_value=Mock(stdout=output)):
-            self.assertEqual(self.controller.watchers(),[10,13])
+        with patch('codex_auto_resume.watch_control.state_path',return_value=self.root/'watch.pid'), \
+             patch('codex_auto_resume.watch_control.inspect_watch',return_value={'running':True,'pid':10,'executable':str(self.controller.executable)}) as inspect:
+            self.assertEqual(self.controller.watchers(),[10])
+            inspect.return_value['executable']=str(self.root/'other'/self.controller.executable.name)
+            with self.assertRaises(ControlError): self.controller.watchers()
+
+    def test_verified_other_package_is_reused_and_only_explicit_stop_controls_it(self):
+        self.controller=Controller(self.controller.bundle,self.controller.home)
+        other=Controller(self.root/'another'/'AI一手工具工作台.app',self.controller.home)
+        other.executable.parent.mkdir(parents=True);other.executable.write_text('synthetic')
+        other.startup(True)
+        value={'running':True,'pid':321,'executable':str(other.executable)}
+        def stopped(controller): value.update(running=False,pid=None,executable=None)
+        with patch('codex_auto_resume.watch_control.state_path',return_value=self.root/'watch.pid'), \
+             patch('codex_auto_resume.watch_control.inspect_watch',side_effect=lambda path:dict(value)), \
+             patch.object(Controller,'stop',autospec=True,side_effect=stopped) as stop, \
+             patch.object(Controller,'launchctl'):
+            self.assertTrue(self.controller.act('status')['running'])
+            self.assertTrue(self.controller.act('prepare-update')['running'])
+            self.assertTrue(other.plist.exists());stop.assert_not_called()
+            result=self.controller.act('stop')
+            self.assertFalse(result['running']);self.assertFalse(result['autostart'])
+            self.assertEqual(stop.call_args.args[0].executable,other.executable)
+        self.assertFalse(other.plist.exists())
 
     def test_mac_native_resolution_uses_packaged_architecture(self):
         from codex_auto_resume.paths import bundled_codex

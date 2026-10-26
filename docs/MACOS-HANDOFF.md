@@ -1,5 +1,38 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+## 2026-10-24 当前修复的 Mac 专项复查
+
+这轮接续必须包含最新 ChatGPT 压缩原文、项目7条显示/来源归属、v4导入兼容保护、重复智能搬家及当前续跑/重置代码。不能使用10月23日导出的旧源码包，也不能把旧公开Mac包当作包含这些未提交修复。
+
+已补 `MacApi` 的实际合成入口检查：当前项目7条可搬、压缩完整原档、只终端记录不混列、中文/空格/大小写路径不合并、既有目录和源字节不变。Mac冻结入口新增 `--codex-import-test --report <文件>`，调用与Windows相同的7项完整导入/两轮保存回读/压缩导出/损坏保护检查。打包在生成DMG之前执行；未来preview.19起两芯片的暂存验证必须包含这份真正Darwin冻结报告（共21资产），不得用Windows源报告替代。
+
+源报告使用 `artifacts/macos-current-fixes-checked/report.json`；检查覆盖实际共用代码、MacApi、续跑安全、重置规则及浏览器页面，记录源码与requirements/spec/构建门槛摘要。它不是Cocoa、launchd、真实目标软件或真实模型续聊已通过的证明。完整/智能搬家实际显示、系统提醒、登录自启仍须在Mac本机运行合成资料验收。已知Copilot自动刷新适配缺口继续未通过，不能绕过任务/草稿保护靠强退重开来“修复”。
+
+本轮最终385项全部通过、无跳过，报告保持未完成原生验收。接续包在 `artifacts/macos-current-fixes-delivery/`，是包含全部当前未提交代码和校验报告的开发快照，不是可直接安装的Mac预览。接手后先验证包内DEVELOPMENT-SNAPSHOT.json，再在真实Mac匹配芯片构建独立local-preview；新codex-import冻结门槛、既有通知/登录自启与目标列表检查必须一并通过，仍禁止提交或发布。
+
+2026-10-24后续：ChatGPT项目少记录/压缩本地原文修复已接入共用chatgpt/mover及新增codex_history；requirements与Mac spec增加zstandard==0.23.0，后续须带当前源码与新依赖重建。窗口/总量/损坏帧及原文编号校验保持，临时解压不写源目录。Windows合成验证见CODEX-SOURCE-QA.md；不代表Mac原生已通过，也不消除下述Copilot刷新缺口，旧ZIP不包含本轮修正。
+
+2026-10-24：Day18分类、已完成帖后时间预告、双记录日历及过期预告不弹通知已修改直接共用的 Windows C# 源码；便携 ResetBridge35项通过。没有更改 Cocoa/launchd，也没有在 Mac 运行；既有列表自动刷新缺口和原生验收未因此完成。最新 Windows 包保留 v4 搬家修订，但用户第二轮续聊错误仍未根因确认。详见 RESET-NOTICES-QA.md、CHATGPT-IMPORT-QA.md。先前导出的 Mac ZIP 不含这次更新，不能当当前交付。
+
+
+## 当前待验证：2026-10-23 Windows 全功能同步
+
+后续共享修正：Cursor → ChatGPT 首次续聊的非可移植推理/hosted/compaction 状态已改为无损历史归档，格式 v4，见 CHATGPT-IMPORT-QA.md。本机 60 项及 Windows 冻结验证通过，Mac 使用同一源码；此项没有解决下述自动刷新缺口或替代 Mac 原生验收。上轮 Mac 接续 ZIP 早于该修正，继续时须携带当前共享源码，不能拿旧 ZIP 的 358 项报告称当前源码已测。
+
+**最新复核：尚未完全对等，不能直接交付。** 优先处理实际缺口：`dialog-mover/core/copilot_refresh.py` 对 Darwin 直接返回 unsupported，导致智能搬家 `open_memory_desktop` 报错，完整搬家也没有 Windows 的安全自动刷新。须在 Mac 验证官方客户端的安全刷新方式，不打断任务、不丢草稿，不用仅打开链接冒充列表刷新；补齐后验证列表显示、切走找回和重复一份。上轮“代码同步完成”及 355 项成功报告不足以覆盖此路径。独立预览标识与旧缓存更新时间错误已在后续复核修正，详情见功能清单顶部。用户在意的是功能及操作体验一致，不是版本称谓。
+
+用户要求把当前 Windows 未提交改动全部同步到 Mac。实现与对照见 [功能同步清单](MACOS-WINDOWS-PARITY.md)。包括智能搬家的完整原档/索引/只读 MCP/独立项目/重复复用/1.1.31 兼容和完整退路，以及自动续跑、中文 Tibo 提醒、北京时间和历史日历。重置规则直接共用 Windows C# 源文件；Mac 另接 Cocoa、系统后台和 LaunchAgent。
+
+当前 Windows 已完成可运行的合成检查；Mac 的真实 APP、原生通知、launchd 和两芯片运行报告仍待执行，不得称 Mac 已实测。用户明确表示有 Mac，后续在 Mac 接续。接收独立源代码快照时，保留其中全部当前修改，不从 GitHub 拉取旧文件覆盖；不重置/clean/stash pop，不恢复旧实验，不读取真实聊天或认证，不发送模型请求。
+
+使用 `scripts/package_macos.py --architecture "$(uname -m)" --local-preview` 生成独立预览，按同步清单准备开发依赖。该预览采用独立标识、资料和提醒状态，禁止正式更新；不替换用户正式安装。现有 Windows 预览继续保留。未经进一步明确验收授权，不提交、推送、打标签、PR、调度发布或公开 DMG。
+
+可给 Mac 新对话：
+
+> 请接手这个独立目录，先读 AGENTS.md、docs/DEVELOPMENT-CONTEXT.md、docs/MACOS-WINDOWS-PARITY.md、docs/MACOS-HANDOFF.md 和 docs/MACOS-QA.md。这是包含 Windows 全部未提交改动的同步快照，不能拉取旧版覆盖。先核对源码校验清单，然后在本机芯片构建独立 local-preview，执行完整原生报告并修复失败，再给我一个预览。不安装覆盖正式版，不停止现有 Agent 任务，不读真实聊天/认证，不发模型请求，不提交或发布；另一芯片未测就明确记录。
+
+以下为先前已公开版本和开发历史，不能当作本轮新功能已验收的证据。
+
 当前公开 [preview.18](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.18)，包和标签固定 `851887ba4903d3bb8b79e8b344950223f915737f`。Copilot v2 使用原生图片、正常角色问答和默认折叠的历史归档；旧格式可重搬一次，旧副本保留。两架构原生构建 39124685770、13 资产独立下载核验 39125691806 和匿名公开选择/摘要/十份报告通过。保留完整内置续跑；Windows v0.3.15 的更新 helper 进度与清理调整仅限 Windows。列表链接只请求导航，不能保证缓存失效，Mac 在任务完成后完全退出 Copilot 再打开。Desktop 实际显示只验收 Windows 1.1.30；未发模型请求、未升级或重开用户工作台。详见 MACOS-QA.md 和 COPILOT-RELEASE-VERIFICATION.json。
 
 此前公开 [preview.17](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.17)，源码 `d15b0ee80240f0de0c29730edb7574738feca680`。Copilot 搬入完成打开原生会话管理页刷新列表，已搬过副本也能查看；保留 preview.16 的完整内置续跑。两架构原生构建与 13 个资产独立下载核验通过，匿名更新从 preview.16 选到 preview.17。Copilot 实际窗口验证仅限 Windows 1.1.30，未称 Mac Desktop 已验收。由用户自行自动更新，不替其升级或重开工作台。证据见 MACOS-QA.md、COPILOT-RELEASE-VERIFICATION.json。下文保留历史交接。

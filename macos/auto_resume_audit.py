@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+import auto_resume
 from auto_resume import Controller, LABEL, WATCH
 
 def audit(report: Path) -> int:
@@ -19,7 +20,10 @@ def audit(report: Path) -> int:
     def wait(test, seconds=15):
         deadline=time.monotonic()+seconds
         while time.monotonic()<deadline:
-            if test(): return
+            try:
+                if test(): return
+            except auto_resume.ControlError:
+                pass
             time.sleep(.2)
         require(False)
     original_home=Path.home()

@@ -1,5 +1,9 @@
 # 开发与构建
 
+2026-10-24压缩项目修复：独立增量构建须显式传最新 `--base-package artifacts/codex-program-preview/package --build-directory artifacts/chatgpt-project-history-checked --output <新独立目录>`，避免回退重置组件。搬家spec新收集zstandard==0.23.0并补充许可证；保留其他工具的原许可证。冻结兼容门槛现为7项（含压缩列表/完整导出/损坏保护及Windows扩展路径），原智能15项、现有WPF全部通过后才交付。C盘无空间时将本轮TEMP/TMP/PYINSTALLER_CONFIG_DIR指向D盘独立构建目录，不清理用户文件。实际结果见CODEX-SOURCE-QA.md。
+
+2026-10-23 Cursor → ChatGPT 历史可移植性修正（未证明解决第二轮续聊）：`scripts/build_codex_compat_preview.py --output <新的独立目录>` 仅重建搬家程序，继承已验证外壳/续跑/重置组件，核对未改动文件摘要，执行冻结兼容 5 项、智能搬家 15 项及 WPF 141 项后生成新的完整文件清单。`--codex-import-self-test <报告>` 不读取真实记录或请求模型。实现、验证边界及旧格式允许新副本的规则见 [ChatGPT 导入 QA](CHATGPT-IMPORT-QA.md)。
+
 普通用户只需下载安装包。以下内容供开发者使用。
 
 Mac 构建、完整背景和继续开发步骤见 [Mac 开发交接](MACOS-HANDOFF.md)、[开发背景](DEVELOPMENT-CONTEXT.md)。下面的 WPF/NSIS 命令仅适用于 Windows。
@@ -14,6 +18,8 @@ Mac 构建、完整背景和继续开发步骤见 [Mac 开发交接](MACOS-HANDO
 - `scripts/`：打包、许可证收集、发布包检查。
 
 ## 开发环境
+
+智能迁移的本地开发预览可使用 `python scripts/build_memory_preview.py --output <独立交付目录>`，详见 [智能迁移说明](SMART-MIGRATION.md)。Windows 搬家程序冻结前先构建 `dialog-mover/记忆服务.spec`，将生成的 `AI一手记忆服务.exe` 放到 `dialog-mover/bin/`，再冻结原搬家程序；不得只复制旧版冻结搬家 EXE。`--memory-self-test <报告>` 使用隔离合成项目检查内置服务、中文检索、原文读取及撤销，不读取真实会话或请求模型。
 
 Windows x64、.NET SDK 8、Python 3.13、Git。编译引擎需要 Rust 1.96 或更新版本、Visual Studio C++ 构建工具；网络读取特性还涉及 LLVM/libclang、CMake、NASM 等原生依赖，详见 txcript 上游构建说明。不要用未修改的上游 EXE 替代本项目引擎，否则国产 Agent 等适配会缺失。
 
@@ -67,3 +73,25 @@ Windows 暂存流程现同样执行 `verify_windows_release.py`：独立下载�
 
 v0.3.5 / v0.3.6 使用相同的既有已测试引擎，SHA-256：`799b80dff7ba44cb05f1a92ed5f64a4969ffefc5ad7b3566600ed88adaaaacd2`。
 
+# 2026-10-23 本地预览启动修复补充
+
+选择内置页使用 `--page dialog-mover` 或 `--page auto-resume`；`--tool` 保留完整自定义 EXE 路径用途，并兼容两个已知内置工具编号。名称不能被当作启动文件路径。不要仅依据工作台主窗口句柄报告工具打开成功，应再检查实际工具页加载/内嵌握手。
+
+单工具的 InvalidDataException/无效路径等预期启动失败在工具页处理，不触发全局工作台退出。新增自检使用隔离配置和注入日志，不启动真实工具或读取真实聊天。当前修复构建证据位于 `artifacts/startup-guard-preview/`，源码阶段自检140项、最终包141项通过，0失败，清单与交付检查通过。完整搬家引擎、记忆服务、重复搬家修复、续跑与重置提醒组件不重建，逐文件摘要与上一包相同。不覆盖安装、不强杀任务、不提交或发布。
+
+旧报错窗口已退出。使用正确的 `--page dialog-mover` 打开独立启动修复预览，启动握手报告 `opening-health.json` 为 ready=true、attached=true、error=null；随后通过桌面控制显示窗口，目视确认对话搬家页与软件列表已加载、没有异常弹窗。此为正常预览启动核对，没有点开真实聊天正文、执行搬家或发送模型消息，不能当真实迁移/续聊通过。
+
+## 2026-10-23 智能搬家残留登记及 1.1.31 兼容修正版
+
+上面的启动验证不代表智能搬家问题已经解决。用户再次反馈后，针对旧 workspace 会话仅剩编号、项目/工作区/对话目录消失的情况补齐兼容，同时精确适配官方已安装 1.1.31 静态规则中的 persistent_projects。保留旧行、资料与回执，正常入口优先复用；原生结构、未知规则、后续工作和撤销保护不放宽。
+
+构建位于 `artifacts/memory-repeat-compatible-preview/`。源码96项回归与1项页面桥、冻结15项与WPF141项通过，只重建搬家程序，完整迁移引擎/记忆服务、续跑/控制和外壳程序逐文件摘要保持。冻结审计加了连接前隔离目录拒绝，首轮隔离遗漏如实记录在 SMART-MIGRATION-QA.md，失败包不交付。交付前更新完整文件清单、复查源码摘要和包内容；启动仍使用 `--page dialog-mover`，不自动测试真实聊天搬家、读取正文或发模型请求，不提交或发布。
+
+
+## 2026-10-24 最新重置漏报修复预览
+
+只重建 `workspace/AIFirst.Workspace.csproj` 的 self-contained win-x64 外壳，覆盖到 `artifacts/codex-compatible-preview/package` 的全新副本；不得覆盖正在运行的包。`tools/`、续跑控制脚本和目录清单逐文件摘要保持。更新 development-preview 源指纹，执行 --self-test、--render-reset-ui 及隔离 --check-public-reset-feed，最后生成完整清单并执行 check_release.py 后复制到新的独立预览目录。构建证据 `artifacts/reset-latest-preview/`，WPF142项、11份合成渲染与实际公开原帖核对通过。没有重新冻结搬家程序，不将这次重置修复称为用户第二轮报错已经解决。
+
+## 2026-10-24 通用搬家程序兼容校验预览
+
+可用 `scripts/build_codex_compat_preview.py --base-package artifacts/reset-latest-preview/package --build-directory artifacts/codex-program-preview --output <全新独立目录>` 在最新外壳上仅重新冻结搬家程序，避免回退最新重置修正。构建目录必须在artifacts内且尚不存在；交付目录必须是工作区之外的新目录。冻结兼容检查现要求6项，包含真实引擎的普通Cursor导入和两轮合成已保存问答回读；仍不请求模型，不称在线续聊通过。非搬家组件摘要及包清单检查保留。
