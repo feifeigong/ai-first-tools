@@ -42,6 +42,7 @@ internal static partial class ResetNewsTests
         internal List<Post> HistoryPosts = new();
         internal List<Post> EventPosts = new();
         internal Dictionary<string, string> Quotes = new();
+        internal Dictionary<string, string> Parents = new();
         internal int HistoryPageSize = 100;
         private readonly bool includeHistory;
         internal readonly Dictionary<string, string> EmbedOverrides = new();
@@ -80,8 +81,18 @@ internal static partial class ResetNewsTests
             var decoded = Uri.UnescapeDataString(uri.Query);
             var post = Posts.Concat(HistoryPosts).FirstOrDefault(value => decoded.Contains("/status/" + value.Id, StringComparison.Ordinal) || decoded.Contains("id=" + value.Id, StringComparison.Ordinal)) ?? throw new HttpRequestException("Synthetic post missing");
             if (uri.Host == "cdn.syndication.twimg.com")
+            {
+                var parent = Parents.GetValueOrDefault(post.Id) ?? post.Parent;
+                object? Context(string id)
+                {
+                    var context = Posts.Concat(HistoryPosts).Single(value => value.Id == id);
+                    return new { id_str = id, text = NormalizeBody(context.Text), created_at = context.At.ToString("O"), user = new { screen_name = "thsottiaux" } };
+                }
                 return Task.FromResult(Response(JsonSerializer.Serialize(new { id_str = post.Id, text = NormalizeBody(post.Text), created_at = post.At.ToString("O"),
-                    user = new { screen_name = "thsottiaux" }, quoted_tweet = Quotes.TryGetValue(post.Id, out var quote) ? new { id_str = quote, user = new { screen_name = "thsottiaux" } } : null })));
+                    user = new { screen_name = "thsottiaux" }, quoted_tweet = Quotes.TryGetValue(post.Id, out var quote) ? Context(quote) : null,
+                    parent = parent is not null ? Context(parent) : null,
+                    in_reply_to_status_id_str = parent })));
+            }
             return Task.FromResult(Response(EmbedOverrides.TryGetValue(post.Id, out var replacement) ? replacement : Embed(post)));
         }
         internal string Feed() => JsonSerializer.Serialize(new
@@ -174,7 +185,7 @@ internal static partial class ResetNewsTests
             require(fixture.Service.Snapshot.Fresh && fixture.Service.Snapshot.Items.Count == 2);
             require(fixture.Service.TryTakeAlert(out var alert) && alert?.Id == reply.Id && alert.Text.Contains("10am PST", StringComparison.Ordinal));
             require(!fixture.Service.TryTakeAlert(out _));
-            require(fixture.Handler.Count == 3);
+            require(fixture.Handler.Count == 4);
         });
         check("Reply without official matching parent cannot notify", () =>
         {

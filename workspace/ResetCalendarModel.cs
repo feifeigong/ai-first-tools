@@ -45,8 +45,8 @@ internal static class ResetCalendarModel
                 "按完成公告的发布日记录，实际额度以 Codex 显示为准。", "公告发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url);
         var hasDate = view.ExpectedAt is { } target && (view.AlternativeAt is null || BeijingDate(target) == BeijingDate(view.AlternativeAt.Value));
         if (!hasDate)
-            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "undated", "时间待定", "已发布预告，时间待确认",
-                "这一天发布了预告，还不能确定重置日期。", view.ExpectedAt is null ? "尚未公布明确时间" : view.TimeText, view.TimeNote, item.Url);
+            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "undated", "重置预告", "Tibo 已发布重置预告",
+                "日期按预告的北京时间记录，实际额度以 Codex 显示为准。", view.ExpectedAt is null ? "具体时间尚未公布" : view.TimeText, view.TimeNote, item.Url);
         var passed = view.ExpectedAt <= now && (view.AlternativeAt is null || view.AlternativeAt <= now);
         var note = view.TimeNote.Replace(" 原计划时间已过，实际额度以 Codex 显示为准。", "", StringComparison.Ordinal);
         return new(item.Id, BeijingDate(view.ExpectedAt!.Value), item.PublishedAt, passed ? "past-preview" : "upcoming",

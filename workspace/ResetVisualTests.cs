@@ -105,6 +105,17 @@ internal static class ResetVisualTests
                 RenderElement(surface, Path.Combine(directory, "calendar-upcoming.png"), 900, 610);
                 calendar.SetItems(Array.Empty<ResetNewsItem>());
                 RenderElement(surface, Path.Combine(directory, "calendar-empty.png"), 900, 610);
+                var weekend = new ResetCalendarView { Clock = () => DateTimeOffset.Parse("2026-10-26T07:00:00Z") };
+                weekend.SetItems(new[]
+                {
+                    new ResetNewsItem("synthetic-weekend-completion", "", "It is all propagated. Enjoy some mad codexing tomorrow.", "announced", DateTimeOffset.Parse("2026-10-25T06:06:16Z"), "https://x.com/thsottiaux/status/1000000000000000010"),
+                    new ResetNewsItem("synthetic-monday-preview", "", "Day 21/ But today is a reset.", "upcoming", DateTimeOffset.Parse("2026-10-26T05:21:22Z"), "https://x.com/thsottiaux/status/1000000000000000011")
+                });
+                var weekendSurface = new Border { Background = Brushes.White, Padding = new Thickness(26), Child = weekend };
+                weekend.SelectDate(new DateTime(2026,10,25));
+                RenderElement(weekendSurface, Path.Combine(directory,"calendar-weekend-completed.png"),900,610);
+                weekend.SelectDate(new DateTime(2026,10,26));
+                RenderElement(weekendSurface, Path.Combine(directory,"calendar-today-preview.png"),900,610);
                 page.PaintResetNews(snapshot with { Fresh = false, StatusText = "暂时没取到最新消息，正在自动重试", DetailText = "下方是上次保存的消息，发布时间已标出。" });
                 RenderElement(page, Path.Combine(directory, "page-offline.png"), 1020, 1050);
             }
@@ -131,7 +142,7 @@ internal static class ResetVisualTests
                 pauseRequests = pauseCalls,
                 compactCanScroll,
                 horizontalOverflow = false,
-                images = new[] { "page.png", "page-compact.png", "page-offline.png", "calendar.png", "calendar-latest-forecast.png", "calendar-completed.png", "calendar-banked.png", "calendar-unconfirmed.png", "calendar-upcoming.png", "calendar-empty.png", "notice.png" },
+                images = new[] { "page.png", "page-compact.png", "page-offline.png", "calendar.png", "calendar-latest-forecast.png", "calendar-completed.png", "calendar-banked.png", "calendar-unconfirmed.png", "calendar-upcoming.png", "calendar-empty.png", "calendar-weekend-completed.png", "calendar-today-preview.png", "notice.png" },
                 renderDpi = 96
             }, new JsonSerializerOptions { WriteIndented = true }));
             return 0;

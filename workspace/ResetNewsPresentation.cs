@@ -9,7 +9,7 @@ internal sealed record ResetNewsPresentation(string Summary, string Description,
     DateTimeOffset? ExpectedAt = null, DateTimeOffset? AlternativeAt = null)
 {
     private static readonly TimeSpan Beijing = TimeSpan.FromHours(8);
-    private static readonly Regex Clock = new(@"\b(?<h>\d{1,2})(?::(?<m>\d{2}))?\s*(?<ap>a\.?m\.?|p\.?m\.?)?\s*(?<zone>PST|PDT|PT|Pacific\s+Time|EST|EDT|ET|Eastern\s+Time|UTC|GMT)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex Clock = new(@"\b(?:(?<h>\d{1,2})(?::(?<m>\d{2}))?\s*(?<ap>a\.?m\.?|p\.?m\.?)?|(?<named>midnight|noon))\s*(?<zone>PST|PDT|PT|Pacific\s+Time|EST|EDT|ET|Eastern\s+Time|UTC|GMT)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     internal static string BeijingStamp(DateTimeOffset value) => value.ToOffset(Beijing).ToString("MM-dd HH:mm", CultureInfo.InvariantCulture);
     private static string Display(DateTimeOffset value) => value.ToOffset(Beijing).ToString("M 月 d 日 HH:mm", CultureInfo.InvariantCulture);
@@ -46,7 +46,8 @@ internal sealed record ResetNewsPresentation(string Summary, string Description,
         var sentence = text[(start + 1)..(end < 0 ? text.Length : end)];
         var rangeText = Regex.Replace(sentence, @"\b\d{4}-\d{2}-\d{2}\b", "");
         if (Regex.IsMatch(rangeText, @"\b(?:between|until|not\s+before|webinar|meeting|sale|promo|livestream)\b|\bfrom\b.{0,50}\bto\b|\b\d{1,2}(?::\d{2})?\s*(?:am|pm)?\s*[-–]\s*\d", RegexOptions.IgnoreCase)) return result;
-        var hour = int.Parse(match.Groups["h"].Value, CultureInfo.InvariantCulture);
+        var named = match.Groups["named"].Value.ToLowerInvariant();
+        var hour = named.Length > 0 ? named == "midnight" ? 0 : 12 : int.Parse(match.Groups["h"].Value, CultureInfo.InvariantCulture);
         var minute = match.Groups["m"].Success ? int.Parse(match.Groups["m"].Value, CultureInfo.InvariantCulture) : 0;
         var ampm = match.Groups["ap"].Value.Replace(".", "").ToLowerInvariant();
         if (minute > 59 || (ampm.Length > 0 ? hour is < 1 or > 12 : hour > 23)) return result;
@@ -68,7 +69,13 @@ internal sealed record ResetNewsPresentation(string Summary, string Description,
         };
         var postedLocal = explicitOffset is { } fixedOffset ? item.PublishedAt.ToOffset(fixedOffset)
             : TimeZoneInfo.ConvertTime(item.PublishedAt, regional!);
-        if (!TryDate(sentence, postedLocal.Date, out var date)) return result;
+        if (!TryDate(sentence, postedLocal.Date, out var date))
+        {
+            // "By midnight" means the end of the posting local day, not
+            // 00:00 at its beginning. Other undated clocks stay unresolved.
+            if (named != "midnight" || !Regex.IsMatch(sentence, @"\b(?:by|before)\s+midnight\b", RegexOptions.IgnoreCase)) return result;
+            date = postedLocal.Date.AddDays(1);
+        }
         var local = DateTime.SpecifyKind(date.AddHours(hour).AddMinutes(minute), DateTimeKind.Unspecified);
         if (explicitOffset is null && (regional!.IsInvalidTime(local) || regional.IsAmbiguousTime(local)))
             return result with { TimeNote = "原帖时刻恰逢夏令时切换，暂时无法确定唯一的北京时间。" };

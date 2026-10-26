@@ -8,8 +8,8 @@
   const key = value => value.toISOString().slice(0, 10);
   const todayFallback = () => key(new Date(Date.now() + 8 * 3600000));
   const events = () => snapshot?.events || [];
-  const kind = event => ['completed', 'banked', 'upcoming'].includes(event?.state) ? event.state : 'history';
-  const label = event => ({completed:'完成公告',banked:'重置卡',upcoming:'预告',uncertain:'待核实',undated:'待定'})[event?.state] || '历史预告';
+  const kind = event => event?.state==='undated' ? 'upcoming' : ['completed', 'banked', 'upcoming'].includes(event?.state) ? event.state : 'history';
+  const label = event => ({completed:'完成公告',banked:'重置卡',upcoming:'预告',uncertain:'待核实',undated:'预告'})[event?.state] || '历史预告';
   const dateLabel = value => {
     const day = date(value);
     return `${day.getUTCMonth()+1} 月 ${day.getUTCDate()} 日` + (value === snapshot?.today ? ' · 今天' : ` · 周${'日一二三四五六'[day.getUTCDay()]}`);
@@ -82,6 +82,7 @@
   function render() {
     if(snapshot && !selectedByUser) {
       const preferred=events().filter(item=>item.state==='upcoming').sort((a,b)=>a.date.localeCompare(b.date))[0]
+        ||events().find(item=>item.state==='undated'&&item.date===snapshot.today)
         ||events().find(item=>item.state==='completed')||events()[0];
       selected=preferred?.date||snapshot.today;month=selected.slice(0,7);
     }

@@ -47,6 +47,7 @@ public partial class ResetCalendarView : UserControl
         if (!selectedByUser)
         {
             selected = events.Where(item => item.State == "upcoming").OrderBy(item => item.Date).FirstOrDefault()?.Date
+                ?? events.FirstOrDefault(item => item.State == "undated" && item.Date == today)?.Date
                 ?? events.FirstOrDefault(item => item.Completed)?.Date ?? events.FirstOrDefault()?.Date ?? today;
             month = new DateTime(selected.Year, selected.Month, 1);
         }
@@ -55,7 +56,7 @@ public partial class ResetCalendarView : UserControl
     }
 
     private static Brush Ink(string hex) => (Brush)new BrushConverter().ConvertFromString(hex)!;
-    private static Brush Color(ResetCalendarEvent item) => Ink(item.Completed ? "#207A58" : item.State == "banked" ? "#7252A3" : item.State == "upcoming" ? "#0068D9" : "#5B6B7E");
+    private static Brush Color(ResetCalendarEvent item) => Ink(item.Completed ? "#207A58" : item.State == "banked" ? "#7252A3" : item.State is "upcoming" or "undated" ? "#0068D9" : "#5B6B7E");
     private static TextBlock Text(string value, double size = 13, string color = "#202D3A") => new()
     { Text = value, FontSize = size, Foreground = Ink(color), TextWrapping = TextWrapping.Wrap, LineHeight = size + 8 };
 
@@ -76,7 +77,7 @@ public partial class ResetCalendarView : UserControl
             if (day.Month != month.Month) number.Foreground = Ink("#64748B");
             else if (day == today || day == selected) number.Foreground = Ink("#0068D9");
             content.Children.Add(number);
-            var marker = Text(record is null ? day == today ? "今天" : "" : record.Completed ? "完成公告" : record.State == "banked" ? "重置卡" : record.State == "uncertain" ? "待核实" : record.State == "upcoming" ? "预告" : record.State == "undated" ? "待定" : "历史预告", 11);
+            var marker = Text(record is null ? day == today ? "今天" : "" : record.Completed ? "完成公告" : record.State == "banked" ? "重置卡" : record.State == "uncertain" ? "待核实" : record.State is "upcoming" or "undated" ? "预告" : "历史预告", 11);
             marker.TextAlignment = TextAlignment.Center;
             marker.Foreground = record is null ? Ink("#0068D9") : Color(record);
             marker.MinHeight = 16;
@@ -105,7 +106,7 @@ public partial class ResetCalendarView : UserControl
             var stack = new StackPanel { Margin = new Thickness(0, 0, 0, onDay.Length > 1 ? 18 : 0) };
             var badge = Text(hasOtherCompletion ? "历史预告" : record.Badge, 11);
             badge.Foreground = Color(record);
-            stack.Children.Add(new Border { Background = Ink(record.Completed ? "#EAF5EF" : record.State == "banked" ? "#F1ECF8" : record.State == "upcoming" ? "#EAF3FF" : "#EFF2F6"), CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 3, 8, 3), HorizontalAlignment = HorizontalAlignment.Left, Child = badge });
+            stack.Children.Add(new Border { Background = Ink(record.Completed ? "#EAF5EF" : record.State == "banked" ? "#F1ECF8" : record.State is "upcoming" or "undated" ? "#EAF3FF" : "#EFF2F6"), CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 3, 8, 3), HorizontalAlignment = HorizontalAlignment.Left, Child = badge });
             var heading = Text(hasOtherCompletion ? "同日发布过的预告" : record.Heading, 15);
             heading.FontWeight = FontWeights.SemiBold;
             heading.Margin = new Thickness(0, 12, 0, 6);

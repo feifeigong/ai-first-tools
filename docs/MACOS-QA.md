@@ -1,5 +1,9 @@
 # Mac 移植验证记录
 
+## 2026-10-26 preview.20：周末重置修正接入
+
+共用Windows四份业务源修复历史坏行整页丢失、Day20/21措辞、官方引用/回复链、5分钟失败重试和最新页独立补查。近期补充来源只有经官方核实并满足已有通知窗口才提醒；旧档案不弹，恢复网络不丢已核实近期帖。Mac日历与Windows同步显示蓝色未定时预告，不要求用户确认。源码/页面414、共享44项已通过；preview.20的两架构原生包另行构建，其结果不能引用下方preview.19的报告。实际登录Copilot侧栏及在线续聊仍待原先约定的Mac接续。
+
 ## 2026-10-26 当前两芯片运行包
 
 安装包提交：`fc54ad45e8f348f94bc717d5abf6d99e765ab8de`。独立预览构建[40266306041](https://github.com/feifeigong/ai-first-tools/actions/runs/40266306041)、普通候选[40266303179](https://github.com/feifeigong/ai-first-tools/actions/runs/40266303179)的Apple/Intel任务全部成功。独立预览未执行正式暂存；普通任务没有匹配preview.19草稿，未改公开资产。Windows当前源检查[40266303160](https://github.com/feifeigong/ai-first-tools/actions/runs/40266303160)亦成功，已有独立Windows包继续固定37d7525，不用它冒充新Mac包的构建来源。

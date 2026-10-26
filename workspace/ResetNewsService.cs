@@ -58,6 +58,10 @@ internal sealed partial class ResetNewsService : IDisposable
         public int HistoryOffset { get; set; }
         public DateTimeOffset? HistoryNextPage { get; set; }
         public string? HistoryFrom { get; set; }
+        public int DiscoveryRevision { get; set; }
+        public Dictionary<string, DateTimeOffset> HistoryRetryAfter { get; set; } = new();
+        public DateTimeOffset? HistoryHeadCheckedAt { get; set; }
+        public bool HistorySourcePartial { get; set; }
     }
 
     private sealed record Candidate(string Id, string Text, DateTimeOffset At, string? Parent, bool Historical = false, bool RelatedHint = false);
@@ -126,6 +130,7 @@ internal sealed partial class ResetNewsService : IDisposable
         if (result.Version != 1 || result.Items is null || result.Pending is null || result.Seen is null || result.SeenStages is null
             || result.Items.Count > 120 || result.Seen.Count > 4000 || result.SeenStages.Count > 4000
             || result.HistoryQueue is null || result.HistoryQueue.Count > 300 || result.HistoryChecked is null || result.HistoryChecked.Count > 600
+            || result.DiscoveryRevision is < 0 or > DiscoveryRevision || result.HistoryRetryAfter is null || result.HistoryRetryAfter.Count > 600
             || result.HistoryOffset is < 0 or > 2000 || result.HistoryQueue.Any(item => !ValidCandidate(item))
             || result.Items.Any(item => !ValidItem(item))) throw new InvalidDataException();
         return result;
@@ -160,9 +165,9 @@ internal sealed partial class ResetNewsService : IDisposable
     {
         if (disposed) return;
         var fresh = IsFresh(value, clock());
-        var title = !value.Enabled ? "重置消息提醒已关闭" : fresh ? value.Partial ? "部分消息还没确认，稍后继续查" : "正在留意 Tibo 的重置消息" : value.LastCheckedAt is null ? "正在获取重置消息" : "暂时没取到最新消息，正在自动重试";
+        var title = !value.Enabled ? "重置消息提醒已关闭" : fresh ? value.Partial ? "消息已更新，部分内容正在重试" : "正在留意 Tibo 的重置消息" : value.LastCheckedAt is null ? "正在获取重置消息" : "暂时没取到最新消息，正在自动重试";
         var detail = !value.Enabled ? "旧消息仍可查看，重新开启后继续提醒。" : fresh
-            ? value.Partial ? "本次只提醒已经核实的消息，其余消息稍后再查。由你决定是否关闭续跑。" : "发现新的重置预告或完成消息时提醒你，由你决定是否关闭续跑。"
+            ? value.Partial ? "已核实的消息会正常提醒；暂时无法核对的内容会继续自动检查。" : "发现新的重置预告或完成消息时提醒你，由你决定是否关闭续跑。"
             : value.LastCheckedAt is null ? "有重置预告或完成消息时，会弹窗提醒。" : value.Items.Count > 0 ? "下方是上次保存的消息，发布时间已标出。" : "取到最新消息后会在这里显示，无需一直点刷新。";
         Snapshot = new(value.Enabled, title, detail, value.LastCheckedAt, value.Items.ToArray(), fresh, value.LastSuccess, value.NextCheck, value.Partial);
         var encoded = JsonSerializer.Serialize(Snapshot, Json);
@@ -227,7 +232,7 @@ internal sealed partial class ResetNewsService : IDisposable
             var scan = await ScanAsync(feed, starting, now, timeout.Token).ConfigureAwait(false);
             var items = scan.Items;
             var partial = scan.Partial;
-            if (partial && items.Count == 0) throw new InvalidDataException();
+            if (scan.VerificationFailed && items.Count == 0) throw new InvalidDataException();
             if (disposed) return;
             Saved updated;
             using (StateLock())
@@ -237,12 +242,18 @@ internal sealed partial class ResetNewsService : IDisposable
                 if (!saved.Initialized) { saved.Initialized = true; saved.AlertSince = finished.AddHours(-6); }
                 saved.Items = items.GroupBy(item => item.Id).Select(group => group.First()).Concat(saved.Items.Where(old => items.All(item => item.Id != old.Id)))
                     .Where(item => finished - item.PublishedAt < TimeSpan.FromDays(30)).OrderByDescending(item => item.PublishedAt).Take(120).ToList();
-                saved.Pending = saved.Enabled ? saved.Pending.Concat(items.Where(item => Eligible(item, saved, finished)).Select(item => item.Id)).Distinct().ToList() : new();
                 saved.HistoryQueue = scan.Queue;
                 saved.HistoryChecked = scan.Checked;
                 saved.HistoryOffset = scan.Offset;
                 saved.HistoryFrom = scan.From;
                 saved.HistoryNextPage = scan.NextPage;
+                saved.DiscoveryRevision = DiscoveryRevision;
+                saved.HistoryRetryAfter = scan.RetryAfter;
+                saved.HistoryHeadCheckedAt = scan.HeadCheckedAt;
+                saved.HistorySourcePartial = scan.SourcePartial;
+                // A fresh discovery feed can recover after an outage without
+                // losing recent posts already verified through the other source.
+                saved.Pending = saved.Enabled ? saved.Pending.Concat(saved.Items.Where(item => Eligible(item, saved, finished)).Select(item => item.Id)).Distinct().ToList() : new();
                 saved.LastSuccess = finished;
                 saved.FetchedAt = feed.FetchedAt;
                 saved.Fresh = finished - feed.FetchedAt <= Freshness;
@@ -276,6 +287,10 @@ internal sealed partial class ResetNewsService : IDisposable
                     saved.HistoryOffset = history.Offset;
                     saved.HistoryFrom = history.From;
                     saved.HistoryNextPage = history.NextPage;
+                    saved.DiscoveryRevision = DiscoveryRevision;
+                    saved.HistoryRetryAfter = history.RetryAfter;
+                    saved.HistoryHeadCheckedAt = history.HeadCheckedAt;
+                    saved.HistorySourcePartial = history.SourcePartial;
                 }
                 saved.Fresh = false;
                 saved.Partial = false;
@@ -288,10 +303,13 @@ internal sealed partial class ResetNewsService : IDisposable
         }
     }
 
-    private static string Stage(ResetNewsItem item) => (string.IsNullOrEmpty(item.GroupId) ? item.Id : item.GroupId) + ":" + item.Kind;
+    private static string Group(ResetNewsItem item) => string.IsNullOrEmpty(item.GroupId) ? item.Id : item.GroupId;
+    private static string Stage(ResetNewsItem item) => Group(item) + ":" + item.Kind;
     private static bool Eligible(ResetNewsItem item, Saved saved, DateTimeOffset now) => !item.Historical && item.Kind != "uncertain" && item.PublishedAt <= now.AddMinutes(2)
         && now - item.PublishedAt <= TimeSpan.FromHours(24) && item.PublishedAt >= saved.AlertSince
         && !ElapsedPreview(item, now)
+        && !saved.HistoryRetryAfter.ContainsKey(item.Id)
+        && !(item.Kind == "upcoming" && saved.Items.Any(newer => newer.Kind == "announced" && Group(newer) == Group(item) && newer.PublishedAt >= item.PublishedAt))
         && !saved.Seen.ContainsKey(item.Id) && !saved.SeenStages.ContainsKey(Stage(item));
     private static bool ElapsedPreview(ResetNewsItem item, DateTimeOffset now)
     {
@@ -346,7 +364,7 @@ internal sealed partial class ResetNewsService : IDisposable
                 || (address.Host == "publish.x.com" && address.AbsolutePath == "/oembed"))) throw new InvalidDataException();
         using var request = new HttpRequestMessage(HttpMethod.Get, address);
         request.Headers.Accept.ParseAdd("application/json");
-        request.Headers.UserAgent.ParseAdd("AI-First-Tools/0.3.16");
+        request.Headers.UserAgent.ParseAdd("AI-First-Tools/0.3.17");
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation).ConfigureAwait(false);
         if ((int)response.StatusCode is < 200 or >= 300 || response.Content.Headers.ContentLength > MaxBytes) throw new HttpRequestException();
         await using var source = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
@@ -449,7 +467,7 @@ internal sealed partial class ResetNewsService : IDisposable
     }
 
     private static string Normalize(string value) => Regex.Replace(Regex.Replace(WebUtility.HtmlDecode(value), @"https?://\S+", "", RegexOptions.IgnoreCase), @"\s+", " ").Trim();
-    private static bool TimingReply(string value) => Regex.IsMatch(value, @"\b(?:lands?|landing|coming|tomorrow|tonight|before\s+\d|later\s+today)\b", RegexOptions.IgnoreCase);
+    private static bool TimingReply(string value) => Regex.IsMatch(value, @"\b(?:lands?|landing|coming|tomorrow|tonight|before\s+\d|later\s+today|(?:by|before)\s+(?:midnight|noon))\b", RegexOptions.IgnoreCase);
     private static bool VerificationFailure(Exception exception) => exception is HttpRequestException or IOException or JsonException or InvalidDataException
         or OperationCanceledException or FormatException or OverflowException or XmlException or InvalidOperationException or KeyNotFoundException or ArgumentException;
     internal static string? Classify(string text)
@@ -467,6 +485,7 @@ internal sealed partial class ResetNewsService : IDisposable
         if (!Regex.IsMatch(value, @"\b(?:codex|quota|usage|limits?|reset\s+day|side\s+of\s+reset)\b") && !Regex.IsMatch(value, @"\bday\s+\d+\s*/")) return null;
         if (Regex.IsMatch(value, @"\breset\b") && Regex.IsMatch(value, @"\bit'?s\s+done[.!]")) return "announced";
         if (value.Contains('?')) return null;
+        if (Regex.IsMatch(value, @"\b(?:today|tonight)\s+is\s+(?:a\s+)?reset\b|\bit'?s\s+(?:a\s+)?reset\s+today\b|\bday\s+\d+\s*/\s*rest\s+and\s+reset[.!\s]*$")) return "upcoming";
         if (Regex.IsMatch(value, @"\bthat'?s\s+a\s+reset[.!]"))
             return Regex.IsMatch(value, @"\b(?:tomorrow|tonight|soon|later|will|going\s+to)\b") ? "upcoming" : "announced";
         if (Regex.IsMatch(value, @"\bday\s+\d+\s*/\s*(?:le\s+limit\s+)?reset\b")) return "upcoming";

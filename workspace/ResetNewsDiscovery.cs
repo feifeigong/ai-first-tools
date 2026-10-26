@@ -12,14 +12,20 @@ namespace AIFirst.Workspace;
 
 internal sealed partial class ResetNewsService
 {
+    private const int DiscoveryRevision = 2;
     private sealed record Scan(List<ResetNewsItem> Items, bool Partial, List<Candidate> Queue,
-        Dictionary<string, DateTimeOffset> Checked, int Offset, string? From, DateTimeOffset? NextPage);
-    private sealed record HistoryPage(List<Candidate> Items, int? Next);
+        Dictionary<string, DateTimeOffset> Checked, int Offset, string? From, DateTimeOffset? NextPage,
+        Dictionary<string, DateTimeOffset> RetryAfter, DateTimeOffset? HeadCheckedAt, bool SourcePartial, bool VerificationFailed);
+    private sealed record HistoryPage(List<Candidate> Items, int? Next, bool Partial);
     private sealed record Resolved(string Kind, string Text, string Group);
     private static bool ValidCandidate(Candidate item) => item is not null && item.Text is { Length: <= 12000 }
         && Regex.IsMatch(item.Id ?? "", @"^[1-9][0-9]{14,19}$")
         && (item.Parent is null || Regex.IsMatch(item.Parent, @"^[1-9][0-9]{14,19}$"));
-    private static bool CompletionOnly(string text) => Regex.IsMatch(Normalize(text), @"^(?:done(?:\s+and\s+dusted)?|all\s+propagated)[.!\s]*$", RegexOptions.IgnoreCase);
+    // A completion sentence still needs an officially verified reset context.
+    // Other sentences (e.g. "Enjoy tomorrow") do not erase that first sentence.
+    private static bool CompletionOnly(string text) => Regex.IsMatch(Normalize(text),
+        @"^(?:(?:it\s+is|it's)\s+)?(?:done(?:\s+and\s+dusted)?|all\s+propagated)(?:[.!](?:\s|$)|\s*$)", RegexOptions.IgnoreCase)
+        && !Regex.IsMatch(Normalize(text), @"\b(?:not|never|isn't|isn’t)\b.{0,30}\b(?:done|complete|propagated)\b", RegexOptions.IgnoreCase);
 
     private static HistoryPage ParseHistory(string json, DateTimeOffset now, int offset)
     {
@@ -31,15 +37,25 @@ internal sealed partial class ResetNewsService
         var rows = root.GetProperty("items");
         if (rows.ValueKind != JsonValueKind.Array || rows.GetArrayLength() > 100) throw new System.IO.InvalidDataException();
         var result = new List<Candidate>();
+        var partial = false;
         foreach (var row in rows.EnumerateArray())
         {
-            var id = String(row, "id");
-            var text = String(row, "text");
-            var at = Time(String(row, "published_at"));
-            if (!PostAddress(String(row, "url"), id) || text.Length > 12000 || Math.Abs((IdTime(id) - at).TotalMinutes) > 5
-                || at > now.AddMinutes(2)) throw new System.IO.InvalidDataException();
-            if (now - at < TimeSpan.FromDays(30))
-                result.Add(new(id, text, at, null, true, CompletionOnly(text)));
+            try
+            {
+                var id = String(row, "id");
+                var text = String(row, "text");
+                var at = Time(String(row, "published_at"));
+                if (!PostAddress(String(row, "url"), id) || text.Length > 12000 || Math.Abs((IdTime(id) - at).TotalMinutes) > 5
+                    || at > now.AddMinutes(2)) throw new System.IO.InvalidDataException();
+                if (now - at < TimeSpan.FromDays(30))
+                    result.Add(new(id, text, at, null, true, CompletionOnly(text)));
+            }
+            catch (Exception exception) when (VerificationFailure(exception))
+            {
+                // Quarantine this row. Do not accept its ID, body or timestamp,
+                // and do not discard independently valid rows on the same page.
+                partial = true;
+            }
         }
         int? next = null;
         if (root.TryGetProperty("next_offset", out var value) && value.ValueKind != JsonValueKind.Null)
@@ -47,14 +63,21 @@ internal sealed partial class ResetNewsService
             next = value.GetInt32();
             if (next <= offset || next > 2000) throw new System.IO.InvalidDataException();
         }
-        if (result.GroupBy(item => item.Id).Any(group => group.Select(item => item.Text).Distinct().Count() != 1)) throw new System.IO.InvalidDataException();
-        return new(result.DistinctBy(item => item.Id).ToList(), next);
+        var conflicts = result.GroupBy(item => item.Id).Where(group => group.Select(item => item.Text).Distinct().Count() != 1).Select(group => group.Key).ToHashSet();
+        return new(result.Where(item => !conflicts.Contains(item.Id)).DistinctBy(item => item.Id).ToList(), next, partial || conflicts.Count > 0);
     }
 
     private async Task<Scan> ScanAsync(Feed feed, Saved saved, DateTimeOffset now, CancellationToken cancellation)
     {
-        var checkedAt = saved.HistoryChecked.Where(pair => now - pair.Value < TimeSpan.FromDays(30))
+        var current = saved.DiscoveryRevision == DiscoveryRevision;
+        var checkedAt = saved.HistoryChecked.Where(pair => current && now - pair.Value < TimeSpan.FromDays(30))
             .OrderByDescending(pair => pair.Value).Take(500).ToDictionary(pair => pair.Key, pair => pair.Value);
+        var retryAfter = new ConcurrentDictionary<string, DateTimeOffset>(saved.HistoryRetryAfter
+            .Where(pair => current && now - pair.Value < TimeSpan.FromDays(30)).Take(500));
+        var headChecked = current ? saved.HistoryHeadCheckedAt : null;
+        var sourcePartial = current && saved.HistorySourcePartial;
+        var partial = 0;
+        var recentFailed = 0;
         var queue = saved.HistoryQueue.Where(item => now - item.At < TimeSpan.FromDays(30)).ToDictionary(item => item.Id);
         void Add(Candidate item)
         {
@@ -62,26 +85,41 @@ internal sealed partial class ResetNewsService
                 queue[item.Id] = item with { Historical = true, Parent = item.Parent ?? old?.Parent, RelatedHint = item.RelatedHint || (old?.RelatedHint ?? false) };
         }
         if (includeHistory) foreach (var candidate in feed.History.Concat(feed.Candidates)) Add(candidate);
-        var offset = saved.HistoryOffset;
-        var from = saved.HistoryFrom;
-        var nextPage = saved.HistoryNextPage;
+        var offset = current ? saved.HistoryOffset : 0;
+        var from = current ? saved.HistoryFrom : null;
+        var nextPage = current ? saved.HistoryNextPage : null;
         // History snapshots may be stale: they only discover old IDs. They never authorize alerts.
         async Task DiscoverHistory()
         {
-            if (!includeHistory || (nextPage is not null && now < nextPage)) return;
+            if (!includeHistory) return;
             if (offset == 0 || from is null) from = now.AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            try
+            async Task<HistoryPage> Page(int at)
             {
                 var address = new Uri("https://www.codexreset-news.com/api/v1/tibo/history?limit=100&offset="
-                    + offset.ToString(CultureInfo.InvariantCulture) + "&from=" + from);
+                    + at.ToString(CultureInfo.InvariantCulture) + "&from=" + from);
                 using var historyTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
                 historyTimeout.CancelAfter(TimeSpan.FromSeconds(8));
-                var page = ParseHistory(await ReadJsonAsync(address, historyTimeout.Token).ConfigureAwait(false), now, offset);
+                return ParseHistory(await ReadJsonAsync(address, historyTimeout.Token).ConfigureAwait(false), now, at);
+            }
+            try
+            {
+                HistoryPage? head = null;
+                // Always check new posts even while older pages are being filled.
+                if (headChecked is null || now - headChecked >= TimeSpan.FromMinutes(5))
+                {
+                    head = await Page(0).ConfigureAwait(false);
+                    foreach (var candidate in head.Items) Add(candidate);
+                    headChecked = now;
+                    sourcePartial = head.Partial;
+                }
+                if (nextPage is not null && now < nextPage) return;
+                var page = offset == 0 && head is not null ? head : await Page(offset).ConfigureAwait(false);
                 foreach (var candidate in page.Items) Add(candidate);
+                sourcePartial |= page.Partial;
                 offset = page.Next ?? 0;
                 nextPage = page.Next is null ? now.AddHours(6) : now.AddMinutes(5);
             }
-            catch (Exception exception) when (VerificationFailure(exception)) { nextPage = now.AddMinutes(30); }
+            catch (Exception exception) when (VerificationFailure(exception)) { sourcePartial = true; nextPage = now.AddMinutes(5); }
         }
 
         var candidates = queue.Values.Concat(feed.Candidates).GroupBy(item => item.Id)
@@ -101,7 +139,7 @@ internal sealed partial class ResetNewsService
             return result;
         }, LazyThreadSafetyMode.ExecutionAndPublication)).Value;
 
-        async Task<string?> OfficialQuote(string id, Verified post)
+        async Task<string?> OfficialContext(string id, Verified post)
         {
             var address = new Uri("https://cdn.syndication.twimg.com/tweet-result?id=" + id + "&lang=en&token=0");
             using var document = JsonDocument.Parse(await ReadJsonAsync(address, cancellation).ConfigureAwait(false));
@@ -109,10 +147,15 @@ internal sealed partial class ResetNewsService
             if (String(root, "id_str") != id || String(root.GetProperty("user"), "screen_name") != "thsottiaux"
                 || Normalize(String(root, "text")) != Normalize(post.Text)
                 || Math.Abs((Time(String(root, "created_at")) - IdTime(id)).TotalMinutes) > 5) throw new System.IO.InvalidDataException();
-            if (!root.TryGetProperty("quoted_tweet", out var quote) || quote.ValueKind == JsonValueKind.Null) return null;
+            var isQuote = root.TryGetProperty("quoted_tweet", out var quote) && quote.ValueKind != JsonValueKind.Null;
+            if (!isQuote && (!root.TryGetProperty("parent", out quote) || quote.ValueKind == JsonValueKind.Null)) return null;
             if (String(quote.GetProperty("user"), "screen_name") != "thsottiaux") throw new System.IO.InvalidDataException();
             var parent = String(quote, "id_str");
             if (IdTime(parent) >= IdTime(id)) throw new System.IO.InvalidDataException();
+            if (!isQuote && String(root, "in_reply_to_status_id_str") != parent) throw new System.IO.InvalidDataException();
+            if (Math.Abs((Time(String(quote, "created_at")) - IdTime(parent)).TotalMinutes) > 5) throw new System.IO.InvalidDataException();
+            var context = await Verify(parent).ConfigureAwait(false);
+            if (!context.Complete || Normalize(String(quote, "text")) != Normalize(context.Text)) throw new System.IO.InvalidDataException();
             return parent;
         }
 
@@ -129,7 +172,12 @@ internal sealed partial class ResetNewsService
             var text = original.Text;
             var group = candidate.Id;
             var parent = candidate.Parent;
-            if (parent is null && CompletionOnly(text)) parent = await OfficialQuote(candidate.Id, original).ConfigureAwait(false);
+            if (CompletionOnly(text) || kind is null && TimingReply(text))
+            {
+                var officialParent = await OfficialContext(candidate.Id, original).ConfigureAwait(false);
+                if (parent is not null && parent != officialParent) throw new System.IO.InvalidDataException();
+                parent = officialParent;
+            }
             if (parent is not null)
             {
                 if (IdTime(parent) >= candidate.At) throw new System.IO.InvalidDataException();
@@ -147,11 +195,10 @@ internal sealed partial class ResetNewsService
             return kind is null ? null : new(kind, text, group);
         }
 
-        bool Needs(Candidate candidate) => candidate.Text.Length == 0 || Classify(candidate.Text) is not null || CompletionOnly(candidate.Text)
+        bool Needs(Candidate candidate) => candidate.Text.Length == 0 || Classify(candidate.Text) is not null || CompletionOnly(candidate.Text) || TimingReply(candidate.Text)
             || (candidate.Parent is { } parent && TimingReply(candidate.Text) && (!candidates.TryGetValue(parent, out var context) || Classify(context.Text) is not null));
         var items = new ConcurrentBag<ResetNewsItem>();
         var completed = new ConcurrentBag<string>();
-        var partial = 0;
         using var concurrency = new SemaphoreSlim(3);
         async Task Process(Candidate candidate)
         {
@@ -163,11 +210,13 @@ internal sealed partial class ResetNewsService
                     items.Add(new(candidate.Id, resolved.Kind switch { "banked" => "Tibo 发布了重置卡消息", "announced" => "Tibo 宣布已完成重置", "uncertain" => "这条历史消息还待核实", _ => "Tibo 发布了新的重置预告" },
                         resolved.Text, resolved.Kind, IdTime(candidate.Id), PostUrl(candidate.Id), GroupId: resolved.Group, Historical: candidate.Historical));
                 completed.Add(candidate.Id);
+                retryAfter.TryRemove(candidate.Id, out _);
             }
             catch (Exception exception) when (VerificationFailure(exception))
             {
-                if (!candidate.Historical) Interlocked.Exchange(ref partial, 1);
-                if (!cancellation.IsCancellationRequested) completed.Add(candidate.Id);
+                Interlocked.Exchange(ref partial, 1);
+                if (!candidate.Historical) Interlocked.Exchange(ref recentFailed, 1);
+                if (!cancellation.IsCancellationRequested) retryAfter[candidate.Id] = now.AddMinutes(5);
             }
             finally { concurrency.Release(); }
         }
@@ -181,14 +230,16 @@ internal sealed partial class ResetNewsService
                 if (!candidates.ContainsKey(candidate.Id)) candidates[candidate.Id] = candidate;
             var liveIds = live.Select(item => item.Id).ToHashSet();
             var history = queue.Values.Where(item => !liveIds.Contains(item.Id) && Needs(item)
+                && (!retryAfter.TryGetValue(item.Id, out var retry) || now >= retry)
                 && (!checkedAt.TryGetValue(item.Id, out var stamp) || now - stamp >= TimeSpan.FromHours(24)))
-                .OrderBy(item => checkedAt.ContainsKey(item.Id)).ThenByDescending(item => item.At).Take(24).ToArray();
+                .OrderBy(item => checkedAt.ContainsKey(item.Id) ? 2 : retryAfter.ContainsKey(item.Id) ? 1 : 0).ThenByDescending(item => item.At).Take(24).ToArray();
             try { await Task.WhenAll(history.Select(candidate => Process(feed.Candidates.FirstOrDefault(liveCandidate => liveCandidate.Id == candidate.Id
-                && now - liveCandidate.At <= TimeSpan.FromHours(24)) ?? candidate))).ConfigureAwait(false); }
+                && now - liveCandidate.At <= TimeSpan.FromHours(24)) ?? candidate with { Historical = now - candidate.At > TimeSpan.FromHours(24) }))).ConfigureAwait(false); }
             catch (OperationCanceledException) when (!lifetime.IsCancellationRequested) { }
         }
         foreach (var id in completed) checkedAt[id] = now;
-        return new(items.ToList(), partial != 0, queue.Values.OrderByDescending(item => item.At).Take(300).ToList(),
-            checkedAt.OrderByDescending(pair => pair.Value).Take(500).ToDictionary(pair => pair.Key, pair => pair.Value), offset, from, nextPage);
+        return new(items.ToList(), partial != 0 || sourcePartial || retryAfter.Count > 0, queue.Values.OrderByDescending(item => item.At).Take(300).ToList(),
+            checkedAt.OrderByDescending(pair => pair.Value).Take(500).ToDictionary(pair => pair.Key, pair => pair.Value), offset, from, nextPage,
+            retryAfter.OrderByDescending(pair => pair.Value).Take(500).ToDictionary(pair => pair.Key, pair => pair.Value), headChecked, sourcePartial, recentFailed != 0);
     }
 }

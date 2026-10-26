@@ -11,6 +11,139 @@ internal static partial class ResetNewsTests
 {
     private static void RunDiscovery(Action<string, Action> check, Action<bool> require)
     {
+        check("A discovery reply hint cannot override the officially verified parent relationship", () =>
+        {
+            using var f = new Fixture();
+            var claimed=f.Add("Day 17/ Reset",3);
+            var actual=f.Add("Day 18/ Reset",2);
+            var reply=f.Add("Lands tomorrow before 10am PST.",1,claimed.Id);
+            f.Parents[reply.Id]=actual.Id;
+            f.Refresh();
+            require(f.Service.Snapshot.Partial && f.Service.Snapshot.Items.All(item=>item.Id!=reply.Id));
+        });
+        check("Feed recovery does not lose a recent officially verified secondary-source message or repeat its alert", () =>
+        {
+            using var f=new Fixture(true) { Status=503 };
+            var news=f.Historical("Codex quota has reset. Enjoy.",1);
+            f.Refresh();
+            require(!f.Service.Snapshot.Fresh && f.Service.Snapshot.Items.Single().Id==news.Id && !f.Service.TryTakeAlert(out _));
+            f.Status=200;f.Now=f.Now.AddMinutes(6);
+            using var next=f.Another();next.RefreshAsync().GetAwaiter().GetResult();
+            require(next.Snapshot.Fresh && next.TryTakeAlert(out var alert) && alert?.Id==news.Id && !next.TryTakeAlert(out _));
+        });
+        check("Midnight uses the end of the posting Pacific day and retains explicit PST summer ambiguity", () =>
+        {
+            var item = new ResetNewsItem("2114200291319124163", "", "Day 20/ Rest and reset\n\nBy midnight PST", "upcoming",
+                DateTimeOffset.Parse("2026-10-25T03:40:04Z"), Url("2114200291319124163"));
+            var view = ResetNewsPresentation.From(item,DateTimeOffset.Parse("2026-10-25T04:00:00Z"));
+            require(view.TimeText=="北京时间 10 月 25 日 16:00 前" && view.TimeNote.Contains("15:00 前"));
+            var regional = ResetNewsPresentation.From(item with { Text="By midnight PT" },DateTimeOffset.Parse("2026-10-25T04:00:00Z"));
+            require(regional.TimeText=="北京时间 10 月 25 日 15:00 前");
+            require(ResetNewsPresentation.From(item with { Text="By midnight" }).TimeText=="具体时间待公布");
+        });
+        check("Legacy failed-check cache is revalidated without erasing prior announcements or seen state", () =>
+        {
+            using var f = new Fixture(true);
+            f.Refresh();
+            var news=f.Historical("Day 21/ But today is a reset.",1);
+            var state=JsonNode.Parse(System.IO.File.ReadAllText(f.StateFile))!;
+            state["discoveryRevision"]=0;
+            state["historyChecked"]=new JsonObject { [news.Id]=f.Now.ToString("O") };
+            state["historyNextPage"]=f.Now.AddHours(6).ToString("O");
+            state["seen"]=new JsonObject { ["2107578625419866469"]=f.Now.ToString("O") };
+            System.IO.File.WriteAllText(f.StateFile,state.ToJsonString());
+            f.Now=f.Now.AddMinutes(6);
+            using var next=f.Another();next.RefreshAsync().GetAwaiter().GetResult();
+            require(next.Snapshot.Items.Single().Id==news.Id && next.TryTakeAlert(out var alert) && alert?.Id==news.Id);
+            var updated=JsonNode.Parse(System.IO.File.ReadAllText(f.StateFile))!;
+            require(updated["seen"]!["2107578625419866469"] is not null);
+        });
+        check("Weekend completion follows verified quote and reply even when the primary timeline omits it", () =>
+        {
+            using var f = new Fixture(true);
+            var root = f.Historical("Day 20/ Rest and reset", 3);
+            var timing = f.Historical("By midnight PST", 2);
+            var done = f.Historical("It is all propagated. Enjoy some mad codexing tomorrow. Fun week ahead too.", 1);
+            f.Parents[timing.Id] = root.Id;
+            f.Quotes[done.Id] = timing.Id;
+            f.Refresh();
+            require(f.Service.Snapshot.Items.Single(item => item.Id == done.Id).Kind == "announced");
+            require(f.Service.Snapshot.Items.Single(item => item.Id == done.Id).GroupId == root.Id);
+            require(f.Service.Snapshot.Items.Single(item => item.Id == timing.Id).Kind == "upcoming");
+            require(f.Service.TryTakeAlert(out var alert) && alert?.Id == done.Id && !f.Service.TryTakeAlert(out _));
+            foreach (var phrase in new[] { "Day 21/ Wonder what happens next. But today is a reset.", "Day 20/ Rest and reset" })
+                require(ResetNewsService.Classify(phrase) == "upcoming");
+            foreach (var phrase in new[] { "Day 21/ Is today a reset?", "Day 21/ Today is not a reset.", "Day 21/ I wish today is a reset.", "Day 21/ Today is a password reset.", "It is all propagated. Enjoy tomorrow." })
+                require(ResetNewsService.Classify(phrase) is null);
+        });
+        check("One corrupt historical row is quarantined without accepting it or discarding valid official evidence", () =>
+        {
+            using var f = new Fixture(true);
+            var bad = f.Historical("Day 17/ Reset", 8);
+            var valid = f.Historical("Codex quota has reset. Enjoy.", 1);
+            f.Handler.Responder = async (request, cancellation) =>
+            {
+                var response = await f.Respond(request, cancellation);
+                if (request.RequestUri!.Host != "www.codexreset-news.com") return response;
+                var data = JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellation))!;
+                data["items"]![0]!["published_at"] = bad.At.AddHours(7).ToString("O");
+                return Response(data.ToJsonString());
+            };
+            f.Refresh();
+            require(f.Service.Snapshot.Fresh && f.Service.Snapshot.Partial && f.Service.Snapshot.Items.Single().Id == valid.Id);
+            require(!f.Handler.Requests.Any(uri => Uri.UnescapeDataString(uri.Query).Contains("/status/" + bad.Id)));
+            require(f.Service.TryTakeAlert(out var alert) && alert?.Id == valid.Id);
+        });
+        check("Transient official lookup failures retry in minutes across restart rather than being marked checked for a day", () =>
+        {
+            using var f = new Fixture(true);
+            var news = f.Historical("Codex quota has reset. Enjoy.", 1);
+            f.Handler.Responder = (request, cancellation) => request.RequestUri!.Host == "publish.x.com" ? Task.FromResult(Response("{}",503)) : f.Respond(request,cancellation);
+            f.Refresh();
+            require(f.Service.Snapshot.Items.Count == 0 && !f.Service.TryTakeAlert(out _));
+            f.Handler.Responder = f.Respond;
+            f.Now = f.Now.AddMinutes(6);
+            using var next = f.Another();
+            next.RefreshAsync().GetAwaiter().GetResult();
+            require(next.Snapshot.Fresh && next.Snapshot.Items.Single().Id == news.Id);
+            require(next.TryTakeAlert(out var alert) && alert?.Id == news.Id);
+        });
+        check("Latest discovery page is revisited while older pagination is waiting", () =>
+        {
+            using var f = new Fixture(true) { HistoryPageSize = 1 };
+            f.Historical("Day 6/ Reset",48);
+            f.Historical("Day 8/ Reset",49);
+            f.Refresh();
+            var news = f.Historical("Day 21/ But today is a reset.",1);
+            f.HistoryPosts.Remove(news); f.HistoryPosts.Insert(0,news);
+            f.Now = f.Now.AddMinutes(6);
+            using var next = f.Another();
+            next.RefreshAsync().GetAwaiter().GetResult();
+            require(next.Snapshot.Items.Any(item => item.Id == news.Id));
+            require(next.TryTakeAlert(out var alert) && alert?.Id == news.Id);
+        });
+        check("Official relation metadata conflicts cannot turn an unrelated completion into a reset", () =>
+        {
+            foreach (var field in new[] { "text", "created_at", "in_reply_to_status_id_str" })
+            {
+                using var f = new Fixture(true);
+                var root = f.Historical("Day 20/ Rest and reset",3);
+                var timing = f.Historical("By midnight PST",2);
+                var done = f.Historical("It is all propagated. Enjoy tomorrow.",1);
+                f.Parents[timing.Id]=root.Id; f.Quotes[done.Id]=timing.Id;
+                f.Handler.Responder = async (request,cancellation) =>
+                {
+                    var response=await f.Respond(request,cancellation);
+                    if (request.RequestUri!.Host!="cdn.syndication.twimg.com" || !request.RequestUri.Query.Contains("id="+timing.Id)) return response;
+                    var data=JsonNode.Parse(await response.Content.ReadAsStringAsync(cancellation))!;
+                    if (field=="in_reply_to_status_id_str") data[field]=done.Id;
+                    else data["parent"]![field]=field=="text" ? "An unrelated product update." : f.Now.ToString("O");
+                    return Response(data.ToJsonString());
+                };
+                f.Refresh();
+                require(f.Service.Snapshot.Partial && f.Service.Snapshot.Items.All(item=>item.Id!=done.Id));
+            }
+        });
         check("Day 18 declaration and its later timing reply are both retained and elapsed timing cannot hide completion", () =>
         {
             using var f = new Fixture();
@@ -55,15 +188,16 @@ internal static partial class ResetNewsTests
             require(f.Service.Snapshot.Items.Single(item => item.Id == done.Id).GroupId == root.Id);
             require(f.Service.TryTakeAlert(out var alert) && alert?.Id == done.Id && alert.Kind == "announced");
         });
-        check("Stale historical discovery fills the calendar but never queues old or recent historical alerts", () =>
+        check("Discovery source age cannot hide an officially verified recent post; old backfill never alerts", () =>
         {
             using var f = new Fixture(true);
             f.Historical("Day 6/ Reset", 72);
-            f.Historical("Codex quota has reset. Enjoy.", 1);
+            var recent = f.Historical("Codex quota has reset. Enjoy.", 1);
             f.Historical("Day 3/ Loading a banked reset in paid accounts. See you tomorrow!", 96);
             f.Refresh();
-            require(f.Service.Snapshot.Fresh && f.Service.Snapshot.Items.Count == 3 && f.Service.Snapshot.Items.All(item => item.Historical));
-            require(f.Service.Snapshot.Items.Count(item => item.Kind == "banked") == 1 && !f.Service.TryTakeAlert(out _));
+            require(f.Service.Snapshot.Fresh && f.Service.Snapshot.Items.Count == 3 && f.Service.Snapshot.Items.Count(item => item.Historical) == 2);
+            require(f.Service.Snapshot.Items.Count(item => item.Kind == "banked") == 1 && f.Service.TryTakeAlert(out var alert) && alert?.Id == recent.Id);
+            require(!f.Service.TryTakeAlert(out _));
         });
         check("Event discovery uses the original post ID time and ignores operator completion labels", () =>
         {
