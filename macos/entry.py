@@ -543,12 +543,13 @@ def run() -> int:
     parser.add_argument('--memory-test', action='store_true')
     parser.add_argument('--codex-import-test', action='store_true')
     parser.add_argument('--reset-test', action='store_true')
+    parser.add_argument('--copilot-refresh-test', action='store_true')
     parser.add_argument("--update-ui-audit", type=Path)
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("This entry point runs on macOS. Windows uses workspace/AIFirst.Workspace.csproj.")
-    if (args.self_test or args.smoke_test or args.network_test or args.update_test or args.resume_test or args.memory_test or args.codex_import_test or args.reset_test or args.update_ui_audit) and args.report is None:
+    if (args.self_test or args.smoke_test or args.network_test or args.update_test or args.resume_test or args.memory_test or args.codex_import_test or args.reset_test or args.copilot_refresh_test or args.update_ui_audit) and args.report is None:
         parser.error("Tests require --report")
     if args.self_test:
         return 0 if self_check(args.report) else 1
@@ -561,6 +562,9 @@ def run() -> int:
         return codex_import_check(args.report)
     if args.reset_test:
         from reset_audit import audit
+        return audit(args.report)
+    if args.copilot_refresh_test:
+        from copilot_refresh_audit import audit
         return audit(args.report)
     if args.network_test:
         return 0 if network_check(args.report) else 1

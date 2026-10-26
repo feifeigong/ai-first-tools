@@ -59,7 +59,7 @@ def run(report: Path, ui: bool = False):
             raise RuntimeError('Shared rule report did not pass')
         results[-1]['tests']=len(value['checks'])
         check('shared-and-mac-backend',[sys.executable,'-m','unittest',
-            'test_memory','test_codex_sources','test_codex_compressed','test_chatgpt','test_close_safety','test_copilot_import','test_copilot_refresh',
+            'test_memory','test_codex_sources','test_codex_compressed','test_chatgpt','test_close_safety','test_copilot_import','test_copilot_refresh','test_macos_copilot_refresh',
             'test_codex_history','test_macos','test_macos_updater','test_macos_resume','test_macos_reset','test_macos_memory',
             'test_macos_parity_release','test_macos_history','-v'],ROOT/'dialog-mover')
         check('resume-safety',[sys.executable,'-m','unittest','discover','-s','tests','-v'],ROOT/'auto-resume',{'PYTHONPATH':'src'})
@@ -74,7 +74,7 @@ def run(report: Path, ui: bool = False):
     # Passing source tests are not an assertion that every user-facing Mac flow
     # is implemented. This explicit gap was found by the functional recheck.
     parity_gaps = [{'feature':'copilotDesktopAutoRefresh',
-        'detail':'The current refresh adapter returns unsupported on Darwin; safe automatic list refresh and smart-entry opening still require Mac implementation and native verification.'}]
+        'detail':'The Mac adapter only accepts explicit labelled native reload commands with task/draft/identity guards. The signed-out official runner cannot verify the logged-in command or resulting sidebar; this must still be checked on an initialized Mac client.'}]
     report.write_text(json.dumps({'passed':passed,'checks':results,'errorType':failure,'host':platform.system(),
         'functionalParityComplete':False,'parityGaps':parity_gaps,
         'nativeMacVerified':False,'uiChecked':ui,'modelRequests':0,'syntheticOnly':True,'sourceSha256':initial_sources,

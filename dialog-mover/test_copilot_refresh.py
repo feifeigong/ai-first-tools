@@ -27,10 +27,21 @@ class CopilotRefreshTests(unittest.TestCase):
                 self.assertEqual(copilot_refresh.refresh(), "unavailable")
                 self.assertEqual(native.call_count, 1)
 
-    def test_other_platforms_do_not_touch_the_windows_input_api(self):
+    def test_mac_uses_its_guarded_adapter_instead_of_windows_input(self):
         with patch("core.copilot_refresh.sys.platform", "darwin"), patch("core.copilot_refresh._windows") as native:
-            self.assertEqual(copilot_refresh.refresh(), "unsupported")
+            with patch('core.copilot_refresh._busy', return_value='idle'), \
+                    patch('core.copilot_refresh_macos.refresh', return_value='requested') as mac:
+                self.assertEqual(copilot_refresh.refresh(passive=True), 'requested')
+                mac.assert_called_once_with(passive=True, busy=copilot_refresh._busy)
             native.assert_not_called()
+
+    def test_mac_busy_and_unknown_indexes_are_not_opened_or_refreshed(self):
+        for state in ('busy', 'unavailable'):
+            with patch('core.copilot_refresh.sys.platform','darwin'), \
+                    patch('core.copilot_refresh._busy', return_value=state), \
+                    patch('core.copilot_refresh_macos.refresh') as native:
+                self.assertEqual(copilot_refresh.refresh(), state)
+                native.assert_not_called()
 
 
 if __name__ == "__main__":

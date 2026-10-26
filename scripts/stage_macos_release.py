@@ -18,6 +18,8 @@ CODEX_IMPORT_CHECKS = {
     'normal_cursor_import_and_two_saved_followups_round_trip',
     'compressed_project_history_listing_export_and_truncation_guard',
 }
+REFRESH_CHECKS = {'nativeDraftPreserved','nativeEmptyComposerRecognized','nativeBusyPreserved',
+                  'explicitNativeReloadExecuted','actualWebKitDocumentReloaded','sameApplicationKeptRunning'}
 
 
 def validated_assets(directory: Path, release: str) -> list[Path]:
@@ -36,7 +38,7 @@ def validated_assets(directory: Path, release: str) -> list[Path]:
             raise ValueError("DMG digest mismatch")
         number = int(release.rsplit('.',1)[1])
         kinds = ("self", "smoke", "network", "update", 'resume') if number >= 15 else ("self", "smoke", "network", "update")
-        if number >= 19: kinds += ('memory', 'reset', 'reset-rules', 'codex-import')
+        if number >= 19: kinds += ('memory', 'reset', 'reset-rules', 'codex-import', 'copilot-refresh')
         for kind in kinds:
             report = source / f"{kind}-test.json"
             result = json.loads(report.read_text())
@@ -60,6 +62,9 @@ def validated_assets(directory: Path, release: str) -> list[Path]:
                     or result.get('modelRequests') != 0 or result.get('nativeContinuationVerified') is not False
                     or result.get('host') != 'Darwin' or result.get('frozen') is not True):
                 raise ValueError('Packaged Mac history compatibility and compressed export checks are required')
+            if kind == 'copilot-refresh' and (not REFRESH_CHECKS <= set(result['checks'])
+                    or result.get('modelRequests') != 0 or result.get('host') != 'Darwin' or result.get('frozen') is not True):
+                raise ValueError('Actual Mac draft, busy and explicitly labelled native reload guards are required')
             if kind != "smoke" and (result.get("architecture") != architecture or result.get("version", {}).get("release") != release):
                 raise ValueError("Native report version or architecture mismatch")
             target = directory / f"{kind}-test-{architecture}.json"

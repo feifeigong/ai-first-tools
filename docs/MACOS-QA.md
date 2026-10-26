@@ -1,5 +1,13 @@
 # Mac 移植验证记录
 
+## 2026-10-26：继续原生验收，preview.19候选
+
+4e4fdec 的两芯片共享/原生读取检查通过，但冻结续跑检查在 launchAgentReady 失败，未产出可发布DMG。诊断确认实际后台正在运行且归属/命令正确，控制端报 identity_unverified。隔离真实 LaunchAgent 的不同时区反例（40260449677）复现同 PID/锁但启动时间不同；换用 proc_pidinfo 后同一检查（40260766927）六项为true。保留所有失败报告，不调整就绪超时或降低归属门槛。通知也改用内核启动时间，防止工作台与提醒跨时区误判。
+
+新增 copilot-refresh-test 为真实冻结 Cocoa/WebKit/AX 的独立合成窗口检查：草稿、空编辑框、忙碌、明确菜单操作、实际文档重载、原应用进程保留。这里只替换合成应用身份，不接触真实Copilot/聊天/认证；正式产品仍要求GitHub签名。preview.19资产门槛增为两芯片23项，缺该报告或旧报告不放行。
+
+官方Copilot1.1.32公开签名包在独立runner完成原生菜单/正常关窗重开/常见按键探查，未证明登录页可刷新；正常关窗保持同进程和同文档，故不能以重开窗口冒充刷新。CLI只提供open，不提供reload。新增适配仅接受运行时真实可见的Reload命令，未知则保留任务和草稿。已登录Copilot的刷新及侧栏持久显示仍待Mac环境验证，不能将其写为通过。
+
 ## 2026-10-24 当前修复专项检查（本机为Windows）
 
 最终固定源码报告 `artifacts/macos-current-fixes-checked/report.json`：**385项通过、0失败、0跳过**，含共享重置规则35、共享/Mac后端236、续跑安全75、页面39，源码检查前后摘要一致。已查看上轮7条项目合成页面，本轮实际页面桥与Mac日历/窄布局交互也通过。报告明确host=Windows、nativeMacVerified=false、functionalParityComplete=false，保留Copilot自动刷新缺口；本轮没有Mac运行包或真实模型续聊结论。

@@ -86,6 +86,8 @@ def audit(report: Path) -> int:
             wait(lambda: service.live_owner() is not None and (root / 'delivered.json').is_file()
                 and (root / 'popup-visible.json').is_file() and notices.read_json(root / 'popup-visible.json')['visible'])
             first_owner = service.live_owner()
+            with patch.dict(os.environ, {'TZ':'Asia/Shanghai'}):
+                require(service.live_owner() == first_owner)
             checks['independentAfterLauncherExit'] = True
             service.ensure()
             require(service.live_owner() == first_owner)

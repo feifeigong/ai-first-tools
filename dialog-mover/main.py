@@ -292,6 +292,8 @@ class Api:
                 refreshed = copilot_refresh.refresh(passive=True)
                 if refreshed in {"busy", "draft"}:
                     return {"ok": True, "pending": True, "refresh_status": refreshed}
+                if refreshed == 'permission-required':
+                    return {"error": "旧对话已保存。请在 macOS 系统设置中允许工作台的辅助功能权限，再重试打开 Copilot。"}
                 if refreshed not in {"requested", "not-running"}:
                     return {"error": "旧对话已保存，暂时无法安全更新 Copilot 左侧列表。请稍后重试，原记录仍保留。"}
                 if refreshed == "requested":
@@ -398,6 +400,8 @@ class Api:
                     return {"error": "记录已复制。Copilot 中还有未发送的内容，已保留草稿；处理完草稿后点「在 Copilot 中查看」即可刷新。"}
                 if refreshed == "unavailable":
                     return {"error": "记录已复制，但没有完成 Copilot 窗口刷新。请松开快捷键并打开 Copilot，再点「在 Copilot 中查看」重试。"}
+                if refreshed == 'permission-required':
+                    return {"error": "记录已复制。请在 macOS 系统设置中允许工作台的辅助功能权限，再点「在 Copilot 中查看」。"}
                 if refreshed == "requested":
                     # Let the reload initialize before dispatching navigation.
                     # Reload invalidates both the sidebar and Recent caches.

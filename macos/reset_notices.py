@@ -79,15 +79,15 @@ class Lease:
 
 
 def process_identity(pid: int):
+    from codex_auto_resume.watch_control import _darwin_process_start, WatchStateError
     try:
-        result = subprocess.run(['/bin/ps', '-ww', '-p', str(pid), '-o', 'lstart=', '-o', 'command='],
+        result = subprocess.run(['/bin/ps', '-ww', '-p', str(pid), '-o', 'command='],
                                 capture_output=True, text=True, timeout=5, check=False)
-    except (OSError, subprocess.SubprocessError) as error:
+        started = _darwin_process_start(pid) if result.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, WatchStateError) as error:
         raise NoticeError('暂时无法确认提醒状态。') from error
-    if result.returncode != 0 or not result.stdout.strip(): return None
-    parts = result.stdout.strip().split(maxsplit=5)
-    if len(parts) != 6: raise NoticeError('暂时无法确认提醒状态。')
-    return {'started': ' '.join(parts[:5]), 'command': parts[5]}
+    if started is None or not result.stdout.strip(): return None
+    return {'started': started, 'command': result.stdout.strip()}
 
 
 def default_directory():

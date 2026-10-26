@@ -46,9 +46,7 @@ def _has_draft(parent: int) -> bool | None:
         return None
 
 
-def refresh(*, passive: bool = False) -> str:
-    if sys.platform != "win32":
-        return "unsupported"
+def _busy() -> str:
     # A reload only reconnects the UI, but do not do it while a task is active.
     # Read a boolean from the destination index, never any conversation body.
     from . import copilot_local
@@ -58,6 +56,17 @@ def refresh(*, passive: bool = False) -> str:
                 return "busy"
     except (OSError, sqlite3.Error, ValueError):
         return "unavailable"
+    return 'idle'
+
+
+def refresh(*, passive: bool = False) -> str:
+    if sys.platform not in {'win32', 'darwin'}:
+        return 'unsupported'
+    state = _busy()
+    if state != 'idle': return state
+    if sys.platform == 'darwin':
+        from .copilot_refresh_macos import refresh as mac_refresh
+        return mac_refresh(passive=passive, busy=_busy)
     return _windows(passive=True) if passive else _windows()
 
 

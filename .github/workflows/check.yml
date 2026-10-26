@@ -39,7 +39,7 @@ jobs:
           dotnet macos/ResetBridge/bin/Release/net8.0/AI.First.ResetBridge.dll --self-test --report artifacts/mac-reset-rules-test.json
       - name: Backend safety and sidebar checks
         working-directory: dialog-mover
-        run: python -m unittest test_memory test_codex_sources test_codex_compressed test_chatgpt test_close_safety test_embedded_startup test_doubao test_copilot test_copilot_import test_copilot_refresh test_windows_release test_macos test_macos_updater test_codex_history test_macos_resume test_macos_reset test_macos_memory test_macos_parity_release test_macos_history -v
+        run: python -m unittest test_memory test_codex_sources test_codex_compressed test_chatgpt test_close_safety test_embedded_startup test_doubao test_copilot test_copilot_import test_copilot_refresh test_macos_copilot_refresh test_windows_release test_macos test_macos_updater test_codex_history test_macos_resume test_macos_reset test_macos_memory test_macos_parity_release test_macos_history -v
       - name: Prepare official Copilot test runtime with pinned integrity
         run: python scripts/prepare_copilot_audit.py
       - name: Native Copilot full history and strict resume without model requests

@@ -130,10 +130,19 @@ class MacResetTests(unittest.TestCase):
 
     def test_mac_identity_handles_spaces_without_splitting_executable(self):
         path = str(self.monitor.executable)
-        with patch('sys.platform','darwin'), patch('codex_auto_resume.watch_control.subprocess.check_output',
-            side_effect=[path+'\n','Fri Oct 23 09:00:00 2026\n',path+' --auto-resume-watch --manual\n']):
+        with patch('sys.platform','darwin'), patch('codex_auto_resume.watch_control._darwin_process_start',return_value=1792994400123456), \
+            patch('codex_auto_resume.watch_control.subprocess.check_output',
+            side_effect=[path+'\n',path+' --auto-resume-watch --manual\n']):
             result = watch_control._inspect_process(1234)
         self.assertEqual(result['argv'], [path,'--auto-resume-watch','--manual'])
+
+    def test_notifier_identity_also_uses_kernel_birth_time(self):
+        from types import SimpleNamespace
+        command = str(self.monitor.executable) + ' ' + notices.WATCH
+        with patch('codex_auto_resume.watch_control._darwin_process_start',return_value=1792994400123456), \
+                patch('reset_notices.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout=command+'\n')) as ps:
+            self.assertEqual(notices.process_identity(1234),{'started':1792994400123456,'command':command})
+        self.assertNotIn('lstart=',ps.call_args.args[0])
 
     def test_packaged_mac_watcher_requires_bundle_identity_and_exact_mode(self):
         import plistlib
