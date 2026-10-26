@@ -44,7 +44,7 @@ def audit(report: Path) -> int:
         state.mkdir(parents=True)
         (state/'config.json').write_text(json.dumps({'enabled':False,'poll_seconds':5,'state_dir':str(state),'codex_home':str(codex_home)}))
         old_env=os.environ.copy()
-        os.environ.update({'HOME':str(home),'CODEX_HOME':str(codex_home),'PATH':'/usr/bin:/bin:/usr/sbin:/sbin'})
+        os.environ.update({'HOME':str(home),'CODEX_HOME':str(codex_home),'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','TZ':'UTC'})
         for key in ('CODEX_BIN','PYTHONPATH'): os.environ.pop(key,None)
         controller=Controller(bundle,home)
         try:
@@ -83,7 +83,7 @@ def audit(report: Path) -> int:
             phase='launchAgentBootstrap'
             controller.stop()
             value=controller.registration()
-            value['EnvironmentVariables'].update({'HOME':str(home),'CODEX_HOME':str(codex_home)})
+            value['EnvironmentVariables'].update({'HOME':str(home),'CODEX_HOME':str(codex_home),'TZ':'America/Los_Angeles'})
             value.update(StandardOutPath=str(root/'launch-agent.stdout'),StandardErrorPath=str(root/'launch-agent.stderr'))
             import plistlib
             with controller.plist.open('wb') as stream: plistlib.dump(value,stream)

@@ -18,6 +18,32 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class WatchControlTests(unittest.TestCase):
+    def test_mac_birth_time_is_kernel_metadata_not_time_zone_formatted_ps(self):
+        executable = self.root / 'AI一手工具工作台.app/Contents/MacOS/AI First Tools'
+        replies = [str(executable), str(executable) + ' --auto-resume-watch']
+        with patch.object(watch.sys, 'platform', 'darwin'), \
+                patch.object(watch, '_darwin_process_start', return_value=1792994400123456), \
+                patch.object(watch.subprocess, 'check_output', side_effect=replies) as ps:
+            value = watch._inspect_process(123)
+        self.assertEqual(value['started_at'], 1792994400123456)
+        self.assertEqual(value['argv'][1:], ['--auto-resume-watch'])
+        self.assertFalse(any('lstart=' in call.args[0] for call in ps.call_args_list))
+
+    def test_mac_kernel_birth_time_requires_complete_matching_process_metadata(self):
+        from unittest.mock import Mock
+        query = Mock()
+        def kernel(pid, flavor, argument, pointer, size):
+            info = pointer._obj
+            info.pid = pid; info.seconds = 1792994400; info.microseconds = 123456
+            return size
+        query.side_effect = kernel
+        with patch.object(watch.ctypes, 'CDLL', return_value=Mock(proc_pidinfo=query)):
+            self.assertEqual(watch._darwin_process_start(123), 1792994400123456)
+            for returned in (0, 4):
+                query.side_effect = None; query.return_value = returned
+                with patch.object(watch.ctypes, 'get_errno', return_value=1):
+                    with self.assertRaises(watch.WatchStateError): watch._darwin_process_start(123)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="resume-owner-test-")
         self.root = Path(self.temporary.name)

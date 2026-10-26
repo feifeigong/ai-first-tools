@@ -120,16 +120,44 @@ def _lock_held(path: Path) -> bool:
     return False
 
 
+def _darwin_process_start(pid: int) -> int | None:
+    """Kernel birth time, independent of launchd's locale and time zone.
+
+    Layout: Apple's bsd/sys/proc_info.h, PROC_PIDTBSDINFO. Read only the
+    target process metadata; never request its environment or credentials.
+    """
+    class BsdInfo(ctypes.Structure):
+        _fields_ = [(name, ctypes.c_uint32) for name in (
+            'flags', 'status', 'xstatus', 'pid', 'ppid', 'uid', 'gid',
+            'ruid', 'rgid', 'svuid', 'svgid', 'reserved')]
+        _fields_ += [('comm', ctypes.c_char * 16), ('name', ctypes.c_char * 32)]
+        _fields_ += [(name, ctypes.c_uint32) for name in ('nfiles', 'pgid', 'jobc', 'tdev', 'tpgid')]
+        _fields_ += [('nice', ctypes.c_int32), ('seconds', ctypes.c_uint64), ('microseconds', ctypes.c_uint64)]
+
+    library = ctypes.CDLL('/usr/lib/libproc.dylib', use_errno=True)
+    query = library.proc_pidinfo
+    query.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_int]
+    query.restype = ctypes.c_int
+    info = BsdInfo()
+    size = query(pid, 3, 0, ctypes.byref(info), ctypes.sizeof(info))
+    if size == 0 and ctypes.get_errno() == 3:  # ESRCH
+        return None
+    if (size != ctypes.sizeof(info) or info.pid != pid or not info.seconds
+            or info.microseconds >= 1_000_000):
+        raise WatchStateError('identity_unverified')
+    return info.seconds * 1_000_000 + info.microseconds
+
+
 def _inspect_process(pid: int) -> dict | None:
     """Read only this PID's executable, start time and command line."""
     if sys.platform == "darwin":
         try:
             executable_text = subprocess.check_output(["/bin/ps", "-ww", "-p", str(pid), "-o", "comm="], text=True).strip()
-            started = subprocess.check_output(["/bin/ps", "-ww", "-p", str(pid), "-o", "lstart="], text=True).strip()
             command = subprocess.check_output(["/bin/ps", "-ww", "-p", str(pid), "-o", "command="], text=True).strip()
         except subprocess.CalledProcessError:
             return None
-        if not executable_text or not started or not command: return None
+        started = _darwin_process_start(pid)
+        if not executable_text or started is None or not command: return None
         executable = Path(executable_text)
         if not executable.is_absolute() or not (command == executable_text or command.startswith(executable_text + " ")):
             raise WatchStateError("identity_unverified")

@@ -169,6 +169,17 @@ def main():
             if application:application.terminate()
             try:process.wait(timeout=15)
             except subprocess.TimeoutExpired:result['cooperativeExitPending']=True
+        command=subprocess.Popen([str(args.app/'Contents/MacOS'/info['CFBundleExecutable']),'--help'],env=env,
+            stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        try:
+            stdout,stderr=command.communicate(timeout=4)
+            result['publicCliHelp']=stdout.decode('utf-8',errors='replace')[:4000]
+        except subprocess.TimeoutExpired:
+            application=NSRunningApplication.runningApplicationWithProcessIdentifier_(command.pid)
+            if application:application.terminate()
+            result['publicCliHelp']='No immediate command help; no termination signal was sent.'
+            try:command.communicate(timeout=10)
+            except subprocess.TimeoutExpired:result['helpExitPending']=True
     args.report.write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
 
 
