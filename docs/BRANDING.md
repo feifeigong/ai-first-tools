@@ -13,6 +13,6 @@
 | GitHub 仓库、英文发布资产前缀和压缩包目录 | 旧版下载器的固定协议，保留完整版本、来源、摘要及路径校验。 |
 | 已发布包的历史文件名、校验值及归属标记 | 保留可核验的发布历史，不重写旧记录冒充新版本。 |
 
-安装升级只移除确实指向本安装的旧快捷方式；用户改成其他目标的同名链接、非空目录及额外文件保留。快捷方式的新显示名不改变稳定回滚入口。
+安装升级只移除确实指向本安装的旧快捷方式；用户改成其他目标的同名链接、非空目录及额外文件保留。快捷方式的新显示名不改变稳定回滚入口。归属读取使用Windows原生IShellLinkW Unicode接口；本轮英文CI中，原始快捷方式含正确Unicode路径，而WScript.Shell返回空目标，不能为此删掉归属验证或改成盲删旧图标。
 
 Mac 的本地化命名依据 [Apple 的 CFBundleDisplayName 说明](https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html)。界面仅显示新名称，兼容细节不放进使用流程。

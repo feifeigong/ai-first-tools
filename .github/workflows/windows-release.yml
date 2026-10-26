@@ -150,9 +150,10 @@ jobs:
           $desktop=[Environment]::GetFolderPath('DesktopDirectory')
           $programs=[Environment]::GetFolderPath('Programs')
           $shell=New-Object -ComObject WScript.Shell
+          Add-Type -Path (Join-Path $target 'assets/ShellLinkTarget.cs')
           foreach($shortcut in @((Join-Path $desktop 'AI一手工具箱.lnk'),(Join-Path $programs 'AI一手工具箱/AI一手工具箱.lnk'))) {
             if (!(Test-Path -LiteralPath $shortcut)) { throw ('Missing branded shortcut: '+[IO.Path]::GetFileName($shortcut)) }
-            if ($shell.CreateShortcut($shortcut).TargetPath -ne (Join-Path $target 'AI一手工具工作台.exe')) { throw ('Shortcut target must retain the stable rollback-compatible apphost: '+[IO.Path]::GetFileName($shell.CreateShortcut($shortcut).TargetPath)) }
+            if ([AIFirst.Toolbox.ShellLinkTarget]::Read($shortcut) -ne (Join-Path $target 'AI一手工具工作台.exe')) { throw 'Unicode shortcut target must retain the stable rollback-compatible apphost' }
           }
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json
           if ($LASTEXITCODE) { throw 'Installed background lifecycle checks failed' }
@@ -160,14 +161,14 @@ jobs:
           Set-Content -LiteralPath $extra -Value 'synthetic extra file must survive'
           # Model an owned legacy desktop link and a user-repurposed menu link.
           $legacyDesktop=Join-Path $desktop 'AI一手工具工作台.lnk'
-          $link=$shell.CreateShortcut($legacyDesktop);$link.TargetPath=Join-Path $target 'AI一手工具工作台.exe';$link.Save()
+          Copy-Item -LiteralPath (Join-Path $desktop 'AI一手工具箱.lnk') -Destination $legacyDesktop
           $legacyMenu=Join-Path $programs 'AI一手工具工作台/AI一手工具工作台.lnk'
           New-Item -ItemType Directory -Force (Split-Path $legacyMenu) | Out-Null
           $link=$shell.CreateShortcut($legacyMenu);$link.TargetPath=Join-Path $env:WINDIR 'System32/notepad.exe';$link.Save()
           $reinstall=Start-Process -FilePath $setup -ArgumentList '/S' -PassThru -WindowStyle Hidden
           $reinstall.WaitForExit()
           if ($reinstall.ExitCode -ne 0 -or (Get-Content -LiteralPath $extra -Raw).Trim() -ne 'synthetic extra file must survive') { throw 'Silent reinstall or extra-file protection failed' }
-          if ((Test-Path -LiteralPath $legacyDesktop) -or !(Test-Path -LiteralPath $legacyMenu) -or $shell.CreateShortcut($legacyMenu).TargetPath -ne (Join-Path $env:WINDIR 'System32/notepad.exe')) { throw 'Legacy shortcut migration must remove only links owned by this installation' }
+          if ((Test-Path -LiteralPath $legacyDesktop) -or !(Test-Path -LiteralPath $legacyMenu) -or [AIFirst.Toolbox.ShellLinkTarget]::Read($legacyMenu) -ne (Join-Path $env:WINDIR 'System32/notepad.exe')) { throw 'Legacy shortcut migration must remove only links owned by this installation' }
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json --stage reinstall
           if ($LASTEXITCODE) { throw 'Reinstallation did not restore the running background' }
           # NSIS uninstallation delegates to a temporary child. This operation

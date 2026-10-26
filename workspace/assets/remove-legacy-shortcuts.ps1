@@ -8,12 +8,12 @@ $programs=[Environment]::GetFolderPath('Programs')
 $folder=Join-Path $programs $legacy
 $links=@((Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) ($legacy+'.lnk')),(Join-Path $folder ($legacy+'.lnk')))
 $owned=@((Join-Path $expected ($legacy+'.exe')),(Join-Path $expected 'AI一手工具箱.exe'))
-$shell=New-Object -ComObject WScript.Shell
+if (!('AIFirst.Toolbox.ShellLinkTarget' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'ShellLinkTarget.cs') }
 foreach($path in $links) {
     if (!(Test-Path -LiteralPath $path -PathType Leaf)) { continue }
     if ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
-    $link=$shell.CreateShortcut($path)
-    if ($owned -contains $link.TargetPath) { Remove-Item -LiteralPath $path -Force }
+    $actual=[AIFirst.Toolbox.ShellLinkTarget]::Read($path)
+    if ($owned -contains $actual) { Remove-Item -LiteralPath $path -Force }
 }
 # Remove only the now-empty legacy shortcut folder; extra user links survive.
 if ((Test-Path -LiteralPath $folder -PathType Container) -and !(Get-ChildItem -LiteralPath $folder -Force | Select-Object -First 1)) {
