@@ -84,9 +84,13 @@ def main():
             if any(word in key.upper() for word in ('TOKEN','SECRET','PASSWORD')):env.pop(key)
         process=subprocess.Popen([str(args.app/'Contents/MacOS'/info['CFBundleExecutable'])],env=env,
             stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-        from AppKit import NSRunningApplication
+        from AppKit import NSRunningApplication, NSWorkspace
         try:
             time.sleep(12)
+            application=NSRunningApplication.runningApplicationWithProcessIdentifier_(process.pid)
+            application.activateWithOptions_(3)
+            time.sleep(1)
+            result['targetForeground']=NSWorkspace.sharedWorkspace().frontmostApplication().processIdentifier()==process.pid
             ax=Accessibility()
             try:
                 result['accessibilityTrusted']=bool(ax.ax.AXIsProcessTrusted())
@@ -113,6 +117,18 @@ def main():
                         if len(after)==1 and not ax.cf.CFEqual(before,after[0]):replaced=True;break
                         time.sleep(.2)
                     result['reloadShortcuts'][label]={'documentReplaced':replaced,'initialWebAreas':len(areas)}
+                areas=[element for element,role,_ in ax.walk(app) if role=='AXWebArea']
+                if len(areas)==1:
+                    names=ctypes.c_void_p()
+                    ax.ax.AXUIElementCopyActionNames.argtypes=[ctypes.c_void_p,ctypes.POINTER(ctypes.c_void_p)]
+                    code=ax.ax.AXUIElementCopyActionNames(areas[0],ctypes.byref(names))
+                    if not code:
+                        ax.owned.append(names.value)
+                        result['webActions']=[ax.text(ax.cf.CFArrayGetValueAtIndex(names.value,i)) for i in range(ax.cf.CFArrayGetCount(names.value))]
+                    if 'AXShowMenu' in result.get('webActions',[]):
+                        result['showMenuCode']=ax.ax.AXUIElementPerformAction(areas[0],ax.string('AXShowMenu'))
+                        time.sleep(.5)
+                        result['contextLabels']=[title for _,role,title in ax.walk(app) if role=='AXMenuItem' and title]
                 menu=ax.attribute(app,'AXMenuBar')
                 if menu:
                     controls=list(ax.walk(menu))

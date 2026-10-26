@@ -124,6 +124,17 @@ def audit(report: Path) -> int:
                     diagnostics['syntheticChild'+name.title()]=(path.read_text(errors='replace')[-1000:].replace(str(root),'[fixture]') if path.exists() else '')
                 diagnostics['startupEnabled']=controller.enabled()
                 diagnostics['syntheticStateExists']=(state/'state.json').exists()
+                from codex_auto_resume.watch_control import _inspect_process, _watcher, inspect_watch, state_path
+                try:
+                    identity=_inspect_process(int(diagnostics['launchAgentStatus'].get('pid','0')))
+                    diagnostics['launchAgentIdentity']={'present':identity is not None,
+                        'expectedExecutable':identity is not None and Path(identity['executable'])==controller.executable,
+                        'recognizedWatcher':identity is not None and _watcher(identity),
+                        'argumentCount':len(identity['argv']) if identity else None,
+                        'watchFlag':identity is not None and WATCH in identity['argv']}
+                except Exception as identity_error: diagnostics['launchAgentIdentityError']=str(identity_error)[:80]
+                try: diagnostics['watchStateRunning']=inspect_watch(state_path())['running']
+                except Exception as state_error: diagnostics['watchStateError']=str(state_error)[:80]
         else: failure=None
         finally:
             with contextlib.suppress(Exception): controller.action('uninstall')
