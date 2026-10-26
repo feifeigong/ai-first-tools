@@ -46,7 +46,7 @@ class Controller:
         if not self.plist.exists(): return None
         with self.plist.open('rb') as stream: value = plistlib.load(stream)
         if value.get('Label') != LABEL or value.get('ProgramArguments') != [str(self.executable),WATCH]:
-            raise ControlError('开机设置属于另一处工作台，请先在原工作台关闭开机自动开启。')
+            raise ControlError('开机设置属于另一处工具箱，请先在原工具箱关闭开机自动开启。')
         return value
 
     def watchers(self):
@@ -90,7 +90,7 @@ class Controller:
 
     def start(self):
         if self.watchers(): return
-        if not self.executable.is_file(): raise ControlError('内置续跑组件缺失，请重新安装完整工作台。')
+        if not self.executable.is_file(): raise ControlError('内置续跑组件缺失，请重新安装完整工具箱。')
         env=os.environ.copy()
         env['PYINSTALLER_RESET_ENVIRONMENT']='1'
         subprocess.Popen([str(self.executable),WATCH,'--manual'],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,

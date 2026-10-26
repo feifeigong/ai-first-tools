@@ -10,9 +10,9 @@ Mac 构建、完整背景和继续开发步骤见 [Mac 开发交接](MACOS-HANDO
 
 ## 目录
 
-- `workspace/`：WPF 单窗口工作台。
+- `workspace/`：WPF 单窗口工具箱。
 - `dialog-mover/`：Python / pywebview 对话搬家界面与本机适配。
-- `auto-resume/`：随工作台冻结的续跑后台、原生组件锁定清单及回归测试。
+- `auto-resume/`：随工具箱冻结的续跑后台、原生组件锁定清单及回归测试。
 - `txcript/`：修改后的 Rust 迁移引擎，保留上游许可证与文档。
 - `installer/`：NSIS 当前用户安装程序，不要求管理员权限。
 - `scripts/`：打包、许可证收集、发布包检查。
@@ -55,7 +55,7 @@ dotnet build workspace\AIFirst.Workspace.csproj -c Release
   -WebViewBootstrapper C:\BuildTools\MicrosoftEdgeWebview2Setup.exe
 ```
 
-生成安装包、免安装 ZIP 与 SHA-256 校验文件，位于 `artifacts/release/`。工作台以自带 .NET 的方式发布，迁移引擎旁也带所需 Visual C++ 运行库；原应用源码和引擎不因打包而改写。
+生成安装包、免安装 ZIP 与 SHA-256 校验文件，位于 `artifacts/release/`。工具箱以自带 .NET 的方式发布，迁移引擎旁也带所需 Visual C++ 运行库；原应用源码和引擎不因打包而改写。
 
 Windows 流水线额外冻结内置续跑后台并执行原生离线检查；干净 runner 实际安装后，通过真实开关验证无外部运行环境时启停、禁止重新常驻、运行中覆盖更新与恢复、卸载后的进程和开机项清理。`audit_bundled_resume.py` 明确拒绝修改非 CI 用户安装；本机原生控制测试使用独立合成配置并隔离旧程序发现和注册表操作。
 
@@ -75,9 +75,9 @@ v0.3.5 / v0.3.6 使用相同的既有已测试引擎，SHA-256：`799b80dff7ba44
 
 # 2026-10-23 本地预览启动修复补充
 
-选择内置页使用 `--page dialog-mover` 或 `--page auto-resume`；`--tool` 保留完整自定义 EXE 路径用途，并兼容两个已知内置工具编号。名称不能被当作启动文件路径。不要仅依据工作台主窗口句柄报告工具打开成功，应再检查实际工具页加载/内嵌握手。
+选择内置页使用 `--page dialog-mover` 或 `--page auto-resume`；`--tool` 保留完整自定义 EXE 路径用途，并兼容两个已知内置工具编号。名称不能被当作启动文件路径。不要仅依据工具箱主窗口句柄报告工具打开成功，应再检查实际工具页加载/内嵌握手。
 
-单工具的 InvalidDataException/无效路径等预期启动失败在工具页处理，不触发全局工作台退出。新增自检使用隔离配置和注入日志，不启动真实工具或读取真实聊天。当前修复构建证据位于 `artifacts/startup-guard-preview/`，源码阶段自检140项、最终包141项通过，0失败，清单与交付检查通过。完整搬家引擎、记忆服务、重复搬家修复、续跑与重置提醒组件不重建，逐文件摘要与上一包相同。不覆盖安装、不强杀任务、不提交或发布。
+单工具的 InvalidDataException/无效路径等预期启动失败在工具页处理，不触发全局工具箱退出。新增自检使用隔离配置和注入日志，不启动真实工具或读取真实聊天。当前修复构建证据位于 `artifacts/startup-guard-preview/`，源码阶段自检140项、最终包141项通过，0失败，清单与交付检查通过。完整搬家引擎、记忆服务、重复搬家修复、续跑与重置提醒组件不重建，逐文件摘要与上一包相同。不覆盖安装、不强杀任务、不提交或发布。
 
 旧报错窗口已退出。使用正确的 `--page dialog-mover` 打开独立启动修复预览，启动握手报告 `opening-health.json` 为 ready=true、attached=true、error=null；随后通过桌面控制显示窗口，目视确认对话搬家页与软件列表已加载、没有异常弹窗。此为正常预览启动核对，没有点开真实聊天正文、执行搬家或发送模型消息，不能当真实迁移/续聊通过。
 

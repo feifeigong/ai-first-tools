@@ -1,4 +1,4 @@
-<Window x:Class="AIFirst.Workspace.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Title="AI一手工具工作台" Width="1440" Height="960" MinWidth="1100" MinHeight="740" WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" Background="#F5F6F8" FontFamily="Microsoft YaHei UI" FontSize="14" Foreground="#202D3A" Closing="OnClosing">
+<Window x:Class="AIFirst.Workspace.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Title="AI一手工具箱" Width="1440" Height="960" MinWidth="1100" MinHeight="740" WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" Background="#F5F6F8" FontFamily="Microsoft YaHei UI" FontSize="14" Foreground="#202D3A" Closing="OnClosing">
   <Window.Resources>
     <Style x:Key="CaptionButton" TargetType="Button">
       <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="#43515E" /><Setter Property="Width" Value="48" /><Setter Property="Padding" Value="0" /><Setter Property="BorderThickness" Value="0" /><Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}" /><Setter Property="Cursor" Value="Arrow" />
@@ -20,7 +20,7 @@
           <Image x:Name="BrandLogo" Width="60" Height="30" Stretch="Uniform" AutomationProperties.Name="AI一手 Logo" RenderOptions.BitmapScalingMode="HighQuality" />
           <TextBlock x:Name="BrandText" Text="AI一手" FontSize="18" FontWeight="Bold" Foreground="#0073E6" Visibility="Collapsed" VerticalAlignment="Center" />
           <Border Width="1" Height="16" Background="#E1E6EC" Margin="14,0" />
-          <TextBlock Text="工具工作台" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Foreground="#3C4956" />
+          <TextBlock Text="工具箱" VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold" Foreground="#3C4956" />
           <Button x:Name="SidebarToggle" Style="{StaticResource SidebarButton}" Click="ToggleSidebarClick" ToolTip="收起工具侧栏" AutomationProperties.Name="收起工具侧栏" shell:WindowChrome.IsHitTestVisibleInChrome="True" Margin="18,0,0,0" Foreground="#627180">
             <Grid Width="18" Height="16">
               <Path Data="M3,1 H15 Q17,1 17,3 V13 Q17,15 15,15 H3 Q1,15 1,13 V3 Q1,1 3,1 Z M6,1 V15" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.4" StrokeLineJoin="Round" />
@@ -33,7 +33,7 @@
           <Button x:Name="CheckUpdateButton" Content="检查更新" Click="CheckUpdateClick" FontSize="12" Padding="12,5" Margin="0,7,12,7" ToolTip="从 AI一手的 GitHub 发布页检查新版本" AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" />
           <Button Style="{StaticResource CaptionButton}" ToolTip="最小化" AutomationProperties.Name="最小化" Click="MinimizeClick"><Path Data="M1,7 L13,7" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" /></Button>
           <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" ToolTip="最大化" AutomationProperties.Name="最大化" Click="MaximizeClick"><Path x:Name="MaximizeGlyph" Data="M1,1 H13 V13 H1 Z" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" /></Button>
-          <Button Style="{StaticResource CloseCaptionButton}" ToolTip="关闭工作台" AutomationProperties.Name="关闭工作台" Click="WindowCloseClick"><Path Data="M1,1 L13,13 M13,1 L1,13" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" /></Button>
+          <Button Style="{StaticResource CloseCaptionButton}" ToolTip="关闭工具箱" AutomationProperties.Name="关闭工具箱" Click="WindowCloseClick"><Path Data="M1,1 L13,13 M13,1 L1,13" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" /></Button>
         </StackPanel>
       </Grid>
     </Border>

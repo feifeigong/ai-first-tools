@@ -17,14 +17,14 @@ function Get-ResetMonitorDirectory {
         $binding = Join-Path $directory 'active-data-profile.json'
         if (Test-Path -LiteralPath $binding) {
             $file = Get-Item -LiteralPath $binding -Force
-            if ($file.PSIsContainer -or $file.Length -gt 1024 -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw '工作台资料设置暂时无法读取，原资料已保留。' }
+            if ($file.PSIsContainer -or $file.Length -gt 1024 -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw '工具箱资料设置暂时无法读取，原资料已保留。' }
             $value = [IO.File]::ReadAllText($binding) | ConvertFrom-Json
-            if ($null -eq $value -or @($value.PSObject.Properties).Count -ne 2 -or $value.format -cne 'ai-first-data-profile-v1' -or $value.profile -cnotin @('default','memory-preview')) { throw '工作台资料设置暂时无法读取，原资料已保留。' }
+            if ($null -eq $value -or @($value.PSObject.Properties).Count -ne 2 -or $value.format -cne 'ai-first-data-profile-v1' -or $value.profile -cnotin @('default','memory-preview')) { throw '工具箱资料设置暂时无法读取，原资料已保留。' }
             if ($value.profile -ceq 'memory-preview') { $directory = Join-Path $directory 'memory-preview' }
         }
     }
     foreach ($path in @($settingsDirectory,$directory)) {
-        if ((Test-Path -LiteralPath $path) -and ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw '工作台资料位置暂时无法核对，原资料已保留。' }
+        if ((Test-Path -LiteralPath $path) -and ((Get-Item -LiteralPath $path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw '工具箱资料位置暂时无法核对，原资料已保留。' }
     }
     Join-Path $directory 'reset-notices'
 }
@@ -185,7 +185,7 @@ function Save-BundledPreference([bool]$Enabled) {
 function Get-BundledPreference {
     if (!(Test-Path -LiteralPath $bundledPreference)) { return $null }
     $value = Get-Content -LiteralPath $bundledPreference -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($null -eq $value -or $value.autostart -isnot [bool]) { throw '开机设置暂时无法读取，请修复工作台设置后重试。' }
+    if ($null -eq $value -or $value.autostart -isnot [bool]) { throw '开机设置暂时无法读取，请修复工具箱设置后重试。' }
     return $value.autostart
 }
 function Get-BundleStatus {
@@ -239,7 +239,7 @@ function Stop-BundledWatcher {
     if (@(Get-BundledWatchers).Count -gt 0) { throw '自动续跑正在结束当前检查，请稍后刷新确认。' }
 }
 function Invoke-BundledAction([string]$Operation) {
-    if (!(Test-Path -LiteralPath $script:bundledExecutable -PathType Leaf)) { throw '内置续跑组件缺失，请重新安装完整工作台。' }
+    if (!(Test-Path -LiteralPath $script:bundledExecutable -PathType Leaf)) { throw '内置续跑组件缺失，请重新安装完整工具箱。' }
     $script:hasLegacy = Connect-Resume
     if ($Operation -eq 'status') { return Get-BundleStatus }
     New-Item -ItemType Directory -Path $settingsDirectory -Force | Out-Null

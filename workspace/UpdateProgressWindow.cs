@@ -25,11 +25,11 @@ internal sealed class UpdateProgressWindow : IDisposable
     {
         job = directory;
         var panel = new StackPanel { Margin = new Thickness(28) };
-        panel.Children.Add(new TextBlock { Text = "正在更新工具工作台", FontSize = 20, FontWeight = FontWeights.SemiBold });
+        panel.Children.Add(new TextBlock { Text = "正在更新工具箱", FontSize = 20, FontWeight = FontWeights.SemiBold });
         panel.Children.Add(stage);
         panel.Children.Add(elapsed);
         panel.Children.Add(new ProgressBar { Height = 4, IsIndeterminate = true, Margin = new Thickness(0, 16, 0, 0) });
-        Window = new Window { Title = "AI一手工具工作台 · 更新", Icon = BrandAssets.LoadWindowIcon(), Content = panel,
+        Window = new Window { Title = "AI一手工具箱 · 更新", Icon = BrandAssets.LoadWindowIcon(), Content = panel,
             Width = 470, Height = 230, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterScreen,
             FontFamily = new System.Windows.Media.FontFamily("Microsoft YaHei UI") };
         Window.Closing += OnClosing;

@@ -33,9 +33,9 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(INSTALL.exists(), "Refuse to modify an existing installation")
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders") as key:
             desktop = Path(os.path.expandvars(winreg.QueryValueEx(key, "Desktop")[0]))
-        self.assertFalse((desktop / "AI一手工具工作台.lnk").exists(), "Refuse to replace an existing shortcut")
+        self.assertFalse((desktop / "AI一手工具箱.lnk").exists(), "Refuse to replace an existing shortcut")
         self.assertEqual(execute(INSTALLER, "/S"), 0)
-        executable = INSTALL / "AI一手工具工作台.exe"
+        executable = INSTALL / "AI一手工具箱.exe"
         self.assertTrue(executable.is_file())
         version = ElementTree.parse(ROOT / "workspace" / "AIFirst.Workspace.csproj").findtext("./PropertyGroup/Version")
         self.assertIsNotNone(version)

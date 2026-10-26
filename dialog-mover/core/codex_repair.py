@@ -141,7 +141,7 @@ def create_copy(*, root: Path, archive_root: Path, source_paths: list[Path], old
     plain(root); plain(archive_root)
     private_archive = Path(env['LOCALAPPDATA']) / 'AI一手工具工作台' / 'memory-preview' / 'codex-repairs'
     if _norm(str(archive_root)) != _norm(str(private_archive)) or not 1 <= len(source_paths) <= 8:
-        raise ValueError('修复原档只能保存在工作台自己的资料区。')
+        raise ValueError('修复原档只能保存在工具箱自己的资料区。')
     if Path(env['CODEX_HOME']).resolve() != root.resolve() or not Path(directory).is_dir():
         raise ValueError('修复目标无法核对，原记录未改动。')
     database = root / 'state_5.sqlite'; plain(database)

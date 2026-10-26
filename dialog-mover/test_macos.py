@@ -45,7 +45,7 @@ class MacPathsTests(unittest.TestCase):
                 actual=eval(compile(ast.Expression(bundle),'<bundle-identity>','eval'),namespace)
                 self.assertEqual(actual['bundle_identifier'],'cn.aifirst.tools.preview' if preview else 'cn.aifirst.tools')
                 self.assertEqual(actual['name'],'AI一手工具工作台预览.app' if preview else 'AI一手工具工作台.app')
-                self.assertEqual('本地预览' in actual['info_plist']['CFBundleDisplayName'],preview)
+                self.assertEqual(actual['info_plist']['CFBundleDisplayName'],Path(actual['name']).stem)
             self.assertEqual(json.loads((root/'macos/version.json').read_text()),formal)
 
     def test_smoke_profile_is_empty_without_initializing_destination_stores(self):

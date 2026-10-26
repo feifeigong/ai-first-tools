@@ -111,7 +111,7 @@ internal sealed class ToolSession : IDisposable
         NativeMethods.GetWindowThreadProcessId(Window, out var processId);
         if (processId != Process.Id) throw new InvalidOperationException("工具窗口与启动的进程不一致，已停止接入。");
         if (!NativeMethods.AreDpiAwarenessContextsEqual(NativeMethods.GetWindowDpiAwarenessContext(Window), NativeMethods.GetWindowDpiAwarenessContext(parent)))
-            throw new InvalidOperationException("这款工具和工作台的显示缩放模式不同。为避免错位，请先独立打开。");
+            throw new InvalidOperationException("这款工具和工具箱的显示缩放模式不同。为避免错位，请先独立打开。");
         if (Attached && NativeMethods.GetParent(Window) == parent)
         {
             Resize(parent);
@@ -153,7 +153,7 @@ internal sealed class ToolSession : IDisposable
     {
         if (!NativeMethods.IsWindow(Window)) return;
         NativeMethods.GetWindowThreadProcessId(Window, out var processId);
-        if (processId != Process.Id) throw new InvalidOperationException("不是工作台启动的工具窗口。");
+        if (processId != Process.Id) throw new InvalidOperationException("不是工具箱启动的工具窗口。");
         SaveWindowState();
         needsRestore = true;
         var visible = NativeMethods.IsWindowVisible(Window);

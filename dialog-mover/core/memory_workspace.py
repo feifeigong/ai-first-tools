@@ -47,7 +47,7 @@ def validate(workspace: Path, library: Path) -> Path:
         return Path(value)
     if (not workspace.is_dir() or not re.fullmatch(r"[0-9a-f]{32}", workspace.name)
             or key(workspace.parent) != key(library / "copilot-workspaces")):
-        raise ValueError("智能搬家只能使用工作台新建的资料项目，已有项目不会被写入。")
+        raise ValueError("智能搬家只能使用工具箱新建的资料项目，已有项目不会被写入。")
     marker = workspace / MARKER
     no_links(marker)
     try:
@@ -64,6 +64,6 @@ def library_for(memory: Path) -> Path:
     workspace = memory.absolute().parent
     library = workspace.parent.parent
     if memory.name != ".agent-memory":
-        raise ValueError("不是工作台创建的资料位置。")
+        raise ValueError("不是工具箱创建的资料位置。")
     validate(workspace, library)
     return library.resolve()

@@ -138,7 +138,7 @@ jobs:
           $install=Start-Process -FilePath $setup -ArgumentList '/S' -PassThru -WindowStyle Hidden
           $install.WaitForExit()
           if ($install.ExitCode -ne 0) { throw 'Silent installation failed' }
-          $app=Join-Path $target 'AI一手工具工作台.exe'
+          $app=Join-Path $target 'AI一手工具箱.exe'
           $report=Join-Path $PWD 'artifacts/windows/installed-self-test.json'
           $test=Start-Process -FilePath $app -ArgumentList @('--self-test','--report',$report) -Wait -PassThru -WindowStyle Hidden
           $checks=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
@@ -146,13 +146,27 @@ jobs:
           $manifest=Get-Content (Join-Path $target 'update-manifest.json') -Raw | ConvertFrom-Json
           if ($manifest.version -ne $version) { throw 'Installed manifest version mismatch' }
           if ((Get-ItemProperty 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/AIFirstTools').DisplayVersion -ne $version) { throw 'Installation registry version mismatch' }
+          if ((Get-ItemProperty 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/AIFirstTools').DisplayName -ne 'AI一手工具箱' -or (Get-Item $app).VersionInfo.ProductName -ne 'AI一手工具箱' -or (Get-Item $app).VersionInfo.FileDescription -ne 'AI一手工具箱') { throw 'Product branding does not match the installed executable' }
+          $desktop=[Environment]::GetFolderPath('DesktopDirectory')
+          $programs=[Environment]::GetFolderPath('Programs')
+          $shell=New-Object -ComObject WScript.Shell
+          foreach($shortcut in @((Join-Path $desktop 'AI一手工具箱.lnk'),(Join-Path $programs 'AI一手工具箱/AI一手工具箱.lnk'))) {
+            if (!(Test-Path -LiteralPath $shortcut) -or $shell.CreateShortcut($shortcut).TargetPath -ne (Join-Path $target 'AI一手工具工作台.exe')) { throw 'New product shortcuts must retain the stable rollback-compatible target' }
+          }
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json
           if ($LASTEXITCODE) { throw 'Installed background lifecycle checks failed' }
           $extra=Join-Path $target 'synthetic-user-note.txt'
           Set-Content -LiteralPath $extra -Value 'synthetic extra file must survive'
+          # Model an owned legacy desktop link and a user-repurposed menu link.
+          $legacyDesktop=Join-Path $desktop 'AI一手工具工作台.lnk'
+          $link=$shell.CreateShortcut($legacyDesktop);$link.TargetPath=Join-Path $target 'AI一手工具工作台.exe';$link.Save()
+          $legacyMenu=Join-Path $programs 'AI一手工具工作台/AI一手工具工作台.lnk'
+          New-Item -ItemType Directory -Force (Split-Path $legacyMenu) | Out-Null
+          $link=$shell.CreateShortcut($legacyMenu);$link.TargetPath=Join-Path $env:WINDIR 'System32/notepad.exe';$link.Save()
           $reinstall=Start-Process -FilePath $setup -ArgumentList '/S' -PassThru -WindowStyle Hidden
           $reinstall.WaitForExit()
           if ($reinstall.ExitCode -ne 0 -or (Get-Content -LiteralPath $extra -Raw).Trim() -ne 'synthetic extra file must survive') { throw 'Silent reinstall or extra-file protection failed' }
+          if ((Test-Path -LiteralPath $legacyDesktop) -or !(Test-Path -LiteralPath $legacyMenu) -or $shell.CreateShortcut($legacyMenu).TargetPath -ne (Join-Path $env:WINDIR 'System32/notepad.exe')) { throw 'Legacy shortcut migration must remove only links owned by this installation' }
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json --stage reinstall
           if ($LASTEXITCODE) { throw 'Reinstallation did not restore the running background' }
           # NSIS uninstallation delegates to a temporary child. This operation
@@ -163,7 +177,7 @@ jobs:
           if ($uninstall.ExitCode -ne 0 -or (Test-Path -LiteralPath $app) -or !(Test-Path -LiteralPath $extra)) { throw 'Uninstall protection failed' }
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json --stage uninstall
           if ($LASTEXITCODE) { throw 'Uninstall left background processes or startup behind' }
-          @{ passed=$true; checks=@{ silentInstall=$true; silentReinstall=$true; installedSelfChecks=$true; installedVersion=$true; extraFilePreserved=$true; safeUninstall=$true; bundledRuntime=$true; bundledControls=$true; backgroundUpgrade=$true; backgroundUninstall=$true }; version=$version; scope='Clean GitHub Windows runner, real installer and bundled background, synthetic disabled workload; no user installation or Agent data' } | ConvertTo-Json -Depth 4 | Set-Content artifacts/windows/installer-test.json
+          @{ passed=$true; checks=@{ silentInstall=$true; silentReinstall=$true; installedSelfChecks=$true; installedVersion=$true; extraFilePreserved=$true; safeUninstall=$true; bundledRuntime=$true; bundledControls=$true; backgroundUpgrade=$true; backgroundUninstall=$true; productBranding=$true; brandedShortcuts=$true; ownedLegacyShortcutRemoved=$true; foreignLegacyShortcutPreserved=$true }; version=$version; scope='Clean GitHub Windows runner, real installer and bundled background, synthetic disabled workload; no user installation or Agent data' } | ConvertTo-Json -Depth 4 | Set-Content artifacts/windows/installer-test.json
       - name: Audit full installer staging and incremental replacement
         shell: pwsh
         run: |

@@ -90,7 +90,7 @@ public partial class App : Application
         try { dataRoot=UserDataRoot; }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException)
         {
-            MessageBox.Show("工作台资料设置暂时无法读取，原资料已保留。", "AI一手", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("工具箱资料设置暂时无法读取，原资料已保留。", "AI一手", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown(1); return;
         }
         var configuration = Option(args.Args, "--config") ?? Path.Combine(dataRoot, "tools.json");
@@ -100,7 +100,7 @@ public partial class App : Application
         instance = new Mutex(true, "Local\\AI_FIRST_TOOL_WORKSPACE_" + key, out var isNew);
         if (!isNew)
         {
-            if (!await InstanceActivation.ShowExistingAsync(key)) MessageBox.Show("工作台还在打开，请稍等一下。", "AI一手", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (!await InstanceActivation.ShowExistingAsync(key)) MessageBox.Show("工具箱还在打开，请稍等一下。", "AI一手", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
         }
@@ -127,7 +127,7 @@ public partial class App : Application
         {
             window.ReleaseTools();
             Log(error.Exception);
-            MessageBox.Show("工作台遇到了异常。已打开的工具会恢复为独立窗口，不会强行停止任务。", "AI一手工具工作台", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("工具箱遇到了异常。已打开的工具会恢复为独立窗口，不会强行停止任务。", "AI一手工具箱", MessageBoxButton.OK, MessageBoxImage.Warning);
             error.Handled = true;
             Shutdown(1);
         };

@@ -1,5 +1,9 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+## 当前改名候选：preview.21
+
+产品名已统一为“AI一手工具箱”，原生发布须重新构建preview.21。旧.app物理名、可执行文件、bundle ID、用户资料与LaunchAgent身份保留，避免中断旧版升级/续跑；本地化显示名、原生进程名、窗口及DMG卷名使用新名。验证增加系统本地化、Finder显示名与进程名三项，详见BRANDING.md。不能仅凭代码断言Finder已改名。原登录Copilot接续边界保持。
+
 ## 当前 Mac 包：preview.20
 
 两架构运行包已完成并上传，固定源码44b7e21，普通40286406179及独立40286421067通过，各129项原生检查。下载开发草稿的20版Apple或Intel独立DMG，不再使用下方旧19包；报告和校验和与新包一起提供。Windows请用公开正式v0.3.17。
@@ -18,7 +22,7 @@ Windows固定枚举资料绑定不改变Mac资料布局；ResetBridge宿主仍�
 
 fc54ad45e8f348f94bc717d5abf6d99e765ab8de已生成两芯片运行包。独立预览40266306041、普通候选40266303179的Apple/Intel原生任务均成功，当前源/页面405项通过；具体报告与边界见MACOS-QA.md。使用当前独立DMG，不使用旧4e4fdec源码ZIP或公开preview.18代替本轮修正。
 
-独立APP名称“AI一手工具工作台预览”，与正式应用不同名，不覆盖正式安装；内置运行组件，不要求用户另装开发工具。实际续跑开关仍按用户明确操作控制已核实的后台，不能擅自替用户开关。
+独立APP名称“AI一手工具箱预览”，与正式应用不同名，不覆盖正式安装；内置运行组件，不要求用户另装开发工具。实际续跑开关仍按用户明确操作控制已核实的后台，不能擅自替用户开关。
 
 用户已同意稍后在Mac继续；按[Mac接续检查](MACOS-NEXT-VALIDATION.md)直接核对已登录Copilot的真实菜单与侧栏，不再询问是否有Mac或要求账号密码。此项及真实模型多轮未验收，整体functionalParityComplete仍为false，不能拿以下源/冻结合成通过代替。
 
@@ -63,11 +67,11 @@ Mac Copilot 新增严格的 AX 适配：核实官方签名/单窗口、任务与
 
 以下为先前已公开版本和开发历史，不能当作本轮新功能已验收的证据。
 
-当前公开 [preview.18](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.18)，包和标签固定 `851887ba4903d3bb8b79e8b344950223f915737f`。Copilot v2 使用原生图片、正常角色问答和默认折叠的历史归档；旧格式可重搬一次，旧副本保留。两架构原生构建 39124685770、13 资产独立下载核验 39125691806 和匿名公开选择/摘要/十份报告通过。保留完整内置续跑；Windows v0.3.15 的更新 helper 进度与清理调整仅限 Windows。列表链接只请求导航，不能保证缓存失效，Mac 在任务完成后完全退出 Copilot 再打开。Desktop 实际显示只验收 Windows 1.1.30；未发模型请求、未升级或重开用户工作台。详见 MACOS-QA.md 和 COPILOT-RELEASE-VERIFICATION.json。
+当前公开 [preview.18](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.18)，包和标签固定 `851887ba4903d3bb8b79e8b344950223f915737f`。Copilot v2 使用原生图片、正常角色问答和默认折叠的历史归档；旧格式可重搬一次，旧副本保留。两架构原生构建 39124685770、13 资产独立下载核验 39125691806 和匿名公开选择/摘要/十份报告通过。保留完整内置续跑；Windows v0.3.15 的更新 helper 进度与清理调整仅限 Windows。列表链接只请求导航，不能保证缓存失效，Mac 在任务完成后完全退出 Copilot 再打开。Desktop 实际显示只验收 Windows 1.1.30；未发模型请求、未升级或重开用户工具箱。详见 MACOS-QA.md 和 COPILOT-RELEASE-VERIFICATION.json。
 
-此前公开 [preview.17](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.17)，源码 `d15b0ee80240f0de0c29730edb7574738feca680`。Copilot 搬入完成打开原生会话管理页刷新列表，已搬过副本也能查看；保留 preview.16 的完整内置续跑。两架构原生构建与 13 个资产独立下载核验通过，匿名更新从 preview.16 选到 preview.17。Copilot 实际窗口验证仅限 Windows 1.1.30，未称 Mac Desktop 已验收。由用户自行自动更新，不替其升级或重开工作台。证据见 MACOS-QA.md、COPILOT-RELEASE-VERIFICATION.json。下文保留历史交接。
+此前公开 [preview.17](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.17)，源码 `d15b0ee80240f0de0c29730edb7574738feca680`。Copilot 搬入完成打开原生会话管理页刷新列表，已搬过副本也能查看；保留 preview.16 的完整内置续跑。两架构原生构建与 13 个资产独立下载核验通过，匿名更新从 preview.16 选到 preview.17。Copilot 实际窗口验证仅限 Windows 1.1.30，未称 Mac Desktop 已验收。由用户自行自动更新，不替其升级或重开工具箱。证据见 MACOS-QA.md、COPILOT-RELEASE-VERIFICATION.json。下文保留历史交接。
 
-此前公开 [preview.16](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.16)，安装包源码 `f6efcc44ae34e2505c79a41754439f862587e49a`。同一个工作台 APP 完整内置自动续跑页、Python 后台与按芯片校验的原生运行组件，不要求用户安装额外工具。两架构原生资源/页面/HTTPS/更新/续跑分别 11/10/3/9/8 项全通过，13 个资产独立下载核验通过，公开更新选择正常；源码与构建证据见 MACOS-QA.md。后台关闭防拉起、实际 launchd 自启、重复入口单实例、更新状态恢复、隔离 APP 移除后的退出与自启清理已验证。没有操作用户真实 Mac 或测试付费模型请求。下文为历史交接记录。
+此前公开 [preview.16](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.16)，安装包源码 `f6efcc44ae34e2505c79a41754439f862587e49a`。同一个工具箱 APP 完整内置自动续跑页、Python 后台与按芯片校验的原生运行组件，不要求用户安装额外工具。两架构原生资源/页面/HTTPS/更新/续跑分别 11/10/3/9/8 项全通过，13 个资产独立下载核验通过，公开更新选择正常；源码与构建证据见 MACOS-QA.md。后台关闭防拉起、实际 launchd 自启、重复入口单实例、更新状态恢复、隔离 APP 移除后的退出与自启清理已验证。没有操作用户真实 Mac 或测试付费模型请求。下文为历史交接记录。
 
 Copilot Desktop 搬入与列表修正已随 [preview.15](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.15) 公开，源码 dcdf5ad，两架构 131+1+10 项及 7/9/3/9 项冻结检查、全部 11 资产独立下载核验通过。当前更新入口选择较新的 preview.16，并确认保留相同 Copilot 适配；Windows 对应 v0.3.13。用户要求只提交和发布，由用户使用自动更新，不替其升级或重开本机。证据见 COPILOT.md、MACOS-QA.md。
 
@@ -77,7 +81,7 @@ Copilot Desktop 搬入与列表修正已随 [preview.15](https://github.com/feif
 
 ## 可直接给新对话的背景
 
-> 我在继续开发 feifeigong/ai-first-tools。先读 AGENTS.md、docs/DEVELOPMENT-CONTEXT.md、docs/MACOS.md 和本文件，再检查 Git、Mac 架构与最近 CI，不重复已完成修改。AI一手工具工作台面向非技术用户，当前自制工具是对话搬家。Windows WPF 保留；Mac 是 Python/pywebview Cocoa/WebKit 单窗口，共用 dialog-mover UI、Python 业务、修改后的 txcript。GitHub 发布 DMG，不上商店，不用 Developer ID/公证。根据我提供的错误排查，保持只复制、搬运中不强退、实际 Logo、真正隐藏侧栏和简单操作。不要读/上传真实认证、Cookie、聊天，先用隔离合成记录。不要把回读称为所有原生显示/续聊通过。
+> 我在继续开发 feifeigong/ai-first-tools。先读 AGENTS.md、docs/DEVELOPMENT-CONTEXT.md、docs/MACOS.md 和本文件，再检查 Git、Mac 架构与最近 CI，不重复已完成修改。AI一手工具箱面向非技术用户，当前自制工具是对话搬家。Windows WPF 保留；Mac 是 Python/pywebview Cocoa/WebKit 单窗口，共用 dialog-mover UI、Python 业务、修改后的 txcript。GitHub 发布 DMG，不上商店，不用 Developer ID/公证。根据我提供的错误排查，保持只复制、搬运中不强退、实际 Logo、真正隐藏侧栏和简单操作。不要读/上传真实认证、Cookie、聊天，先用隔离合成记录。不要把回读称为所有原生显示/续聊通过。
 
 历史背景不是新的操作授权；当前需求、文件和最近验证结果优先。
 
@@ -164,7 +168,7 @@ python scripts/package_macos.py --architecture "$(uname -m)"
 | 查看位置无反应 | common.open_external 参数与权限 |
 | 许可证/打包失败 | TOC、Python/PyObjC 元数据、Cargo metadata、资源 |
 
-工作台状态：`~/Library/Application Support/AI一手工具工作台/`；搬家缓存/历史/备份：`~/Library/Application Support/对话搬家/`。不要上传整目录。自定义 CODEX_HOME 可由启动环境提供；Finder 不保证继承终端环境，后续可加明确设置，不全盘扫描。
+工具箱状态：`~/Library/Application Support/AI一手工具工作台/`；搬家缓存/历史/备份：`~/Library/Application Support/对话搬家/`。不要上传整目录。自定义 CODEX_HOME 可由启动环境提供；Finder 不保证继承终端环境，后续可加明确设置，不全盘扫描。
 
 ## 发布维护
 
@@ -217,7 +221,7 @@ Windows Chat 搬出失败只记录在 KNOWN-ISSUES.md，按用户要求后修。
 
 用户确认下载后“校验更新包”超过三分钟且点击取消仍不变。当前接入 Windows，未取得用户 Mac 的具体阻塞步骤；不能把代码缺口说成已确定该设备的系统原因。已用隔离应用复现：旧 prepare 在首个应用校验后收到取消，仍复制文件并生成任务，不抛 Cancelled。
 
-新增准备阶段共用 180 秒预算、每个外部操作至多原有 60 秒，命令等待每 0.2 秒检查取消/预算并结束自己的子进程；文件遍历和分块哈希也检查。完整性摘要算法保持一致，版本/架构/链接/资源封印/原子替换检查未放宽。失败清理先判断实际挂载状态（包括 attach 已挂载但命令未成功的情形），十秒限时卸载；仍挂载时保留目录。已停止准备后的私有暂存目录后台清理，避免清理阻塞取消界面。不强退工作台或其他 Agent，不触碰源对话。
+新增准备阶段共用 180 秒预算、每个外部操作至多原有 60 秒，命令等待每 0.2 秒检查取消/预算并结束自己的子进程；文件遍历和分块哈希也检查。完整性摘要算法保持一致，版本/架构/链接/资源封印/原子替换检查未放宽。失败清理先判断实际挂载状态（包括 attach 已挂载但命令未成功的情形），十秒限时卸载；仍挂载时保留目录。已停止准备后的私有暂存目录后台清理，避免清理阻塞取消界面。不强退工具箱或其他 Agent，不触碰源对话。
 
 界面显示八个实际步骤和已用秒数，取消请求明确显示“正在取消”，确认工作线程停止后才显示取消结果。三分钟是准备预算，不包括下载或故障后卸载/清理，也不承诺系统单次文件调用异常阻塞时严格按秒返回。
 

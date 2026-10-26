@@ -7,10 +7,17 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Stable assembly identity is required by older installed update runners. -->
     <AssemblyName>AI一手工具工作台</AssemblyName>
+    <Product>AI一手工具箱</Product>
+    <Title>AI一手工具箱</Title>
+    <AssemblyTitle>AI一手工具箱</AssemblyTitle>
+    <Company>AI一手</Company>
+    <Authors>AI一手</Authors>
+    <Description>AI一手工具箱</Description>
     <RootNamespace>AIFirst.Workspace</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.17</Version>
+    <Version>0.3.18</Version>
     <ApplicationIcon>assets\ai-first-logo.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
@@ -24,4 +31,7 @@
   <ItemGroup>
     <Content Include="assets\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="PublishToolboxLauncher" AfterTargets="Publish">
+    <Copy SourceFiles="$(PublishDir)$(AssemblyName).exe" DestinationFiles="$(PublishDir)AI一手工具箱.exe" />
+  </Target>
 </Project>

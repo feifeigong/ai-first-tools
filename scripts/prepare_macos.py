@@ -19,7 +19,7 @@ def prepare(destination: Path) -> Path:
     html = (ui / "index.html").read_text(encoding="utf-8")
     header = '''<header class="workspace-header">
       <img class="workspace-logo" src="assets/ai-first.png" alt="AI一手" width="80" height="44">
-      <span class="workspace-name">工具工作台</span>
+      <span class="workspace-name">工具箱</span>
       <button id="workspace-toggle" class="workspace-button workspace-toggle" aria-controls="workspace-nav" aria-expanded="true" aria-label="隐藏工具栏"></button>
       <span class="workspace-spacer"></span><span id="workspace-version" class="workspace-version">Mac 预览版</span>
       <button id="workspace-download" class="workspace-button workspace-primary" hidden>下载并更新</button>
@@ -33,7 +33,7 @@ def prepare(destination: Path) -> Path:
     ending = (ROOT / 'macos/ui/auto-resume.html').read_text(encoding='utf-8') + '''</div><div id="workspace-notice" class="workspace-notice" role="status" aria-live="polite" hidden>
       <div class="workspace-update-detail"><span id="workspace-message"></span><progress id="workspace-progress" max="100" aria-label="更新下载进度" hidden></progress></div>
       <button id="workspace-dismiss" class="workspace-button" aria-label="关闭提示">×</button></div>'''
-    html = html.replace("<title>对话搬家</title>", "<title>AI一手工具工作台</title>")
+    html = html.replace("<title>对话搬家</title>", "<title>AI一手工具箱</title>")
     html = html.replace("</head>", '<link rel="stylesheet" href="workspace.css">\n<link rel="stylesheet" href="reset-notices.css">\n</head>')
     html = html.replace("<body>", "<body>\n" + header, 1)
     html = html.replace('  <div id="bar"', ending + '\n  <div id="bar"', 1)

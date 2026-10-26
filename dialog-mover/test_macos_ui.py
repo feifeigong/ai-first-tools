@@ -163,7 +163,7 @@ window.pywebview.api.check_update=async()=>{window.checkCalls++;return {availabl
                 page.goto((resources / "ui/index.html").as_uri())
                 page.wait_for_function("window.infoCalls===1")
                 page.clock.fast_forward(10100)
-                page.get_by_text("工作台连接暂未就绪，正在自动重试。您无需点击检查更新。", exact=True).wait_for()
+                page.get_by_text("工具箱连接暂未就绪，正在自动重试。您无需点击检查更新。", exact=True).wait_for()
                 page.clock.fast_forward(1100)
                 page.wait_for_function("window.infoCalls===2")
                 page.clock.fast_forward(2100)

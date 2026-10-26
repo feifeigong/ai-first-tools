@@ -96,7 +96,7 @@ def ingest(library: Path, source: str, source_id: str, document: dict, display_t
     if root.exists():
         old = summary(root)
         if digest((root / "archive/original.json").read_bytes()) != old["sha256"]:
-            raise ValueError("工作台原始档案被修改，已停止更新。")
+            raise ValueError("工具箱原始档案被修改，已停止更新。")
         facts = {f["id"]: f for f in old["facts"]}
         if isinstance(document.get("messages"), list) and len(document["messages"]) < old["messages"]:
             raise ValueError("本次读取的消息比已保存历史少，已保留原档案；请先确认来源是否加载完整。")

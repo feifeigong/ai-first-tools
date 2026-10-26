@@ -40,6 +40,11 @@ def check(package: Path):
                 digest = hashlib.file_digest(stream, "sha256").hexdigest()
             if path.stat().st_size != entry["size"] or digest != entry["sha256"]:
                 errors.append("Update manifest hash mismatch: " + entry["path"])
+    if manifest_path.is_file() and tuple(map(int, manifest['version'].split('.'))) >= (0, 3, 18):
+        launcher = package / 'AI一手工具箱.exe'
+        legacy = package / 'AI一手工具工作台.exe'
+        if not launcher.is_file() or not legacy.is_file() or launcher.read_bytes() != legacy.read_bytes():
+            errors.append('New product launcher and compatible legacy apphost must both be present and identical')
     engine = package / "tools" / "dialog-mover-v0.3" / "_internal" / "bin"
     if not (engine / "AI一手记忆服务.exe").is_file():
         errors.append("Missing bundled memory retrieval service")

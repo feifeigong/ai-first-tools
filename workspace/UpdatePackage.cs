@@ -35,7 +35,7 @@ internal static class UpdatePackage
     internal static void EnsureNoLinks(string path)
     {
         var current = Path.GetFullPath(path);
-        if (current.StartsWith(@"\\", StringComparison.Ordinal)) throw new InvalidDataException("请把工作台放在本机磁盘后更新。");
+        if (current.StartsWith(@"\\", StringComparison.Ordinal)) throw new InvalidDataException("请把工具箱放在本机磁盘后更新。");
         while (!string.IsNullOrEmpty(current))
         {
             if ((File.Exists(current) || Directory.Exists(current)) && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) throw new InvalidDataException("更新目录包含链接，为保护文件已停止更新。");
@@ -199,6 +199,6 @@ internal static class UpdatePackage
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { errors.Add(exception); }
         }
-        if (errors.Count > 0) throw new AggregateException("部分程序文件暂时被占用。更新备份已保留，请关闭其他工作台后恢复或重新安装。", errors);
+        if (errors.Count > 0) throw new AggregateException("部分程序文件暂时被占用。更新备份已保留，请关闭其他工具箱后恢复或重新安装。", errors);
     }
 }

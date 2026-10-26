@@ -71,7 +71,7 @@ public sealed class ToolRepository
 
     public void Save(IEnumerable<ToolDefinition> tools)
     {
-        if (unreadable) throw new InvalidDataException("原工具配置无法读取，已阻止覆盖。请先备份并修复 tools.json，再重新打开工作台。");
+        if (unreadable) throw new InvalidDataException("原工具配置无法读取，已阻止覆盖。请先备份并修复 tools.json，再重新打开工具箱。");
         var saved = tools.Where(tool => !tool.BuiltIn).ToList();
         foreach (var tool in saved) Validate(tool);
         var directory = Path.GetDirectoryName(configuration)!;

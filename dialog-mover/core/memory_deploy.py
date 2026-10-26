@@ -109,7 +109,7 @@ def build_plan(workspace: Path, target: str, library: Path, identities: list[str
     instruction = (
         "## AI一手历史记忆\n"
         "这是独立的旧对话资料项目，不是用户原来的工作项目。不得自行修改其他项目或接入全局设置。\n"
-        "完整历史保存在工作台的本机资料库，通过只读工具按需查找；不要一次读取整个 archive。\n"
+        "完整历史保存在工具箱的本机资料库，通过只读工具按需查找；不要一次读取整个 archive。\n"
         "开始接续时先调用 ai-first-memory 的 get_current_state。涉及历史细节时，用 search_history 查找，再用 read_history 分页核对原文。\n"
         "只将用户确认的条目作为当前状态。遇到冲突，核对原消息和明确决策，不按最后一条助手回复猜测。\n"
         "重要历史结论注明消息 ID 或文件行号；没有证据就说明不确定。\n"

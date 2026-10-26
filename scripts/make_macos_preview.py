@@ -18,7 +18,7 @@ def main() -> None:
                                    ("cursor_desktop", "workbuddy", "workbuddy_ai", "qwen_work", "doubao_work", "chatgpt", "claude_code", "cowork")]}
     rows = [{"id": f"synthetic-{index}", "title": title, "movable": True, "ts": index, "when": "刚刚"}
             for index, title in enumerate(("给网站首页添加产品介绍", "整理产品上线检查清单", "为新工具设计简单的操作流程", "检查移动端页面布局"), 1)]
-    sessions = {"groups": [{"title": "工具工作台", "kind": "folder", "path": "/Users/example/Projects/ai-first-tools", "sessions": rows}],
+    sessions = {"groups": [{"title": "工具箱", "kind": "folder", "path": "/Users/example/Projects/ai-first-tools", "sessions": rows}],
                 "total": len(rows), "movable": len(rows)}
     bootstrap = BOOT.replace(json.dumps(INFO), json.dumps(examples)).replace(json.dumps(SESSIONS), json.dumps(sessions))
     output = ROOT / "docs" / "assets" / "macos-preview.png"

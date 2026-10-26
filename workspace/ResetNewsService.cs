@@ -363,7 +363,7 @@ internal sealed partial class ResetNewsService : IDisposable
                 || (address.Host == "publish.x.com" && address.AbsolutePath == "/oembed"))) throw new InvalidDataException();
         using var request = new HttpRequestMessage(HttpMethod.Get, address);
         request.Headers.Accept.ParseAdd("application/json");
-        request.Headers.UserAgent.ParseAdd("AI-First-Tools/0.3.17");
+        request.Headers.UserAgent.ParseAdd("AI-First-Tools/0.3.18");
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation).ConfigureAwait(false);
         if ((int)response.StatusCode is < 200 or >= 300 || response.Content.Headers.ContentLength > MaxBytes) throw new HttpRequestException();
         await using var source = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);

@@ -719,7 +719,7 @@
         <details class="memory-card" id="memory-browser"><summary>查看保存的旧对话</summary><div class="memory-search"><input id="memory-query" type="search" aria-label="搜索旧对话" placeholder="输入你记得的关键词" value="${esc(sheet.historyQuery || "")}"/><button class="btn plain" id="memory-search">搜索</button></div><div id="memory-hits" aria-live="polite"></div><div id="memory-read"></div></details>
         ${memoryFactsHtml(sheet)}
         <div class="memory-actions"><button class="btn plain" id="memory-folder">打开旧记录保存位置</button><button class="btn plain" id="memory-full">改用完整对话迁移</button></div>
-        ${sheet.confirmRollback ? '<div class="import-notice">撤销会移除这次新增的对话和资料设置，工作台保存的完整旧记录仍保留。如果你已接着聊或修改过相关内容，会停止撤销以保护后续工作。<div class="memory-actions"><button class="btn plain" id="memory-rollback-cancel">先不撤销</button><button class="btn plain memory-danger" id="memory-rollback-confirm">确认撤销这次搬家</button></div></div>' : '<button class="btn plain" id="memory-rollback">撤销这次搬家</button>'}
+        ${sheet.confirmRollback ? '<div class="import-notice">撤销会移除这次新增的对话和资料设置，工具箱保存的完整旧记录仍保留。如果你已接着聊或修改过相关内容，会停止撤销以保护后续工作。<div class="memory-actions"><button class="btn plain" id="memory-rollback-cancel">先不撤销</button><button class="btn plain memory-danger" id="memory-rollback-confirm">确认撤销这次搬家</button></div></div>' : '<button class="btn plain" id="memory-rollback">撤销这次搬家</button>'}
       <div class="foot"><button class="btn plain" id="memory-record-back">关闭</button></div>`;
     body.querySelector("#memory-open").onclick = () => requestMemoryOpen(sheet);
     body.querySelector("#memory-folder").onclick = async () => { const r = await call("open_memory_folder"); if (r.error) toast(r.error); };
@@ -747,7 +747,7 @@
       confirm.disabled = true;
       const r = await call("rollback_memory");
       if (r.error) { toast(r.error); confirm.disabled = false; }
-      else { closeSheet(); refreshMemoryRecords(); toast("这次搬家已撤销，工作台里的旧记录仍保留"); }
+      else { closeSheet(); refreshMemoryRecords(); toast("这次搬家已撤销，工具箱里的旧记录仍保留"); }
     };
     const search = async () => {
       const query = body.querySelector("#memory-query").value;

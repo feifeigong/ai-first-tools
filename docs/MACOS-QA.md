@@ -1,5 +1,9 @@
 # Mac 移植验证记录
 
+## preview.21 改名验收范围
+
+新增localizedProductName、finderDisplayName、nativeProcessName三项原生检查；发布门槛明确要求三者。包装前写入en/zh-Hans/zh-Hant及Base的InfoPlist.strings，保留与文件名匹配的基础名称后重新ad-hoc签名。旧bundle路径、identifier、资料与LaunchAgent不改，原有更新/续跑/提醒生命周期全部仍须通过。
+
 ## 2026-10-26 preview.20：两架构原生报告通过
 
 源码44b7e21fcc8a4644ad6dcd3df564af6b28badccc；普通构建40286406179、独立预览40286421067成功。Apple/Intel分别10份原生报告、129项：17资源身份、15检索/原档、7导入兼容、8提醒生命周期、44共享规则、6刷新保护、12Cocoa页面、3网络、9更新、8续跑。首次任务因Rust下载DNS或镜像资源忙失败，仅重跑失败任务，最终完整报告通过才上传，失败报告不作为交付证据。Windows当前源码/页面414项保持通过。
@@ -24,7 +28,7 @@
 
 ## 2026-10-26：继续原生验收，preview.19候选
 
-4e4fdec 的两芯片共享/原生读取检查通过，但冻结续跑检查在 launchAgentReady 失败，未产出可发布DMG。诊断确认实际后台正在运行且归属/命令正确，控制端报 identity_unverified。隔离真实 LaunchAgent 的不同时区反例（40260449677）复现同 PID/锁但启动时间不同；换用 proc_pidinfo 后同一检查（40260766927）六项为true。保留所有失败报告，不调整就绪超时或降低归属门槛。通知也改用内核启动时间，防止工作台与提醒跨时区误判。
+4e4fdec 的两芯片共享/原生读取检查通过，但冻结续跑检查在 launchAgentReady 失败，未产出可发布DMG。诊断确认实际后台正在运行且归属/命令正确，控制端报 identity_unverified。隔离真实 LaunchAgent 的不同时区反例（40260449677）复现同 PID/锁但启动时间不同；换用 proc_pidinfo 后同一检查（40260766927）六项为true。保留所有失败报告，不调整就绪超时或降低归属门槛。通知也改用内核启动时间，防止工具箱与提醒跨时区误判。
 
 新增 copilot-refresh-test 为真实冻结 Cocoa/WebKit/AX 的独立合成窗口检查：草稿、空编辑框、忙碌、明确菜单操作、实际文档重载、原应用进程保留。这里只替换合成应用身份，不接触真实Copilot/聊天/认证；正式产品仍要求GitHub签名。preview.19资产门槛增为两芯片23项，缺该报告或旧报告不放行。
 
@@ -77,7 +81,7 @@ Mac打包必须执行 `--codex-import-test`；未来preview.19起缺7项中任�
 
 首轮源码 5525967 的 ARM 冻结更新审计在 fixture 阶段报 CalledProcessError，失败包未发布，具体命令当时未记录，不能归因为某个系统错误。851887b 仅补充合成夹具命令、退出码及脱敏错误诊断，并新增失败回归；没有延长超时或放宽检查。新的两架构完整执行通过，未复现该错误，原失败和被替代的 Intel 运行保留，不宣称已确定其根因。
 
-Copilot Desktop 的图片、两轮问答、角色与默认折叠只在 Windows 1.1.30 用独立合成副本实际验收，未称 Mac Desktop 已验收，也未请求在线模型。列表导航不能保证原生缓存失效；Mac 有任务时先完成任务，再完全退出 Copilot 并打开。用户工作台由其自行自动更新，代理没有升级或重开安装。
+Copilot Desktop 的图片、两轮问答、角色与默认折叠只在 Windows 1.1.30 用独立合成副本实际验收，未称 Mac Desktop 已验收，也未请求在线模型。列表导航不能保证原生缓存失效；Mac 有任务时先完成任务，再完全退出 Copilot 并打开。用户工具箱由其自行自动更新，代理没有升级或重开安装。
 
 | 芯片 | DMG 大小（字节） | SHA-256 |
 | --- | ---: | --- |
@@ -90,7 +94,7 @@ Copilot Desktop 的图片、两轮问答、角色与默认折叠只在 Windows 1
 
 [两架构原生构建](https://github.com/feifeigong/ai-first-tools/actions/runs/39121374816) 的 Apple 芯片与 Intel 均完成 143 项共享检查、1 项 Copilot 原生完整历史/严格恢复、54 项后台算法及 10 项原生历史/本机模拟续聊，实际 Cocoa APP/DMG、资源、桥接、HTTPS、更新与内置后台报告全部通过。[独立核验](https://github.com/feifeigong/ai-first-tools/actions/runs/39122126090) 将原 CI 与草稿全部 13 个文件逐个下载核对名称、字节、SHA-256、报告和源码标签后公开。匿名公开元数据摘要与公开 SHA256SUMS 再核对通过，两架构从 preview.16 选到 preview.17，包被生产更新校验器接受，同版不提示。
 
-Copilot Desktop 的侧栏刷新与已导入记录正文打开实机验证仅限 Windows Desktop 1.1.30；Mac 共用相同导航流程，没有操作用户真实 Mac Copilot 或测试付费模型下一轮。未替用户安装、更新或重开工作台，不把生产更新选择通过称为用户窗口已经弹出提示。
+Copilot Desktop 的侧栏刷新与已导入记录正文打开实机验证仅限 Windows Desktop 1.1.30；Mac 共用相同导航流程，没有操作用户真实 Mac Copilot 或测试付费模型下一轮。未替用户安装、更新或重开工具箱，不把生产更新选择通过称为用户窗口已经弹出提示。
 
 | 芯片 | DMG 大小（字节） | SHA-256 |
 | --- | ---: | --- |
@@ -99,7 +103,7 @@ Copilot Desktop 的侧栏刷新与已导入记录正文打开实机验证仅限 
 
 ## 2026-10-16：preview.16 已发布，单个 APP 内置自动续跑
 
-[公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.16)。不可变源码标签与两种芯片的安装包均固定 `f6efcc44ae34e2505c79a41754439f862587e49a`，发布 ID `415011225`。同一个 Cocoa 工作台新增自动续跑页、包内 Python 后台入口与按芯片校验的 Codex 原生组件；不要求读者另外安装后台、Python、Node 或 Codex CLI。保留自动更新及本轮 Copilot Desktop 搬入与列表修正。
+[公开下载](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.16)。不可变源码标签与两种芯片的安装包均固定 `f6efcc44ae34e2505c79a41754439f862587e49a`，发布 ID `415011225`。同一个 Cocoa 工具箱新增自动续跑页、包内 Python 后台入口与按芯片校验的 Codex 原生组件；不要求读者另外安装后台、Python、Node 或 Codex CLI。保留自动更新及本轮 Copilot Desktop 搬入与列表修正。
 
 - [两架构原生构建](https://github.com/feifeigong/ai-first-tools/actions/runs/38908465473)：Apple 芯片和 Intel 均完成共享回归、原生历史/本机模拟续聊、54 项续跑算法回归及冻结 APP/DMG 构建。每架构的 self/smoke/network/update/resume 报告分别有 **11/10/3/9/8** 个检查，全部为 true。
 - 新增 Cocoa 检查通过真实 JS/Python 桥切换到续跑页、开启后台开关、保存登录开关、关闭并确认两个开关回落，再返回搬家页；这部分使用隔离替身，不启动用户后台。另有独立真实冻结进程检查：无外部运行环境下原生组件和隔离未登录 app-server 握手、手动与直接重复入口只保留一个后台、登录开关不改变当前进程、关闭后直接再执行自启入口仍退出、重新开启正常、更新状态交接恢复后台和自启、实际 launchd 加载/停止及应用移除后清理均通过。
@@ -120,7 +124,7 @@ Copilot Desktop 的侧栏刷新与已导入记录正文打开实机验证仅限 
 
 首轮主分支 `38905927761` 因所有目标测试未初始化新增 Copilot 测试库而失败；补齐夹具后的 `38906556595` ARM 通过，Intel 被同时开发的主分支推送取消，未发布失败包。最终用隔离发布分支，额外核对本仓库精确源码已合入 master、两种原生任务和全部关键检查成功。随后原样执行既有 stage_macos_release.py / verify_macos_release.py，分别下载原 CI 与草稿所有 11 资产，名称、字节、SHA-256、不可变标签和原生报告一致后公开（发布 ID `415010334`）。[机器可读核验记录](COPILOT-RELEASE-VERIFICATION.json) 保留来源和各资产摘要，未改宽数据或发布校验器。
 
-匿名公开查询与实际校验清单下载通过。核验时较新的 preview.16 已公开，两个芯片从 preview.12 正确选到 preview.16，同版不提示；已确认 preview.16 源码包含本轮提交，四份 Copilot 适配文件与 preview.15 相同。Windows latest 保持 v0.3.13。本次未升级、重开用户工作台或在其安装内导入合成聊天，用户使用自动更新自行升级。原生恢复不等于用户桌面人工显示/滚动和付费下一轮全部验收。
+匿名公开查询与实际校验清单下载通过。核验时较新的 preview.16 已公开，两个芯片从 preview.12 正确选到 preview.16，同版不提示；已确认 preview.16 源码包含本轮提交，四份 Copilot 适配文件与 preview.15 相同。Windows latest 保持 v0.3.13。本次未升级、重开用户工具箱或在其安装内导入合成聊天，用户使用自动更新自行升级。原生恢复不等于用户桌面人工显示/滚动和付费下一轮全部验收。
 
 | 架构 | DMG 大小（字节） | SHA-256 |
 | --- | ---: | --- |
@@ -171,7 +175,7 @@ Copilot Desktop 的侧栏刷新与已导入记录正文打开实机验证仅限 
 
 [独立发布核验](https://github.com/feifeigong/ai-first-tools/actions/runs/38871513085) 单独下载原 CI 与草稿的全部 11 个文件，源码标签、名称、大小及 SHA-256 完全一致后公开（发布 ID `414696669`）。本地另下载八份小报告，逐个核对 digest 与检查项。匿名公开入口实测两个芯片从 preview.1–11 均选到 preview.12，同版不提示，公开 SHA 清单一致。[Windows 回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38861141802) 的 106 项后端、30 项界面、WPF 构建及自检全部通过，Windows 公开安装包仍为 v0.3.8。
 
-未读取真实对话/认证，未请求在线模型，也未操控用户实际 Mac。下载传输仍用隔离合成 DMG，系统 HTTPS 检查另行保留；不称为用户公网完整升级。已卡住的旧窗口不能靠发布自动改写，确认无搬运任务后仅关闭工作台，再用完整 DMG 替换到 preview.12。保留源、旧副本、备份与全部历史兼容修复；用户设备的实际恢复仍待新版运行结果。
+未读取真实对话/认证，未请求在线模型，也未操控用户实际 Mac。下载传输仍用隔离合成 DMG，系统 HTTPS 检查另行保留；不称为用户公网完整升级。已卡住的旧窗口不能靠发布自动改写，确认无搬运任务后仅关闭工具箱，再用完整 DMG 替换到 preview.12。保留源、旧副本、备份与全部历史兼容修复；用户设备的实际恢复仍待新版运行结果。
 
 | preview.12 文件后缀 | 大小（字节） | SHA-256 |
 | --- | ---: | --- |
@@ -223,7 +227,7 @@ cf80b47 的 [38728521782](https://github.com/feifeigong/ai-first-tools/actions/r
 - 本地 49 项定向测试通过（10 项页面、39 项共享/更新器），另完整 21 项共享页面检查通过。实际 Mac 由 [发布资产所属运行](https://github.com/feifeigong/ai-first-tools/actions/runs/38497770696) 和 [同源码重复运行](https://github.com/feifeigong/ai-first-tools/actions/runs/38497781070) 检查：两次的 arm64、x86_64 各 74 项共享/隔离单测通过，四组冻结 APP 的 7 项资源/引擎、5 项 Cocoa/WebKit/桥、3 项真实 HTTPS、4 项 helper/原子交换/备份/重启全部通过，资源封印与 DMG 校验通过。
 - 发布使用 38497770696 的同批两个架构，不混用重复构建。暂存日志确认实际上传；独立下载后逐一核对 11 个上传资产的标签、版本、架构、报告、长度和 SHA-256 digest，全部匹配后公开。首次下载原产物的本机传输停滞，仅停止本任务的下载进程并有时限重试成功，没有关闭 TLS 校验、修改全局网络或停止用户软件。
 - 发布后匿名公开列表的生产选择逻辑确认两架构 preview.2/3/4 都选到 preview.6，同版本不提示；实际下载公开校验文件并核对 DMG 条目。生产 Windows 选择仍只将 v0.3.7 升到 v0.3.8、不选 Mac 标签，并核对先前下载的公开安装包。这些公网检查在 Windows 宿主执行，不冒称用户 Mac 的实际完整升级。
-- [Windows 回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38497770629) 通过 76 项后台、21 项浏览器和工作台自检，WPF 零错误/警告。没有修改已公开 Windows v0.3.8 资产；Mac preview.5 保持未公开，不移动旧标签或替换已公开包。
+- [Windows 回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38497770629) 通过 76 项后台、21 项浏览器和工具箱自检，WPF 零错误/警告。没有修改已公开 Windows v0.3.8 资产；Mac preview.5 保持未公开，不移动旧标签或替换已公开包。
 - 原生更新检查仍是临时 APP 副本、合成旧版本元数据和实际 helper/Cocoa 重启，不是从已发布旧二进制在作者安装目录手点公网升级。未读取真实 Agent 对话/认证或发送模型请求。preview.1/2 需最后一次手动换到本版；preview.3/4 可以软件内更新。Finder/Gatekeeper、macOS 13/14、用户具体网络与第三方实际显示/续聊仍待实机验收。
 
 | preview.6 文件后缀 | 大小（字节） | SHA-256 |
@@ -240,7 +244,7 @@ cf80b47 的 [38728521782](https://github.com/feifeigong/ai-first-tools/actions/r
 - 两架构实际执行冻结 helper、交换前自检、系统原子交换、保留旧 APP 备份、新版 Cocoa/WebKit/Python 桥重启及版本确认；报告 helperReturnCode=0、receipt/preflightReport=true、五项 relaunchChecks=true。使用临时 APP 副本和合成旧版本元数据，不是从已公开旧二进制在作者安装目录手点升级，也未实际执行 Mac 原生整包公网下载/挂载的完整更新回路。
 - 针对 preview.3 后续重启失败，保持系统 HOME 的审计修订仅使 ARM 复测通过，Intel 仍失败。检查锁定 pywebview 6.2.1 Cocoa 实现后推测共享数据异步清理与页面加载竞争；本版避开该清理路径，保留随机本机端口、系统 HOME 和严格 HTTPS，增加两项回归，重复原生构建通过。未取得全部系统错误诊断，不把推测当成已证明所有平台行为。
 - 发布后用匿名公开 GitHub 列表运行生产选择/完整性逻辑：两架构 preview.3 和 preview.2 都选择 preview.4，preview.4 不提示同版本；实际下载公开校验文件并核对 DMG 的 digest/大小要求及哈希条目。此检查在 Windows 宿主运行纯 Python 逻辑，不冒称 Mac 冻结 APP 的用户公网完整升级已经验收。
-- [本源码 Windows 回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38357964354) 通过 75 项后台、15 项浏览器与工作台自检，WPF 构建零错误/警告；未重新发布 Windows 包。Windows 安装/下载证据见 UPDATER-QA.md。
+- [本源码 Windows 回归](https://github.com/feifeigong/ai-first-tools/actions/runs/38357964354) 通过 75 项后台、15 项浏览器与工具箱自检，WPF 构建零错误/警告；未重新发布 Windows 包。Windows 安装/下载证据见 UPDATER-QA.md。
 - 未更新作者真实 Mac 安装，未读取 Agent 对话/认证，未发送模型请求。preview.1/2 最后一次手动替换到本版，preview.3 可软件内升级。Finder/Gatekeeper、macOS 13/14、真实用户完整公网升级及第三方原生显示/续聊仍待验收。
 
 | preview.4 文件后缀 | 大小（字节） | SHA-256 |
@@ -285,7 +289,7 @@ cf80b47 的 [38728521782](https://github.com/feifeigong/ai-first-tools/actions/r
 - 随后 `b98b478` 构建的 ARM 网络检查因 GitHub 公共 runner IP 匿名限流失败，错误分类明确为 rate_limit；没有放宽网络检查，也不发布该包。早先 `26a2983` 两架构匿名 HTTPS 检查已通过，记录在 [先前运行](https://github.com/feifeigong/ai-first-tools/actions/runs/38342256226)，但这些包被后续构建替代，不是本次下载资产。
 - [最终 Mac 两架构成功运行](https://github.com/feifeigong/ai-first-tools/actions/runs/38344666096)，构建源码 `8674f6f24d6e027134ec63c285815ce808f7ec4f`。arm64、x86_64 各 58 项共享/隔离测试通过，包括合成豆包本机轨迹 → Claude Code → 回读、源文件不变。列表快照使用合成替身，不等于真实豆包 IndexedDB 人工验收。
 - 两架构冻结 APP：7 项资源/引擎检查、5 项真实 Cocoa/WebKit/桥检查、3 项网络检查全部通过；在不存在的 SSL_CERT_FILE/SSL_CERT_DIR 环境中真实读取本项目 GitHub 发布列表，证书及主机名验证保持启用，`_scproxy` 可加载。最终 CI 网络探测使用当次一次性只读授权规避共享 IP 限流，授权不写入包，普通更新不读环境令牌；报告只记录 authenticatedProbe。CI 没有模拟用户的实际代理配置，不保证其网络一定连通。
-- 两架构 ad-hoc 资源严格校验、DMG 格式、下载后的 SHA-256 核对通过。CI 只把报告通过的同一运行资产暂存到匹配版本草稿，独立下载后再核对 9 个上传资产的大小和 digest；最终公开前仍需人工确认，不覆盖已发布版本。[Windows CI](https://github.com/feifeigong/ai-first-tools/actions/runs/38344666214) 通过 60 项后台、13 项浏览器及工作台自检/构建（零警告/错误）；本次没有重发 Windows 安装包。
+- 两架构 ad-hoc 资源严格校验、DMG 格式、下载后的 SHA-256 核对通过。CI 只把报告通过的同一运行资产暂存到匹配版本草稿，独立下载后再核对 9 个上传资产的大小和 digest；最终公开前仍需人工确认，不覆盖已发布版本。[Windows CI](https://github.com/feifeigong/ai-first-tools/actions/runs/38344666214) 通过 60 项后台、13 项浏览器及工具箱自检/构建（零警告/错误）；本次没有重发 Windows 安装包。
 - 没有访问作者 Mac，也没有读取真实豆包数据库、验证其当前版本的原生列表或发送模型消息。作者的网络/原生软件显示情况仍需新版真机验证；Mac 13/14 也未验收。
 
 | preview.2 文件后缀 | 大小（字节） | SHA-256 |
@@ -305,9 +309,9 @@ cf80b47 的 [38728521782](https://github.com/feifeigong/ai-first-tools/actions/r
 
 - 共享列表、关闭、隐藏启动、Logo、UI 回归：40 项。
 - 新 Mac 路径、URI、只读 DB、系统打开、版本选择、资源复用、空测试账户和 Cocoa 加载握手：14 项。
-- 新工作台浏览器布局/完全隐藏侧栏/更新提示：1 项，960–1440 宽度。
+- 新工具箱浏览器布局/完全隐藏侧栏/更新提示：1 项，960–1440 宽度。
 - 既有导入测试：19 项通过，另 2 项 Mac 原生测试在 Windows 明确跳过。
-- Windows 工作台自检：62 项通过，构建零错误/零警告。
+- Windows 工具箱自检：62 项通过，构建零错误/零警告。
 - 不表示在 Windows 运行过 Mac 二进制。
 
 ## Mac 已通过
@@ -421,7 +425,7 @@ Actions 的 `macos-arm64`、`macos-x86_64` 产物各包含 DMG、`self-test.json
 
 用户确认下载后“校验更新包”超过三分钟且点击取消仍不变。当前接入 Windows，未取得用户 Mac 的具体阻塞步骤；不能把代码缺口说成已确定该设备的系统原因。已用隔离应用复现：旧 prepare 在首个应用校验后收到取消，仍复制文件并生成任务，不抛 Cancelled。
 
-新增准备阶段共用 180 秒预算、每个外部操作至多原有 60 秒，命令等待每 0.2 秒检查取消/预算并结束自己的子进程；文件遍历和分块哈希也检查。完整性摘要算法保持一致，版本/架构/链接/资源封印/原子替换检查未放宽。失败清理先判断实际挂载状态（包括 attach 已挂载但命令未成功的情形），十秒限时卸载；仍挂载时保留目录。已停止准备后的私有暂存目录后台清理，避免清理阻塞取消界面。不强退工作台或其他 Agent，不触碰源对话。
+新增准备阶段共用 180 秒预算、每个外部操作至多原有 60 秒，命令等待每 0.2 秒检查取消/预算并结束自己的子进程；文件遍历和分块哈希也检查。完整性摘要算法保持一致，版本/架构/链接/资源封印/原子替换检查未放宽。失败清理先判断实际挂载状态（包括 attach 已挂载但命令未成功的情形），十秒限时卸载；仍挂载时保留目录。已停止准备后的私有暂存目录后台清理，避免清理阻塞取消界面。不强退工具箱或其他 Agent，不触碰源对话。
 
 界面显示八个实际步骤和已用秒数，取消请求明确显示“正在取消”，确认工作线程停止后才显示取消结果。三分钟是准备预算，不包括下载或故障后卸载/清理，也不承诺系统单次文件调用异常阻塞时严格按秒返回。
 

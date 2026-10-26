@@ -48,6 +48,8 @@ def validated_assets(directory: Path, release: str, *, local_preview: bool = Fal
             if kind == 'self' and ((result.get('version',{}).get('developmentPreview') is True) != local_preview
                     or local_preview and result['checks'].get('developmentPreviewIsolation') is not True):
                 raise ValueError('Development preview and formal application identities must not be mixed')
+            if kind == 'self' and number >= 21 and not {'localizedProductName','finderDisplayName','nativeProcessName'} <= set(result['checks']):
+                raise ValueError('The renamed product must be verified through native localized and Finder names')
             if kind == "update" and not {"nativeUpdateClick", "bridgeDrained", "nativeParentExit"}.issubset(result["checks"]):
                 raise ValueError("Native update click and bridge handoff checks are required")
             if kind == 'resume' and not {'nativeRuntimeWithoutExternalInstallation','singlePackagedWatcher','startupSwitchIndependent','stopBlocksStartupRelaunch','updateRestoresRunningAndStartup','realLaunchAgentStopsWithoutRelaunch','finderRemovalCleansBackgroundAndStartup','cleanupPreservesUserSettings'} <= set(result['checks']):

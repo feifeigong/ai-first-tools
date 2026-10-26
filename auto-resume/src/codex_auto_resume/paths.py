@@ -48,7 +48,7 @@ def bundled_codex() -> Path | None:
     else:
         candidate = Path(sys._MEIPASS) / "bin" / "vendor" / "x86_64-pc-windows-msvc" / "bin" / "codex.exe"
     if not candidate.is_file():
-        raise FileNotFoundError("工作台的续跑组件不完整，请重新安装完整工作台。")
+        raise FileNotFoundError("工具箱的续跑组件不完整，请重新安装完整工具箱。")
     return candidate
 
 

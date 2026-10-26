@@ -196,7 +196,7 @@ class Monitor:
         lease = Lease(self.directory / 'monitor.lock')
         if not lease.acquire(): return  # A second launch is still establishing ownership.
         lease.close()
-        if not self.executable.is_file(): raise NoticeError('提醒组件不完整，请使用完整工作台。')
+        if not self.executable.is_file(): raise NoticeError('提醒组件不完整，请使用完整工具箱。')
         env = os.environ.copy()
         env['PYINSTALLER_RESET_ENVIRONMENT'] = '1'
         subprocess.Popen([str(self.executable), *self.arguments], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -295,9 +295,9 @@ def show_notice(alert, configure=None):
             import auto_resume
             try:
                 result = auto_resume.Controller().action('stop')
-                message = '自动续跑已关闭，登录自启也已关闭。' if not result['running'] and not result['autostart'] else '请打开工作台确认续跑状态。'
+                message = '自动续跑已关闭，登录自启也已关闭。' if not result['running'] and not result['autostart'] else '请打开工具箱确认续跑状态。'
             except Exception:
-                message = '续跑尚未确认关闭，请打开工作台刷新查看。'
+                message = '续跑尚未确认关闭，请打开工具箱刷新查看。'
             def report():
                 feedback = NSAlert.alloc().init()
                 feedback.setMessageText_(message)

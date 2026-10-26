@@ -138,7 +138,7 @@ internal static class UpdateRunner
     {
         var path = Path.GetFullPath(planPath);
         var job = Path.GetDirectoryName(path)!;
-        if (!SameDirectory(Path.GetDirectoryName(job)!, CacheRoot) || !Regex.IsMatch(Path.GetFileName(job), "^[a-f0-9]{32}$") || Path.GetFileName(path) != "plan.json" || !SameDirectory(runnerDirectory, Path.Combine(job, "runner"))) throw new InvalidDataException("更新必须由工作台发起。");
+        if (!SameDirectory(Path.GetDirectoryName(job)!, CacheRoot) || !Regex.IsMatch(Path.GetFileName(job), "^[a-f0-9]{32}$") || Path.GetFileName(path) != "plan.json" || !SameDirectory(runnerDirectory, Path.Combine(job, "runner"))) throw new InvalidDataException("更新必须由工具箱发起。");
         UpdatePackage.EnsureNoLinks(path);
         if (new FileInfo(path).Length > 16384) throw new InvalidDataException("更新指令无效。");
         var plan = JsonSerializer.Deserialize<UpdatePlan>(File.ReadAllText(path), UpdatePackage.Json) ?? throw new InvalidDataException("更新指令无效。");
@@ -146,7 +146,7 @@ internal static class UpdateRunner
         UpdatePackage.EnsureNoLinks(plan.Target);
         UpdatePackage.Read(plan.Target, plan.PreviousVersion);
         CheckExecutableVersion(plan.Target, plan.PreviousVersion);
-        if (!File.Exists(UpdatePackage.Resolve(plan.Target, UpdatePackage.AppExecutable)) || plan.Installed != IsInstalled(plan.Target)) throw new InvalidDataException("工作台位置已改变，请重新下载更新。");
+        if (!File.Exists(UpdatePackage.Resolve(plan.Target, UpdatePackage.AppExecutable)) || plan.Installed != IsInstalled(plan.Target)) throw new InvalidDataException("工具箱位置已改变，请重新下载更新。");
         if (plan.StagedInstaller && !plan.Installed) throw new InvalidDataException("更新安装方式不匹配。");
         var name = plan.Installed ? "AI-First-Tools-Setup-" + plan.Version + ".exe" : "AI-First-Tools-Portable-" + plan.Version + "-win-x64.zip";
         UpdateClient.ValidateAsset(new UpdateAsset(plan.PackageName, UpdateClient.Repository + "/releases/download/v" + plan.Version + "/" + plan.PackageName, plan.PackageSize, plan.PackageHash), plan.Version, name);
@@ -175,14 +175,14 @@ internal static class UpdateRunner
             guard = new Mutex(false, GuardName(plan.Target), out var isNew);
             if (!isNew) throw new InvalidOperationException("已有更新正在进行。");
             using var parent = Process.GetProcessById(plan.ParentId);
-            if (parent.StartTime.ToUniversalTime().Ticks != plan.ParentStarted || !SameDirectory(Path.GetDirectoryName(parent.MainModule!.FileName)!, plan.Target)) throw new InvalidDataException("发起更新的工作台不匹配。");
+            if (parent.StartTime.ToUniversalTime().Ticks != plan.ParentStarted || !SameDirectory(Path.GetDirectoryName(parent.MainModule!.FileName)!, plan.Target)) throw new InvalidDataException("发起更新的工具箱不匹配。");
             var job = Path.GetDirectoryName(planPath)!;
             File.WriteAllText(Path.Combine(job, "runner-ready"), "ready");
             var deadline = DateTime.UtcNow.AddMinutes(2);
             while (!parent.HasExited)
             {
                 if (File.Exists(Path.Combine(job, "cancelled"))) return 2;
-                if (DateTime.UtcNow >= deadline) throw new TimeoutException("工作台尚未关闭，本次更新已停止。");
+                if (DateTime.UtcNow >= deadline) throw new TimeoutException("工具箱尚未关闭，本次更新已停止。");
                 await Task.Delay(100);
             }
             parentExited = true;
@@ -200,7 +200,7 @@ internal static class UpdateRunner
                 if (plan.Installed && Mutex.TryOpenExisting("Local\\AI_FIRST_TOOLS_RUNNING", out var running))
                 {
                     running.Dispose();
-                    throw new InvalidOperationException("请先关闭其他工作台窗口，再更新。");
+                    throw new InvalidOperationException("请先关闭其他工具箱窗口，再更新。");
                 }
                 if (plan.Installed && !plan.StagedInstaller)
                 {
@@ -214,7 +214,7 @@ internal static class UpdateRunner
                         start.ArgumentList.Add("/S");
                         using var installer = Process.Start(start) ?? throw new InvalidOperationException("没有启动安装程序。");
                         await installer.WaitForExitAsync();
-                        if (installer.ExitCode != 0) throw new InvalidOperationException("安装未完成，请关闭其他工作台窗口后重试。");
+                        if (installer.ExitCode != 0) throw new InvalidOperationException("安装未完成，请关闭其他工具箱窗口后重试。");
                         Stage(5, "核对新版本文件");
                         var installedManifest = UpdatePackage.Read(plan.Target, plan.Version);
                         CheckExecutableVersion(plan.Target, plan.Version);
@@ -251,7 +251,7 @@ internal static class UpdateRunner
                         CheckExecutableVersion(plan.Target, plan.Version);
                         if (plan.Installed)
                         {
-                            using var key = Registry.CurrentUser.OpenSubKey(RegistryKey, true) ?? throw new IOException("工作台安装登记不存在。");
+                            using var key = Registry.CurrentUser.OpenSubKey(RegistryKey, true) ?? throw new IOException("工具箱安装登记不存在。");
                             key.SetValue("DisplayVersion", plan.Version);
                         }
                     }
@@ -276,7 +276,7 @@ internal static class UpdateRunner
             App.Log(exception);
             guard?.Dispose();
             guard = null;
-            MessageBox.Show("这次更新没有完成，未操作任何对话记录。\n" + exception.Message + "\n请重新打开工作台后再试。", "AI一手 · 更新", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("这次更新没有完成，未操作任何对话记录。\n" + exception.Message + "\n请重新打开工具箱后再试。", "AI一手 · 更新", MessageBoxButton.OK, MessageBoxImage.Information);
             if (plan is not null && parentExited)
             {
                 try { CheckExecutableVersion(plan.Target, plan.PreviousVersion); OpenWorkbench(plan); }

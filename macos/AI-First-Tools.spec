@@ -39,7 +39,9 @@ executable = EXE(archive, analysis.scripts, [], exclude_binaries=True, name="AI 
                  upx=False, target_arch=None, codesign_identity=None)
 collection = COLLECT(executable, analysis.binaries, analysis.datas, name="AI First Tools", upx=False)
 app = BUNDLE(collection, name="AI一手工具工作台预览.app" if version.get('developmentPreview') else "AI一手工具工作台.app", icon=str(resources / "ai-first.icns"),
-             bundle_identifier="cn.aifirst.tools.preview" if version.get('developmentPreview') else "cn.aifirst.tools", version=version["version"],
-             info_plist={"CFBundleDisplayName": "AI一手工具工作台 · 本地预览" if version.get('developmentPreview') else "AI一手工具工作台", "CFBundleShortVersionString": version["version"],
+             bundle_identifier="cn.aifirst.tools.preview" if version.get('developmentPreview') else "cn.aifirst.tools", version=version.get("build", version["version"]),
+             # The base name must match the stable .app filename for Finder's
+             # localized name lookup. packaging writes the new visible name.
+             info_plist={"CFBundleDisplayName": "AI一手工具工作台预览" if version.get('developmentPreview') else "AI一手工具工作台", "CFBundleShortVersionString": version["version"],
                          "NSHighResolutionCapable": True, "LSMinimumSystemVersion": "13.0",
                          "NSHumanReadableCopyright": "Apache-2.0; third-party trademarks belong to their owners."})

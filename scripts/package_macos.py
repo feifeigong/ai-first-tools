@@ -48,6 +48,9 @@ def main() -> None:
         subprocess.run(["cargo", "metadata", "--locked", "--format-version", "1", "--manifest-path", str(ROOT / "txcript" / "Cargo.toml")], check=True, stdout=handle)
     subprocess.run([sys.executable, str(ROOT / "scripts" / "collect_rust_licenses.py"), "--metadata", str(metadata),
                     "--package", str(app / "Contents" / "Resources")], check=True)
+    sys.path.insert(0, str(ROOT / 'macos'))
+    from branding import localize_bundle
+    localize_bundle(app, args.local_preview)
     subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app)], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     launcher = app / "Contents" / "MacOS" / "AI First Tools"
@@ -66,7 +69,7 @@ def main() -> None:
     (staging / "Applications").symlink_to("/Applications")
     shutil.copy2(ROOT / "docs" / "MACOS.md", staging / "先看这里.txt")
     dmg = output / f"AI-First-Tools-{version}-macos-{args.architecture}.dmg"
-    subprocess.run(["hdiutil", "create", "-volname", "AI一手工具工作台", "-srcfolder", str(staging), "-format", "UDZO", str(dmg)], check=True)
+    subprocess.run(["hdiutil", "create", "-volname", "AI一手工具箱", "-srcfolder", str(staging), "-format", "UDZO", str(dmg)], check=True)
     subprocess.run(["hdiutil", "verify", str(dmg)], check=True)
     with dmg.open("rb") as handle:
         digest = hashlib.file_digest(handle, "sha256").hexdigest()

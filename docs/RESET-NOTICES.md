@@ -27,7 +27,7 @@
 
 | 来源 | 实测结果 | 适用范围 |
 | --- | --- | --- |
-| `https://codex-reset.com/api/feed` | HTTP 200，JSON，`source=x-api`、`source_scope=timeline`、`stale=false`；最近一次读取的 `fetched_at=2026-10-22T08:56:12.979Z`；缓存头 `public, max-age=60` | 发现候选；采集方式为服务自己声明，不能当作本工作台直接调用官方 API |
+| `https://codex-reset.com/api/feed` | HTTP 200，JSON，`source=x-api`、`source_scope=timeline`、`stale=false`；最近一次读取的 `fetched_at=2026-10-22T08:56:12.979Z`；缓存头 `public, max-age=60` | 发现候选；采集方式为服务自己声明，不能当作本工具箱直接调用官方 API |
 | `https://publish.x.com/oembed`，参数为已知原帖 URL | 6 条原帖均 HTTP 200，作者与正文一致 | 官方原文核对，不负责发现新帖 |
 | 同一 oEmbed，参数为账号主页 URL | HTTP 200，只返回时间线链接和嵌入标记 | 不是可轮询的最新帖子列表 |
 | `https://www.codexreset-news.com/api/v1/tibo?limit=3` | HTTP 200，但 `stale=true`，来源更新时间停在 07:04 UTC | 备用历史阅读；不能用过期快照触发新提醒 |
@@ -38,11 +38,11 @@
 
 [Codex Reset News 的公开开发文档](https://www.codexreset-news.com/developers?lang=en)明确允许无需认证的 GET 请求，但其数据注明来自 codex-reset.com。它的分类、翻译和更新时间不能代替原帖核对。`/api/health` 的服务正常也不等于采集内容新鲜。
 
-[X 官方用户帖子接口](https://docs.x.com/x-api/users/get-posts)需要 Bearer token；[当前官方价格](https://docs.x.com/x-api/getting-started/pricing)为按量付费。以后若由工作台运营方集中使用官方 API，终端用户仍可不填 Key，但运营方需要自己的凭据和费用安排，本轮没有创建这些依赖。
+[X 官方用户帖子接口](https://docs.x.com/x-api/users/get-posts)需要 Bearer token；[当前官方价格](https://docs.x.com/x-api/getting-started/pricing)为按量付费。以后若由工具箱运营方集中使用官方 API，终端用户仍可不填 Key，但运营方需要自己的凭据和费用安排，本轮没有创建这些依赖。
 
 [RSSHub 的 Twitter 路由源码](https://github.com/RSSHub/RSSHub/blob/master/lib/routes/twitter/user.ts)仍列出账号、认证令牌或第三方接口配置，不能把它当成完全无认证的官方 RSS。[Nitter 官方仓库](https://github.com/zedeus/nitter)已归档，并记录收到 X 要求停止运营的函件；不把公共 Nitter 代理作为可持续产品依赖。这里不对第三方服务的上游授权作法律保证，也不通过登录、挑战绕过或私有接口补救。
 
-2026-10-22 09:19:26 UTC 使用当前工作台服务代码再次匿名读取，结果 `fresh=true`、`partial=false`，核实当日主帖与回复两条预告，以及 10 月 20 日、10 月 13 日两条历史完成公告。报告位于 `artifacts/development/reset-public/public-reset-feed-check.json`。这次只使用隔离缓存验证公开读取，没有取通知或弹窗、控制续跑、读取认证或发送模型请求。
+2026-10-22 09:19:26 UTC 使用当前工具箱服务代码再次匿名读取，结果 `fresh=true`、`partial=false`，核实当日主帖与回复两条预告，以及 10 月 20 日、10 月 13 日两条历史完成公告。报告位于 `artifacts/development/reset-public/public-reset-feed-check.json`。这次只使用隔离缓存验证公开读取，没有取通知或弹窗、控制续跑、读取认证或发送模型请求。
 
 ## Feed 字段与候选示例
 
@@ -101,7 +101,7 @@ hide_thread=true
 
 1. 仅接受固定作者 `thsottiaux`、数字 ID 和规范原帖链接。网络地址始终由固定域名与验证后的 ID 生成，不请求 feed 任意提供的地址。
 2. 核实 oEmbed 返回作者链接的主机与账号、原帖链接中的 ID。仅兼容明确列出的 X/Twitter 官方域名，不按字符串包含判断。
-3. 用 HTML 解析器取主帖段落，解码实体并合并空白；不执行脚本，不在工作台渲染第三方原始 HTML。比较原文时允许空白、HTML 实体及末尾短链接表现差异，不能忽略改变语义的正文差异。
+3. 用 HTML 解析器取主帖段落，解码实体并合并空白；不执行脚本，不在工具箱渲染第三方原始 HTML。比较原文时允许空白、HTML 实体及末尾短链接表现差异，不能忽略改变语义的正文差异。
 4. 缺少正文、文本被截断、作者或 ID 不符、正文冲突、解析失败的候选不弹窗。每条独立核对，单条旧帖失效不抹掉其他已经核实的结果；部分失败显示尚未完全核实，只允许完全核实的候选提醒。Feed 本身过期、结构错误或读取失败仍禁止所有新提醒，不把失败当“没有新消息”。
 5. 回复必须连同对应父帖核对。仅依赖明确的 `in_reply_to_tweet_id`，父帖也须通过官方核对；不要按发布时间接近就猜属于同一次重置。没有足够上下文时只保留消息，不推断为重置预告。
 
@@ -131,13 +131,13 @@ hide_thread=true
 
 正常通知只需简短中文结果和“查看原帖”；来源详情注明“公开消息来自 codex-reset.com，原文经 X 核对”。提醒功能只读取这些公开消息，不更改 Agent 目录、账号、额度或任务。数据源失败只影响消息新鲜度，不影响既有自动续跑。
 
-页面只展示最新一条消息，主帖与时间补充继续按父帖阶段合并提醒。用户明确要求关闭工作台窗口后也收到提醒，现由隐藏通知程序承接，不增加进程管理界面。更新或卸载只请求属于当前包的程序正常退出；崩溃残留必须同时满足同包路径、锁不存在、token 未变才清理，其他包保持不动。关窗口后的真实通知体验仍需用户验收。
+页面只展示最新一条消息，主帖与时间补充继续按父帖阶段合并提醒。用户明确要求关闭工具箱窗口后也收到提醒，现由隐藏通知程序承接，不增加进程管理界面。更新或卸载只请求属于当前包的程序正常退出；崩溃残留必须同时满足同包路径、锁不存在、token 未变才清理，其他包保持不动。关窗口后的真实通知体验仍需用户验收。
 
 ## 尚未验证
 
 - 长期稳定性、真实平均采集延迟、上游采集完整性及服务持续开放承诺。
 - 完整消息编辑、删除、长帖和跨帖上下文覆盖；oEmbed 本身可能缓存旧内容。
-- 工作台关闭、系统休眠恢复、多窗口与 Windows 通知去重体验。
+- 工具箱关闭、系统休眠恢复、多窗口与 Windows 通知去重体验。
 - 真实账号是否恢复额度；本功能不读取账号验证，也不应作此承诺。
 
 后续应以合成 feed、固定匿名帖子样例和本地 oEmbed 替身测试断网、过期、错误作者、正文不一致、父帖缺失、重复消息、预告变完成等情况；不要为测试发送模型请求或操作真实账号。

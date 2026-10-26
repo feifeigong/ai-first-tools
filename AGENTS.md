@@ -1,8 +1,8 @@
-# AI一手工具工作台开发约定
+# AI一手工具箱开发约定
 
 先读 docs/DEVELOPMENT-CONTEXT.md；Mac 再读 docs/MACOS-HANDOFF.md、docs/MACOS-QA.md。当前文件、Git 和 CI 优先。
 
-- 自制工具工作台，不是插件市场。简单中文，不添加内部/外部进程管理 UI。
+- 自制工具箱，不是插件市场。简单中文，不添加内部/外部进程管理 UI。
 - Windows WPF 和 Mac Cocoa 入口分开，搬家业务/工具 UI 共用。
 - 用既有 AI一手/Agent Logo，搬家外层内层一致；侧栏真隐藏、键盘焦点可见、鼠标无外框。
 - 只复制，源只读，结构先检查，搬运中不强退，不发模型请求测试。

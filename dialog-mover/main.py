@@ -211,7 +211,7 @@ class Api:
                 return {"ok": True, **self._memory_deployment, "entries": results,
                         "reused_count": sum(bool(r.get("reused")) for r in results)}
             except Exception as error:
-                return {"error": str(error) if isinstance(error, ValueError) else "这次搬家没有完成，已停止写入。完整旧记录仍保存在工作台，请返回后重试。"}
+                return {"error": str(error) if isinstance(error, ValueError) else "这次搬家没有完成，已停止写入。完整旧记录仍保存在工具箱，请返回后重试。"}
 
     def confirm_memory_facts(self, updates: dict) -> dict:
         """Optional review after moving; changes only the workbench's own index."""
@@ -293,7 +293,7 @@ class Api:
                 if refreshed in {"busy", "draft"}:
                     return {"ok": True, "pending": True, "refresh_status": refreshed}
                 if refreshed == 'permission-required':
-                    return {"error": "旧对话已保存。请在 macOS 系统设置中允许工作台的辅助功能权限，再重试打开 Copilot。"}
+                    return {"error": "旧对话已保存。请在 macOS 系统设置中允许工具箱的辅助功能权限，再重试打开 Copilot。"}
                 if refreshed not in {"requested", "not-running"}:
                     return {"error": "旧对话已保存，暂时无法安全更新 Copilot 左侧列表。请稍后重试，原记录仍保留。"}
                 if refreshed == "requested":
@@ -401,7 +401,7 @@ class Api:
                 if refreshed == "unavailable":
                     return {"error": "记录已复制，但没有完成 Copilot 窗口刷新。请松开快捷键并打开 Copilot，再点「在 Copilot 中查看」重试。"}
                 if refreshed == 'permission-required':
-                    return {"error": "记录已复制。请在 macOS 系统设置中允许工作台的辅助功能权限，再点「在 Copilot 中查看」。"}
+                    return {"error": "记录已复制。请在 macOS 系统设置中允许工具箱的辅助功能权限，再点「在 Copilot 中查看」。"}
                 if refreshed == "requested":
                     # Let the reload initialize before dispatching navigation.
                     # Reload invalidates both the sidebar and Recent caches.

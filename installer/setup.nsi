@@ -5,7 +5,9 @@ Unicode true
 !include "x64.nsh"
 !include "FileFunc.nsh"
 
-!define APP "AI一手工具工作台"
+!define APP "AI一手工具箱"
+; Stable apphost preserves older updater and rollback launch paths.
+!define EXECUTABLE "AI一手工具工作台.exe"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\AIFirstTools"
 !define WEBVIEW_KEY "Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
@@ -22,19 +24,19 @@ Icon "${ICON}"
 UninstallIcon "${ICON}"
 VIProductVersion "${VERSION}.0"
 VIAddVersionKey /LANG=2052 "ProductName" "${APP}"
-VIAddVersionKey /LANG=2052 "FileDescription" "AI一手工具工作台安装程序"
+VIAddVersionKey /LANG=2052 "FileDescription" "AI一手工具箱安装程序"
 VIAddVersionKey /LANG=2052 "FileVersion" "${VERSION}"
 VIAddVersionKey /LANG=2052 "LegalCopyright" "Apache-2.0; third-party components retain their licenses"
 Var StageOnly
 Var StageDirectory
 
 !define MUI_ABORTWARNING
-!define MUI_WELCOMEPAGE_TITLE "欢迎使用 AI一手工具工作台"
+!define MUI_WELCOMEPAGE_TITLE "欢迎使用 AI一手工具箱"
 !define MUI_WELCOMEPAGE_TEXT "把好用的 AI 小工具放在一起。$\r$\n$\r$\n点击安装，完成后从桌面打开即可。$\r$\n不需要自己安装 Python 或 .NET。$\r$\n$\r$\n如果缺少微软 WebView2，会联网准备。$\r$\n软件不会删除原来的 AI 对话记录。"
 !define MUI_FINISHPAGE_TITLE "安装完成，可以开始用了"
-!define MUI_FINISHPAGE_TEXT "以后双击桌面的「AI一手工具工作台」即可打开。"
-!define MUI_FINISHPAGE_RUN "$INSTDIR\${APP}.exe"
-!define MUI_FINISHPAGE_RUN_TEXT "现在打开 AI一手工具工作台"
+!define MUI_FINISHPAGE_TEXT "以后双击桌面的「AI一手工具箱」即可打开。"
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${EXECUTABLE}"
+!define MUI_FINISHPAGE_RUN_TEXT "现在打开 AI一手工具箱"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -46,7 +48,7 @@ Var StageDirectory
   System::Call 'kernel32::OpenMutexW(i 0x100000, i 0, w "Local\AI_FIRST_TOOLS_RUNNING") p.r0'
   ${If} $0 != 0
     System::Call 'kernel32::CloseHandle(p r0)'
-    MessageBox MB_OK|MB_ICONINFORMATION "请先关闭 AI一手工具工作台，再重新运行。正在搬运时，请等任务完成后再关闭。" /SD IDOK
+    MessageBox MB_OK|MB_ICONINFORMATION "请先关闭 AI一手工具箱，再重新运行。正在搬运时，请等任务完成后再关闭。" /SD IDOK
     SetErrorLevel 1603
     Abort
   ${EndIf}
@@ -141,7 +143,7 @@ Section "安装"
     Pop $2
     Pop $3
     ${If} $2 != 0
-      MessageBox MB_OK|MB_ICONEXCLAMATION "后台续跑暂未停止，尚未替换程序文件。请在工作台关闭自动续跑后重试。" /SD IDOK
+      MessageBox MB_OK|MB_ICONEXCLAMATION "后台续跑暂未停止，尚未替换程序文件。请在工具箱关闭自动续跑后重试。" /SD IDOK
       SetErrorLevel 1603
       Abort
     ${EndIf}
@@ -155,13 +157,16 @@ Section "安装"
     Abort
   ${EndIf}
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  CreateShortCut "$DESKTOP\${APP}.lnk" "$INSTDIR\${APP}.exe" "" "$INSTDIR\${APP}.exe" 0
+  CreateShortCut "$DESKTOP\${APP}.lnk" "$INSTDIR\${EXECUTABLE}" "" "$INSTDIR\${EXECUTABLE}" 0
   CreateDirectory "$SMPROGRAMS\${APP}"
-  CreateShortCut "$SMPROGRAMS\${APP}\${APP}.lnk" "$INSTDIR\${APP}.exe" "" "$INSTDIR\${APP}.exe" 0
+  CreateShortCut "$SMPROGRAMS\${APP}\${APP}.lnk" "$INSTDIR\${EXECUTABLE}" "" "$INSTDIR\${EXECUTABLE}" 0
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\assets\remove-legacy-shortcuts.ps1" -InstallDirectory "$INSTDIR"'
+  Pop $2
+  Pop $3
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${APP}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "AI一手"
-  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${APP}.exe,0"
+  WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${EXECUTABLE},0"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "UninstallString" '$\"$INSTDIR\Uninstall.exe$\"'
   WriteRegStr HKCU "${UNINSTALL_KEY}" "QuietUninstallString" '$\"$INSTDIR\Uninstall.exe$\" /S'
@@ -172,7 +177,7 @@ Section "安装"
   Pop $2
   Pop $3
   ${If} $2 != 0
-    MessageBox MB_OK|MB_ICONINFORMATION "工作台已安装，后台续跑暂未恢复。打开工作台后，在自动续跑页面重新开启即可。" /SD IDOK
+    MessageBox MB_OK|MB_ICONINFORMATION "工具箱已安装，后台续跑暂未恢复。打开工具箱后，在自动续跑页面重新开启即可。" /SD IDOK
   ${EndIf}
 SectionEnd
 
@@ -185,8 +190,8 @@ Function un.onInit
     SetErrorLevel 1603
     Abort
   ${EndIf}
-  IfFileExists "$INSTDIR\${APP}.exe" +4 0
-    MessageBox MB_OK|MB_ICONEXCLAMATION "找不到工作台程序，为保护文件已停止卸载。" /SD IDOK
+  IfFileExists "$INSTDIR\${EXECUTABLE}" +4 0
+    MessageBox MB_OK|MB_ICONEXCLAMATION "找不到工具箱程序，为保护文件已停止卸载。" /SD IDOK
     SetErrorLevel 1603
     Abort
   !insertmacro CheckRunning
@@ -198,7 +203,7 @@ Section "Uninstall"
   Pop $2
   Pop $3
   ${If} $2 != 0
-    MessageBox MB_OK|MB_ICONEXCLAMATION "后台续跑暂未停止，尚未删除工作台。请关闭自动续跑后重试。" /SD IDOK
+    MessageBox MB_OK|MB_ICONEXCLAMATION "后台续跑暂未停止，尚未删除工具箱。请关闭自动续跑后重试。" /SD IDOK
     SetErrorLevel 1603
     Abort
   ${EndIf}

@@ -57,7 +57,7 @@ public partial class ResetNoticeWindow : Window
             {
                 NoticeResultCard.Background = new SolidColorBrush(Color.FromRgb(234, 245, 239));
                 NoticeResultText.Foreground = new SolidColorBrush(Color.FromRgb(22, 106, 75));
-                NoticeResultText.Text = "续跑已关闭。准备好后，再回工作台打开。";
+                NoticeResultText.Text = "续跑已关闭。准备好后，再回工具箱打开。";
                 PauseButton.Content = "已关闭续跑";
                 DismissButton.Content = "完成";
             }

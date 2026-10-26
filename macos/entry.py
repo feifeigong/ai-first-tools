@@ -103,7 +103,7 @@ class MacApi(Api):
             elif operation in ('autostart-on','autostart-off'): value['autostart']=operation=='autostart-on'
             value['watcherCount']=int(value['running'])
             return dict(value)
-        if not getattr(sys,'frozen',False): return {'error':'请使用完整工作台安装包中的自动续跑功能。'}
+        if not getattr(sys,'frozen',False): return {'error':'请使用完整工具箱安装包中的自动续跑功能。'}
         self._resume_busy=True
         try:
             return auto_resume.Controller().action(operation)
@@ -347,6 +347,13 @@ def self_check(report: Path) -> bool:
     checks = {name: (ROOT / name).is_file() for name in required}
     from codex_auto_resume.paths import bundled_codex
     checks['bundledAutoResumeRuntime'] = bundled_codex().is_file()
+    from branding import display_name
+    from Foundation import NSBundle, NSFileManager, NSProcessInfo
+    expected_name = display_name(info.get('developmentPreview') is True)
+    bundle = NSBundle.mainBundle()
+    checks['localizedProductName'] = bundle.localizedInfoDictionary().get('CFBundleDisplayName') == expected_name
+    checks['finderDisplayName'] = str(NSFileManager.defaultManager().displayNameAtPath_(str(Path(sys.executable).parents[2]))).removesuffix('.app') == expected_name
+    checks['nativeProcessName'] = NSProcessInfo.processInfo().processName() == expected_name
     result = subprocess.run([str(ROOT / "bin" / "txcript"), "--version"], capture_output=True, text=True, timeout=30)
     checks["native_engine"] = result.returncode == 0 and "txcript" in result.stdout
     if info.get('developmentPreview') is True:
@@ -558,6 +565,9 @@ def run() -> int:
     parser.add_argument("--update-ui-audit", type=Path)
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
+    if sys.platform == 'darwin' and getattr(sys, 'frozen', False):
+        from branding import apply_process_name
+        apply_process_name(version_info().get('developmentPreview') is True)
     if sys.platform != "darwin":
         parser.error("This entry point runs on macOS. Windows uses workspace/AIFirst.Workspace.csproj.")
     if (args.self_test or args.smoke_test or args.network_test or args.update_test or args.resume_test or args.memory_test or args.codex_import_test or args.reset_test or args.copilot_refresh_test or args.update_ui_audit) and args.report is None:
@@ -613,7 +623,7 @@ def run() -> int:
                 except (reset_notices.NoticeError, OSError, ValueError): pass
             if fixture:
                 update_audit.configure(api, fixture)
-            window = webview.create_window("AI一手工具工作台", js_api=api,
+            window = webview.create_window("AI一手工具箱", js_api=api,
                                            width=1280, height=820, min_size=(960, 640), background_color="#F6F8FB", text_select=False)
             api.bind(window)
             window.events.before_show += load_bundled_content

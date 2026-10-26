@@ -60,7 +60,7 @@ def respond(reader: HistoryReader, request: dict):
         except (ValueError, TypeError, KeyError) as error:
             result = {"content": [{"type": "text", "text": str(error)}], "isError": True}
         except Exception:
-            result = {"content": [{"type": "text", "text": "历史索引暂时不可用，请在工作台重新检查记忆库。"}], "isError": True}
+            result = {"content": [{"type": "text", "text": "历史索引暂时不可用，请在工具箱重新检查记忆库。"}], "isError": True}
     else:
         return {"jsonrpc": "2.0", "id": identity, "error": {"code": -32601, "message": "Method not found"}}
     return {"jsonrpc": "2.0", "id": identity, "result": result}

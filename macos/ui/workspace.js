@@ -265,7 +265,7 @@
     } catch {
       initialized = false;
       if (!initializationNotice) {
-        initializationNotice = "工作台连接暂未就绪，正在自动重试。您无需点击检查更新。";
+        initializationNotice = "工具箱连接暂未就绪，正在自动重试。您无需点击检查更新。";
         show(initializationNotice);
       }
       const delay = startRetryDelays[Math.min(startRetryCount, startRetryDelays.length - 1)];
