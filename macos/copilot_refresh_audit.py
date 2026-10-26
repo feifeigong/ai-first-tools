@@ -22,7 +22,7 @@ def audit(report: Path, *, frozen_required: bool = True) -> int:
     from PyObjCTools import AppHelper
     from webview.platforms.cocoa import BrowserView
 
-    checks = {}; outcome = {'calls': 0}; installed = threading.Event()
+    checks = {}; outcome = {'calls': 0, 'trace': []}; installed = threading.Event()
     with tempfile.TemporaryDirectory(prefix='synthetic-mac-refresh-') as temporary:
         root = Path(temporary); (root/'ui').mkdir()
         (root/'ui/index.html').write_text('<!doctype html><html><meta charset="utf-8"><title>Synthetic guard</title>'
@@ -64,7 +64,8 @@ def audit(report: Path, *, frozen_required: bool = True) -> int:
                 require(installed.wait(10)); require(window.events.loaded.wait(25))
                 window.show(); window.restore()
                 app = NSRunningApplication.runningApplicationWithProcessIdentifier_(os.getpid())
-                with patch.object(native, '_application', return_value=app):
+                with patch.object(native, '_application', return_value=app), \
+                        patch.object(native, '_phase', side_effect=outcome['trace'].append):
                     deadline=time.monotonic()+8
                     while time.monotonic()<deadline:
                         try:
@@ -106,6 +107,7 @@ def audit(report: Path, *, frozen_required: bool = True) -> int:
                     'architecture':platform.machine(),'version':entry.version_info(),'host':platform.system(),'frozen':bool(getattr(sys,'frozen',False)),
                     'modelRequests':0,'officialLoggedInSidebarVerified':False,
                     'errorCode':outcome.get('errorCode'),
+                    'nativePhases':outcome['trace'],
                     'nativeStates':{key:value for key,value in outcome.items() if key.endswith('State')},
                     'scope':'Actual frozen Cocoa/WebKit/AX controls; only our synthetic editor and labelled native reload menu. Vendor identity discovery and logged-in Copilot sidebar remain separate.'}
                 report.parent.mkdir(parents=True,exist_ok=True)

@@ -25,6 +25,11 @@ class Unavailable(RuntimeError):
     pass
 
 
+def _phase(name):
+    """No production logging. Isolated native audits can observe static phases."""
+    pass
+
+
 class Accessibility:
     def __init__(self):
         self.ax = ctypes.CDLL('/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices')
@@ -208,9 +213,11 @@ def _dismiss_palette(ax, target, container, field, app):
 
 def refresh(*, passive=False, busy):
     try:
+        _phase('application')
         app = _application()
         if app is None: return 'not-running'
         with Accessibility() as ax:
+            _phase('permission')
             if not ax.ax.AXIsProcessTrusted():
                 ax.request_permission_once()
                 return 'permission-required'
@@ -218,26 +225,33 @@ def refresh(*, passive=False, busy):
             ax.ax.AXUIElementSetMessagingTimeout(target, .3)
             windows = ax.children(target, 'AXWindows')
             if len(windows) != 1: return 'unavailable'
+            _phase('draft')
             if _draft(ax, windows[0]): return 'draft'
             state = busy()
             if state != 'idle': return state
+            _phase('menu')
             menu = ax.attribute(target, 'AXMenuBar')
             if menu is None: return 'unavailable'
             reload = _reload_menu(ax, menu)
             palette = _palette_menu(ax, menu) if reload is None else None
-            if reload is None and palette is None: return 'unavailable'
+            if reload is None and palette is None:
+                _phase('no-named-command'); return 'unavailable'
             # Only bring forward a verified empty, idle window. Never use keys.
+            _phase('activation')
             app.activateWithOptions_(2)
             from AppKit import NSWorkspace
             deadline = time.monotonic() + 1
             while NSWorkspace.sharedWorkspace().frontmostApplication().processIdentifier() != app.processIdentifier():
-                if time.monotonic() >= deadline: return 'unavailable'
+                if time.monotonic() >= deadline:
+                    _phase('activation-unavailable'); return 'unavailable'
                 time.sleep(.02)
             if _draft(ax, windows[0]): return 'draft'
             state = busy()
             if state != 'idle': return state
             if reload is not None:
+                _phase('native-menu-press')
                 ax.press(reload); return 'requested'
+            _phase('palette')
             ax.press(palette)
             time.sleep(.15)
             focused = ax.attribute(target, 'AXFocusedUIElement')
@@ -266,5 +280,6 @@ def refresh(*, passive=False, busy):
                 return 'requested'
             finally:
                 if not performed: _dismiss_palette(ax, target, container, focused, app)
-    except (Unavailable, OSError, ValueError, TypeError, AttributeError, subprocess.SubprocessError, ImportError):
+    except (Unavailable, OSError, ValueError, TypeError, AttributeError, subprocess.SubprocessError, ImportError) as error:
+        _phase(str(error) if isinstance(error, Unavailable) else type(error).__name__)
         return 'unavailable'
