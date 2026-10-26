@@ -137,6 +137,19 @@ def main():
                 if menu:
                     controls=list(ax.walk(menu))
                     result['controlLabels']=[{'role':role,'title':title} for _,role,title in controls if title]
+                    old_areas=[element for element,role,_ in ax.walk(app) if role=='AXWebArea']
+                    for element,role,title in controls:
+                        if role=='AXMenuItem' and title=='Close Window':
+                            result['normalCloseAccepted']=ax.ax.AXUIElementPerformAction(element,ax.string('AXPress'))==0
+                            time.sleep(1)
+                            result['normalCloseKeepsProcess']=process.poll() is None
+                            if process.poll() is None:
+                                subprocess.run(['/usr/bin/open','-a',str(args.app.resolve())],check=True,timeout=10)
+                                time.sleep(3)
+                                new_areas=[element for element,role,_ in ax.walk(app) if role=='AXWebArea']
+                                result['reopenCreatesDocument']=len(old_areas)==len(new_areas)==1 and not ax.cf.CFEqual(old_areas[0],new_areas[0])
+                                result['oldDocumentUnavailable']=bool(old_areas and ax.attribute(old_areas[0],'AXRole') is None)
+                            break
                     for element,role,title in controls:
                         if role=='AXMenuItem' and title=='Keyboard Shortcuts':
                             ax.ax.AXUIElementPerformAction(element,ax.string('AXPress'));time.sleep(1)
