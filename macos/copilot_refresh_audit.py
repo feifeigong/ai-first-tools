@@ -39,10 +39,10 @@ def audit(report: Path) -> int:
         def attach(window):
             with patch.object(entry, 'ROOT', root): entry.load_bundled_content(window)
             def add_menu():
-                submenu = NSMenu.alloc().initWithTitle_('Synthetic window')
+                submenu = NSMenu.alloc().initWithTitle_('Developer')
                 reload = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_('Reload Window','reloadSynthetic:','')
                 reload.setTarget_(target); submenu.addItem_(reload)
-                item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_('Synthetic window',None,'')
+                item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_('Developer',None,'')
                 item.setSubmenu_(submenu); NSApplication.sharedApplication().mainMenu().addItem_(item)
                 installed.set()
             AppHelper.callAfter(add_menu)

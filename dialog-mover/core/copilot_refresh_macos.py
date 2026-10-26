@@ -15,6 +15,7 @@ TEAM = 'VEKTX9H2N7'
 RELOAD = {'reload', 'reload window', 'reload app', 'reload application', 'reload main window',
           'developer: reload window', '重新加载', '重新加载窗口', '重新载入窗口'}
 PALETTE = {'command palette', 'command menu', '命令面板', '命令菜单'}
+VIEW_MENUS = {'view', 'window', 'developer', 'debug', '视图', '窗口', '开发者', '调试'}
 _prompted = False
 
 
@@ -151,6 +152,22 @@ def _reload_command(ax, root):
     return None
 
 
+def _view_menus(ax, menubar):
+    # Never mistake a document called "Reload Window" in Apple's Recent Items
+    # or File menu for an application command.
+    return [menu for menu in ax.children(menubar) if _name(ax.label(menu)) in VIEW_MENUS]
+
+
+def _reload_menu(ax, menubar):
+    return next((command for menu in _view_menus(ax, menubar)
+                 if (command := _reload_command(ax, menu)) is not None), None)
+
+
+def _palette_menu(ax, menubar):
+    return next((element for menu in _view_menus(ax, menubar) for element, role, _ in ax.walk(menu)
+                 if role == 'AXMenuItem' and _name(ax.label(element)) in PALETTE), None)
+
+
 def _dismiss_palette(ax, target, container, field, app):
     """Dismiss only the palette we opened, without changing a user's new input."""
     try:
@@ -194,7 +211,9 @@ def refresh(*, passive=False, busy):
             if state != 'idle': return state
             menu = ax.attribute(target, 'AXMenuBar')
             if menu is None: return 'unavailable'
-            reload = _reload_command(ax, menu)
+            reload = _reload_menu(ax, menu)
+            palette = _palette_menu(ax, menu) if reload is None else None
+            if reload is None and palette is None: return 'unavailable'
             # Only bring forward a verified empty, idle window. Never use keys.
             app.activateWithOptions_(2)
             from AppKit import NSWorkspace
@@ -207,9 +226,6 @@ def refresh(*, passive=False, busy):
             if state != 'idle': return state
             if reload is not None:
                 ax.press(reload); return 'requested'
-            palette = next((element for element, role, _ in ax.walk(menu)
-                            if role == 'AXMenuItem' and _name(ax.label(element)) in PALETTE), None)
-            if palette is None: return 'unavailable'
             ax.press(palette)
             time.sleep(.15)
             focused = ax.attribute(target, 'AXFocusedUIElement')
@@ -220,7 +236,9 @@ def refresh(*, passive=False, busy):
             for _ in range(12):
                 container = ax.attribute(container, 'AXParent')
                 if container is None: return 'unavailable'
-                if _name(ax.label(container)) in PALETTE: break
+                role = ax.text(ax.attribute(container, 'AXRole'))
+                subrole = ax.text(ax.attribute(container, 'AXSubrole'))
+                if (role == 'AXDialog' or subrole in {'AXDialog', 'AXApplicationDialog'}) and _name(ax.label(container)) in PALETTE: break
             else: return 'unavailable'
             # The verified palette search is separate from the chat composer.
             performed = False

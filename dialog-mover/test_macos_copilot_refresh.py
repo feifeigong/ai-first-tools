@@ -18,6 +18,13 @@ class MacCopilotRefreshTests(unittest.TestCase):
             ax=Mock();ax.walk.return_value=[(1,'AXMenuItem',())];ax.label.return_value=name
             self.assertEqual(native._reload_command(ax,0),1)
 
+    def test_recent_document_titles_cannot_masquerade_as_native_commands(self):
+        ax=Mock();ax.children.return_value=[1,2]
+        ax.label.side_effect=lambda element:{1:'Apple',2:'File'}[element]
+        self.assertIsNone(native._reload_menu(ax,0))
+        self.assertIsNone(native._palette_menu(ax,0))
+        ax.walk.assert_not_called()
+
     def test_drafts_and_unreadable_editors_fail_closed_without_reading_history(self):
         for value,expected in (('synthetic draft',True),('',False),(None,None)):
             ax=Mock();ax.walk.return_value=[(1,'AXWebArea',()),(2,'AXStaticText',()),(3,'AXTextArea',())]
@@ -48,7 +55,7 @@ class MacCopilotRefreshTests(unittest.TestCase):
         for drafts,states,expected in (([False,True],['idle'],'draft'),([False,False],['idle','busy'],'busy')):
             ax,app,kit=self.fake()
             with patch.object(native,'Accessibility',return_value=ax),patch.object(native,'_application',return_value=app), \
-                    patch.object(native,'_draft',side_effect=drafts),patch.object(native,'_reload_command',return_value=9), \
+                    patch.object(native,'_draft',side_effect=drafts),patch.object(native,'_reload_menu',return_value=9), \
                     patch.dict('sys.modules',{'AppKit':kit}):
                 self.assertEqual(native.refresh(busy=Mock(side_effect=states)),expected)
             ax.press.assert_not_called()
@@ -56,7 +63,7 @@ class MacCopilotRefreshTests(unittest.TestCase):
     def test_verified_empty_idle_window_uses_named_native_action_once(self):
         ax,app,kit=self.fake()
         with patch.object(native,'Accessibility',return_value=ax),patch.object(native,'_application',return_value=app), \
-                patch.object(native,'_draft',return_value=False),patch.object(native,'_reload_command',return_value=9), \
+                patch.object(native,'_draft',return_value=False),patch.object(native,'_reload_menu',return_value=9), \
                 patch.dict('sys.modules',{'AppKit':kit}):
             self.assertEqual(native.refresh(busy=lambda:'idle'),'requested')
         ax.press.assert_called_once_with(9);ax.set_text.assert_not_called()
