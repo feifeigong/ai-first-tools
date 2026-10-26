@@ -34,6 +34,7 @@ class Accessibility:
         self.ax.AXUIElementCopyAttributeValue.argtypes=[pointer,pointer,ctypes.POINTER(pointer)]
         self.ax.AXUIElementPerformAction.argtypes=[pointer,pointer]
         self.ax.AXUIElementSetMessagingTimeout.argtypes=[pointer,ctypes.c_float]
+        self.cf.CFEqual.argtypes=[pointer,pointer];self.cf.CFEqual.restype=ctypes.c_bool
         self.owned=[]
 
     def string(self,text):
@@ -91,6 +92,27 @@ def main():
                 result['accessibilityTrusted']=bool(ax.ax.AXIsProcessTrusted())
                 app=ax.ax.AXUIElementCreateApplication(process.pid);ax.owned.append(app)
                 ax.ax.AXUIElementSetMessagingTimeout(app,.5)
+                # Signed-out test app only: verify an actual document replacement,
+                # not merely that posting an event returned successfully.
+                quartz=ctypes.CDLL('/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics')
+                quartz.CGEventCreateKeyboardEvent.argtypes=[ctypes.c_void_p,ctypes.c_ushort,ctypes.c_bool]
+                quartz.CGEventCreateKeyboardEvent.restype=ctypes.c_void_p
+                quartz.CGEventSetFlags.argtypes=[ctypes.c_void_p,ctypes.c_uint64]
+                quartz.CGEventPostToPid.argtypes=[ctypes.c_int,ctypes.c_void_p]
+                result['reloadShortcuts']={}
+                for label,key,flags in [('command-r',15,1<<20),('command-shift-r',15,(1<<20)|(1<<17)),('f5',96,0)]:
+                    areas=[element for element,role,_ in ax.walk(app) if role=='AXWebArea']
+                    before=areas[0] if len(areas)==1 else None
+                    for down in (True,False):
+                        event=quartz.CGEventCreateKeyboardEvent(None,key,down)
+                        quartz.CGEventSetFlags(event,flags);quartz.CGEventPostToPid(process.pid,event);ax.cf.CFRelease(event)
+                    replaced=False
+                    deadline=time.monotonic()+4
+                    while before and time.monotonic()<deadline:
+                        after=[element for element,role,_ in ax.walk(app) if role=='AXWebArea']
+                        if len(after)==1 and not ax.cf.CFEqual(before,after[0]):replaced=True;break
+                        time.sleep(.2)
+                    result['reloadShortcuts'][label]={'documentReplaced':replaced,'initialWebAreas':len(areas)}
                 menu=ax.attribute(app,'AXMenuBar')
                 if menu:
                     controls=list(ax.walk(menu))
