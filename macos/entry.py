@@ -41,7 +41,7 @@ if len(sys.argv) == 3 and sys.argv[1] in {'--reset-monitor-audit', '--reset-laun
     action = monitor_child if sys.argv[1] == '--reset-monitor-audit' else launcher_child
     raise SystemExit(action(Path(sys.argv[2])))
 
-if len(sys.argv) == 3 and sys.argv[1] == '--copilot-refresh-child':
+if __name__ == '__main__' and len(sys.argv) == 3 and sys.argv[1] == '--copilot-refresh-child':
     from copilot_refresh_audit import fixture_child
     raise SystemExit(fixture_child(Path(sys.argv[2])))
 

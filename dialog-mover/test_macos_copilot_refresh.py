@@ -1,10 +1,19 @@
 import unittest
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from core import copilot_refresh_macos as native
 
 
 class MacCopilotRefreshTests(unittest.TestCase):
+    def test_fixture_mode_does_not_reenter_when_entry_module_is_imported(self):
+        root=Path(__file__).resolve().parents[1]
+        script="import sys;from pathlib import Path;p=Path(sys.argv[1]);sys.path[:0]=[str(p/'macos'),str(p/'dialog-mover'),str(p/'dialog-mover/vendor'),str(p/'auto-resume/src')];sys.argv=['fixture','--copilot-refresh-child','not-a-fixture'];import entry;print('import-only')"
+        result=subprocess.run([sys.executable,'-c',script,str(root)],capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(result.stdout.strip(),'import-only')
     def test_a_closed_app_needs_no_accessibility_or_process_restart(self):
         with patch.object(native,'_application',return_value=None),patch.object(native,'Accessibility') as ax:
             self.assertEqual(native.refresh(busy=lambda:'idle'),'not-running')
