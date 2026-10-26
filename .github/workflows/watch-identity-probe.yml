@@ -1,0 +1,19 @@
+name: Isolated launch-agent identity probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python scripts/probe_launch_agent.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isolated-launch-agent-identity
+          path: artifacts/launch-agent-probe.json
