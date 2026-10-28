@@ -363,7 +363,7 @@ internal sealed partial class ResetNewsService : IDisposable
                 || (address.Host == "publish.x.com" && address.AbsolutePath == "/oembed"))) throw new InvalidDataException();
         using var request = new HttpRequestMessage(HttpMethod.Get, address);
         request.Headers.Accept.ParseAdd("application/json");
-        request.Headers.UserAgent.ParseAdd("AI-First-Tools/0.3.18");
+        request.Headers.UserAgent.ParseAdd("AI-First-Tools/0.3.20");
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellation).ConfigureAwait(false);
         if ((int)response.StatusCode is < 200 or >= 300 || response.Content.Headers.ContentLength > MaxBytes) throw new HttpRequestException();
         await using var source = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
@@ -418,7 +418,10 @@ internal sealed partial class ResetNewsService : IDisposable
                 parent = String(row, "in_reply_to_tweet_id");
                 if (IdTime(parent) > at || parent == id) throw new InvalidDataException();
             }
-            if (now - at <= TimeSpan.FromDays(30)) result.Add(new(id, body, at, parent));
+            // Discovery hints may request context verification; they never prove a reset.
+            var relatedHint = row.TryGetProperty("tibo_lane", out var lane) && lane.ValueKind == JsonValueKind.String && lane.GetString() == "reset_related"
+                || row.TryGetProperty("reset_verification_candidate", out var hinted) && hinted.ValueKind == JsonValueKind.True;
+            if (now - at <= TimeSpan.FromDays(30)) result.Add(new(id, body, at, parent, RelatedHint: relatedHint));
         }
         if (result.GroupBy(item => item.Id).Any(group => group.Select(item => item.Text).Distinct().Count() > 1)) throw new InvalidDataException();
         var history = new List<Candidate>();

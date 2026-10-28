@@ -1,5 +1,9 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+## 新候选：preview.23 重置确认与日历状态
+
+共用规则修复“And it’s done”引用完成帖被tomorrow误判为预告；规则缓存升级会重核旧分类，保留已提醒状态。使用英文原帖及官方引用/回复关系，未知语言有线索时待核实，不接受上游分类作为确认。两端统一日历词，区分确认发帖时间与实际到账；续跑/自启仍保留用户选择。当前公开preview.22保持，preview.23须两芯片原生报告与全部门槛通过后交付。
+
 ## 当前发布：preview.22
 
 新增更新后的简短变化弹窗，与Windows0.3.19共用whats-new.json；可点版本号回看，单版已关闭不自动重复。已公开preview.22，固定源码72e3914、构建40631620654成功；两芯片各134项原生检查与23份资产摘要通过。新增bundledReleaseHighlights、nativeReleaseHighlightsDialog、releaseHighlightsAcknowledgement三项门槛；启动和更新审计模式不自动弹框干扰其他检查，smoke用隔离资料实际手动打开并检查已读状态。旧Copilot真机边界保留。

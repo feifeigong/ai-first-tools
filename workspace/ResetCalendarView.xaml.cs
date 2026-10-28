@@ -77,7 +77,7 @@ public partial class ResetCalendarView : UserControl
             if (day.Month != month.Month) number.Foreground = Ink("#64748B");
             else if (day == today || day == selected) number.Foreground = Ink("#0068D9");
             content.Children.Add(number);
-            var marker = Text(record is null ? day == today ? "今天" : "" : record.Completed ? "完成公告" : record.State == "banked" ? "重置卡" : record.State == "uncertain" ? "待核实" : record.State is "upcoming" or "undated" ? "预告" : "历史预告", 11);
+            var marker = Text(record is null ? day == today ? "今天" : "" : record.Completed ? "重置确认" : record.State == "banked" ? "发重置卡" : record.State == "uncertain" ? "待核实" : record.State is "upcoming" or "undated" ? "等待重置" : "预计生效", 11);
             marker.TextAlignment = TextAlignment.Center;
             marker.Foreground = record is null ? Ink("#0068D9") : Color(record);
             marker.MinHeight = 16;
@@ -96,7 +96,7 @@ public partial class ResetCalendarView : UserControl
         if (onDay.Length == 0)
         {
             SelectedEvents.Children.Add(Text("这一天还没有重置消息记录", 15));
-            var help = Text("日历会随着收到的预告和完成公告更新。", 12, "#5B6B7E");
+            var help = Text("日历会随着收到的预告和确认消息更新。", 12, "#5B6B7E");
             help.Margin = new Thickness(0, 8, 0, 0);
             SelectedEvents.Children.Add(help);
         }
@@ -104,7 +104,7 @@ public partial class ResetCalendarView : UserControl
         {
             var hasOtherCompletion = record.State == "past-preview" && onDay.Any(other => other.Completed);
             var stack = new StackPanel { Margin = new Thickness(0, 0, 0, onDay.Length > 1 ? 18 : 0) };
-            var badge = Text(hasOtherCompletion ? "历史预告" : record.Badge, 11);
+            var badge = Text(hasOtherCompletion ? "同日预告" : record.Badge, 11);
             badge.Foreground = Color(record);
             stack.Children.Add(new Border { Background = Ink(record.Completed ? "#EAF5EF" : record.State == "banked" ? "#F1ECF8" : record.State is "upcoming" or "undated" ? "#EAF3FF" : "#EFF2F6"), CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 3, 8, 3), HorizontalAlignment = HorizontalAlignment.Left, Child = badge });
             var heading = Text(hasOtherCompletion ? "同日发布过的预告" : record.Heading, 15);
@@ -115,7 +115,7 @@ public partial class ResetCalendarView : UserControl
             time.Foreground = record.State == "upcoming" ? Ink("#0068D9") : Ink("#5B6B7E");
             time.Margin = new Thickness(0, 0, 0, 8);
             stack.Children.Add(time);
-            stack.Children.Add(Text(hasOtherCompletion ? "这一天另有完成公告，可在上方查看。" : record.Detail, 12, "#5B6B7E"));
+            stack.Children.Add(Text(hasOtherCompletion ? "这一天另有重置确认，可在上方查看；尚未核实是否为同一次重置。" : record.Detail, 12, "#5B6B7E"));
             if (record.Note.Length > 0)
             {
                 var note = Text(record.Note, 11, "#5B6B7E");

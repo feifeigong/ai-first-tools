@@ -12,7 +12,7 @@ namespace AIFirst.Workspace;
 
 internal sealed partial class ResetNewsService
 {
-    private const int DiscoveryRevision = 2;
+    private const int DiscoveryRevision = 3;
     private sealed record Scan(List<ResetNewsItem> Items, bool Partial, List<Candidate> Queue,
         Dictionary<string, DateTimeOffset> Checked, int Offset, string? From, DateTimeOffset? NextPage,
         Dictionary<string, DateTimeOffset> RetryAfter, DateTimeOffset? HeadCheckedAt, bool SourcePartial, bool VerificationFailed);
@@ -23,8 +23,8 @@ internal sealed partial class ResetNewsService
         && (item.Parent is null || Regex.IsMatch(item.Parent, @"^[1-9][0-9]{14,19}$"));
     // A completion sentence still needs an officially verified reset context.
     // Other sentences (e.g. "Enjoy tomorrow") do not erase that first sentence.
-    private static bool CompletionOnly(string text) => Regex.IsMatch(Normalize(text),
-        @"^(?:(?:it\s+is|it's)\s+)?(?:done(?:\s+and\s+dusted)?|all\s+propagated)(?:[.!](?:\s|$)|\s*$)", RegexOptions.IgnoreCase)
+    private static bool CompletionOnly(string text) => Regex.IsMatch(Normalize(text).Replace('’', '\''),
+        @"^(?:and\s+)?(?:(?:it\s+is|it's)\s+)?(?:done(?:\s+and\s+dusted)?|all\s+propagated)(?:[.!](?:\s|$)|\s*$)", RegexOptions.IgnoreCase)
         && !Regex.IsMatch(Normalize(text), @"\b(?:not|never|isn't|isn’t)\b.{0,30}\b(?:done|complete|propagated)\b", RegexOptions.IgnoreCase);
 
     private static HistoryPage ParseHistory(string json, DateTimeOffset now, int offset)
@@ -172,7 +172,7 @@ internal sealed partial class ResetNewsService
             var text = original.Text;
             var group = candidate.Id;
             var parent = candidate.Parent;
-            if (CompletionOnly(text) || kind is null && TimingReply(text))
+            if (parent is not null || CompletionOnly(text) || kind is null && (TimingReply(text) || candidate.RelatedHint))
             {
                 var officialParent = await OfficialContext(candidate.Id, original).ConfigureAwait(false);
                 if (parent is not null && parent != officialParent) throw new System.IO.InvalidDataException();
@@ -190,12 +190,14 @@ internal sealed partial class ResetNewsService
                     kind = context.Kind == "announced" ? "upcoming" : context.Kind;
                 text = context.Text + "\n\n" + text;
             }
-            if (kind is null && CompletionOnly(original.Text) && candidate.Historical && candidate.RelatedHint)
-                return new("uncertain", original.Text, candidate.Id);
+            // An unfamiliar language or phrase remains unresolved even if a feed labels it
+            // reset-related. Preserve the verified context without inventing a completion.
+            if (kind is null && candidate.RelatedHint)
+                return new("uncertain", text, candidate.Id);
             return kind is null ? null : new(kind, text, group);
         }
 
-        bool Needs(Candidate candidate) => candidate.Text.Length == 0 || Classify(candidate.Text) is not null || CompletionOnly(candidate.Text) || TimingReply(candidate.Text)
+        bool Needs(Candidate candidate) => candidate.RelatedHint || candidate.Text.Length == 0 || Classify(candidate.Text) is not null || CompletionOnly(candidate.Text) || TimingReply(candidate.Text)
             || (candidate.Parent is { } parent && TimingReply(candidate.Text) && (!candidates.TryGetValue(parent, out var context) || Classify(context.Text) is not null));
         var items = new ConcurrentBag<ResetNewsItem>();
         var completed = new ConcurrentBag<string>();

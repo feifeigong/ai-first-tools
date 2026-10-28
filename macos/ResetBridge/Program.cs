@@ -72,7 +72,7 @@ internal static class Program
             var item = new ResetNewsItem("2113162413008884099", "", "Lands tomorrow before 10am PST", "upcoming",
                 DateTimeOffset.Parse("2026-10-22T06:55:00Z"), "https://x.com/thsottiaux/status/2113162413008884099");
             var eventItem = ResetCalendarModel.Events(new[] { item }, now).Single();
-            Require(eventItem.State == "past-preview" && eventItem.Badge == "历史预告");
+            Require(eventItem.State == "past-preview" && eventItem.Badge == "预计已生效");
             Require(eventItem.Date == new DateTime(2026, 10, 23) && eventItem.TimeText.Contains("02:00"));
             var payload = JsonSerializer.Serialize(Snapshot(new(true, "", "", now, new[] { item }), now), Json);
             Require(payload.Contains("2026-10-23") && !payload.Contains("Lands tomorrow"));

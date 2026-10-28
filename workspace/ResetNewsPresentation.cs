@@ -16,7 +16,7 @@ internal sealed record ResetNewsPresentation(string Summary, string Description,
 
     internal static ResetNewsPresentation From(ResetNewsItem item, DateTimeOffset? now = null)
     {
-        if (item.Kind == "announced") return new("Tibo 已宣布额度重置", "Tibo 表示已完成重置，是否到账以你的 Codex 实际显示为准。", "", "");
+        if (item.Kind == "announced") return new("Tibo 已确认重置完成", "依据 Tibo 的确认帖；具体到账以你的 Codex 用量为准。", "", "");
         if (item.Kind == "banked") return new("Tibo 发布了重置卡消息", "这次是发放可留着以后使用的重置卡，不是直接恢复当前额度。是否收到以你的 Codex 显示为准。", "", "");
         if (item.Kind == "uncertain") return new("这条历史消息还待核实", "原文不完整，或还不能确定它对应哪次重置。暂不计为已完成，也不会据此提醒。", "", "");
         var text = item.Text;

@@ -61,7 +61,7 @@ internal static class ResetNewsPresentationTests
         {
             var item = Item("Codex quota has reset. Enjoy.", kind: "announced");
             var view = ResetNewsPresentation.From(item, Before);
-            require(view.TimeText == "" && view.Description.Contains("实际显示"));
+            require(view.TimeText == "" && view.Description.Contains("用量为准"));
             var window = new ResetNoticeWindow(Item("Lands tomorrow before 10am PST."), () => System.Threading.Tasks.Task.FromResult(false));
             require(((TextBlock)window.FindName("NoticeTime")).Text.Contains("北京时间"));
             require(!((TextBlock)window.FindName("NoticeExcerpt")).Text.Contains("Lands"));

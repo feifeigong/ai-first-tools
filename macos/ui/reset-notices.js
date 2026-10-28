@@ -9,7 +9,7 @@
   const todayFallback = () => key(new Date(Date.now() + 8 * 3600000));
   const events = () => snapshot?.events || [];
   const kind = event => event?.state==='undated' ? 'upcoming' : ['completed', 'banked', 'upcoming'].includes(event?.state) ? event.state : 'history';
-  const label = event => ({completed:'完成公告',banked:'重置卡',upcoming:'预告',uncertain:'待核实',undated:'预告'})[event?.state] || '历史预告';
+  const label = event => ({completed:'重置确认',banked:'发重置卡',upcoming:'等待重置',uncertain:'待核实',undated:'等待重置'})[event?.state] || '预计生效';
   const dateLabel = value => {
     const day = date(value);
     return `${day.getUTCMonth()+1} 月 ${day.getUTCDate()} 日` + (value === snapshot?.today ? ' · 今天' : ` · 周${'日一二三四五六'[day.getUTCDay()]}`);
@@ -90,7 +90,7 @@
     const status=byId('reset-status');status.replaceChildren();
     status.hidden=Boolean(snapshot?.enabled&&snapshot.fresh&&!snapshot.partial);
     status.append(element('strong','',snapshot?.enabled===false?'重置提醒已关闭':snapshot?.statusText||'正在读取重置消息'),
-      element('p','resume-muted',snapshot?.enabled===false?'历史记录会保留；重新开启后继续关注新消息。':snapshot?.detailText||'最近的预告和完成公告会显示在日历里。'));
+      element('p','resume-muted',snapshot?.enabled===false?'历史记录会保留；重新开启后继续关注新消息。':snapshot?.detailText||'最近的预告和确认消息会显示在日历里。'));
     const stamp=snapshot?.lastCheckedLabel;
     byId('reset-updated').textContent=snapshot?.checkedText || (stamp&&stamp!=='尚未更新'?`最近尝试（北京）${stamp}`:'尚未检查');
     renderCalendar();

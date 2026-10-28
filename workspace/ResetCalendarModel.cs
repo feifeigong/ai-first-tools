@@ -38,20 +38,20 @@ internal static class ResetCalendarModel
             return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "banked", "发放重置卡", "Tibo 发布了重置卡消息",
                 view.Description, "公告发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url);
         if (item.Kind == "uncertain")
-            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "uncertain", "待核实", "这条历史消息还待核实",
+            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "uncertain", "待核实", "这条消息还需核对原帖",
                 view.Description, "原帖发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url);
         if (item.Kind == "announced")
-            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "completed", "完成公告", "Tibo 已宣布完成重置",
-                "按完成公告的发布日记录，实际额度以 Codex 显示为准。", "公告发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url);
+            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "completed", "重置确认", "Tibo 已确认重置完成",
+                "按 Tibo 的确认帖记录。这是发帖时间，具体到账以你的 Codex 用量为准。", "确认帖发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url);
         var hasDate = view.ExpectedAt is { } target && (view.AlternativeAt is null || BeijingDate(target) == BeijingDate(view.AlternativeAt.Value));
         if (!hasDate)
-            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "undated", "重置预告", "Tibo 已发布重置预告",
-                "日期按预告的北京时间记录，实际额度以 Codex 显示为准。", view.ExpectedAt is null ? "具体时间尚未公布" : view.TimeText, view.TimeNote, item.Url);
+            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "undated", "等待重置", "Tibo 已发布重置预告",
+                "日期按预告的北京时间记录，具体生效时间仍待后续消息。", view.ExpectedAt is null ? "具体时间尚未公布" : view.TimeText, view.TimeNote, item.Url);
         var passed = view.ExpectedAt <= now && (view.AlternativeAt is null || view.AlternativeAt <= now);
         var note = view.TimeNote.Replace(" 原计划时间已过，实际额度以 Codex 显示为准。", "", StringComparison.Ordinal);
         return new(item.Id, BeijingDate(view.ExpectedAt!.Value), item.PublishedAt, passed ? "past-preview" : "upcoming",
-            passed ? "历史预告" : "重置预告", passed ? "历史重置预告" : "Tibo 发布了重置预告",
-            passed ? "原计划时间已过，实际额度以 Codex 显示为准。" : "这是预计安排，收到完成消息后会继续更新。",
+            passed ? "预计已生效" : "等待重置", passed ? "已到原定重置时间" : "Tibo 发布了重置预告",
+            passed ? "仅按原预告时间推算；程序还未取得对应的确认帖，实际额度以 Codex 显示为准。" : "这是预计安排，收到确认消息后会继续更新。",
             (passed ? "原计划 · " : "预计 · ") + view.TimeText.Replace("北京时间 ", "", StringComparison.Ordinal), note, item.Url);
     }
 

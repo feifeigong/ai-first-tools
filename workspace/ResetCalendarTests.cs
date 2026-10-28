@@ -37,12 +37,12 @@ internal static class ResetCalendarTests
         {
             var item = ResetCalendarModel.Events(new[] { Preview() }, Now).Single();
             require(item.Date == new DateTime(2026, 10, 23) && item.State == "past-preview" && !item.Completed);
-            require(item.TimeText.StartsWith("原计划") && item.Badge == "历史预告" && item.Detail.Contains("实际额度以 Codex 显示为准"));
+            require(item.TimeText.StartsWith("原计划") && item.Badge == "预计已生效" && item.Detail.Contains("实际额度以 Codex 显示为准"));
         });
         check("Known upcoming time remains a preview until both timezone interpretations have passed", () =>
         {
             var item = ResetCalendarModel.Events(new[] { Preview() }, DateTimeOffset.Parse("2026-10-22T17:30:00Z")).Single();
-            require(item.State == "upcoming" && item.Badge == "重置预告");
+            require(item.State == "upcoming" && item.Badge == "等待重置");
         });
         check("A completion supersedes only its own preview chain and records the Beijing publication date", () =>
         {
@@ -50,7 +50,7 @@ internal static class ResetCalendarTests
             var completed = Item("2113162413008884100", "announced", "Codex quota has reset. Enjoy.", "2026-10-22T20:01:00Z", root.Id);
             var records = ResetCalendarModel.Events(new[] { root, Preview(), completed }, Now);
             require(records.Count == 1 && records[0].Completed && records[0].Date == new DateTime(2026, 10, 23));
-            require(records[0].TimeText.Contains("04:01") && records[0].Detail.Contains("发布日"));
+            require(records[0].TimeText.Contains("04:01") && records[0].Detail.Contains("发帖时间") && records[0].Badge == "重置确认");
         });
         check("Independent announcements on the same day are preserved rather than guessed to be the same reset", () =>
         {

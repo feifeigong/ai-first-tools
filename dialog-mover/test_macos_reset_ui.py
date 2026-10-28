@@ -14,11 +14,11 @@ def news():
     return {'enabled':True,'fresh':True,'partial':False,'today':'2026-10-23','lastCheckedLabel':'10-23 09:05',
         'checkedText':'消息更新于（北京）10-23 08:00',
         'statusText':'最近的重置消息','detailText':'', 'events':[
-            {'id':'2113162413008884099','date':'2026-10-23','state':'past-preview','badge':'历史预告','heading':'历史重置预告',
-             'detail':'原计划时间已过，实际额度以 Codex 显示为准。','timeText':'原计划 · 10 月 23 日 02:00 前',
+            {'id':'2113162413008884099','date':'2026-10-23','state':'past-preview','badge':'预计已生效','heading':'已到原定重置时间',
+             'detail':'仅按原预告时间推算；程序还未取得对应的确认帖，实际额度以 Codex 显示为准。','timeText':'原计划 · 10 月 23 日 02:00 前',
              'note':'按原帖 PST 换算；若泛指当地美西时间，则为 01:00 前。','publishedLabel':'10-22 14:55'},
-            {'id':'2112432076767289678','date':'2026-10-20','state':'completed','badge':'完成公告','heading':'Tibo 已宣布完成重置',
-             'detail':'按完成公告的发布日记录，实际额度以 Codex 显示为准。','timeText':'公告发布于 10-20 14:33','note':'','publishedLabel':'10-20 14:33'},
+            {'id':'2112432076767289678','date':'2026-10-20','state':'completed','badge':'重置确认','heading':'Tibo 已确认重置完成',
+             'detail':'按 Tibo 的确认帖记录。这是发帖时间，具体到账以你的 Codex 用量为准。','timeText':'确认帖发布于 10-20 14:33','note':'','publishedLabel':'10-20 14:33'},
             {'id':'2107913674593644711','date':'2026-10-08','state':'banked','badge':'发放重置卡','heading':'Tibo 发布了重置卡消息',
              'detail':'发放可以留着以后使用的重置卡。','timeText':'公告发布于 10-08 03:19','note':'','publishedLabel':'10-08 03:19'}]}
 
@@ -55,7 +55,7 @@ window.pywebview.api.open_reset_post=async(id)=>{window.lastPost=id;return {ok:t
                 self.assertEqual(page.locator('#reset-month').inner_text(),'2026 年 10 月')
                 self.assertEqual(page.locator('.reset-day[aria-pressed=true]').get_attribute('data-date'),'2026-10-20')
                 page.locator('[data-date="2026-10-23"]').click()
-                self.assertIn('历史重置预告',page.locator('#reset-details').inner_text())
+                self.assertIn('已到原定重置时间',page.locator('#reset-details').inner_text())
                 self.assertNotIn('尚未确认完成',page.locator('#reset-details').inner_text())
                 self.assertIn('02:00',page.locator('#reset-details').inner_text())
                 page.get_by_role('button',name='查看原帖 ↗',exact=True).click()

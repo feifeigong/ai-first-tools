@@ -11,13 +11,13 @@
     </section>
     <section class="resume-card reset-card" aria-labelledby="reset-name">
       <div class="resume-card-top"><div><h2 id="reset-name">重置消息</h2><p class="resume-muted">关注 Tibo 的重置消息，关掉窗口也会提醒。</p></div><div class="resume-actions"><span class="resume-muted">提醒</span><button id="reset-enabled" class="resume-switch" role="switch" aria-label="重置消息提醒开关" aria-checked="false" disabled></button></div></div>
-      <div id="reset-status" class="reset-status" role="status" aria-live="polite"><strong>正在读取重置消息</strong><p class="resume-muted">最近的预告和完成公告会显示在日历里。</p></div>
+      <div id="reset-status" class="reset-status" role="status" aria-live="polite"><strong>正在读取重置消息</strong><p class="resume-muted">最近的预告和确认消息会显示在日历里。</p></div>
       <div class="reset-calendar-layout">
         <div class="reset-calendar">
           <div class="reset-month-nav"><div><span class="reset-kicker">北京时间</span><h3 id="reset-month"></h3></div><div class="reset-calendar-actions"><button id="reset-prev" class="reset-icon-button" aria-label="上个月"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button><button id="reset-today" class="workspace-button">今天</button><button id="reset-next" class="reset-icon-button" aria-label="下个月"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg></button></div></div>
           <div class="reset-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
           <div id="reset-days" class="reset-days" role="group" aria-label="重置消息日历"></div>
-          <div class="reset-legend"><span data-kind="upcoming">重置预告</span><span data-kind="completed">完成公告</span><span data-kind="banked">重置卡</span><span data-kind="history">历史记录</span></div>
+          <div class="reset-legend"><span data-kind="upcoming">等待重置</span><span data-kind="completed">重置确认</span><span data-kind="banked">发放重置卡</span><span data-kind="history">预计生效 / 待核实</span></div>
         </div>
         <div id="reset-details" class="reset-details" aria-live="polite"></div>
       </div>

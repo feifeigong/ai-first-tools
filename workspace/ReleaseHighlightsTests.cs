@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 
 namespace AIFirst.Workspace;
 
@@ -37,7 +38,9 @@ internal static class ReleaseHighlightsTests
                 var original=File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"assets","whats-new.json"));
                 foreach(var json in new[]{"broken",original.Replace("\"schema\": 1","\"schema\": 2"),original.Replace(UpdateClient.CurrentVersion,"9.9.9"),original.Replace("\"items\": [","\"items\": null,\"items\": [")})
                 { File.WriteAllText(file,json); require(ReleaseHighlights.Load(file,UpdateClient.CurrentVersion) is null); }
-                File.WriteAllText(file,original.Replace("更新内容，一眼看懂","<script>do_not_run()</script>"));
+                var injected = JsonNode.Parse(original)!;
+                injected["items"]![0]!["title"] = "<script>do_not_run()</script>";
+                File.WriteAllText(file,injected.ToJsonString());
                 require(ReleaseHighlights.Load(file,UpdateClient.CurrentVersion)?.Items.First().Title.Contains("<script>")==true);
             });
         }

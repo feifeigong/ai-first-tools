@@ -11,15 +11,91 @@ internal static partial class ResetNewsTests
 {
     private static void RunDiscovery(Action<string, Action> check, Action<bool> require)
     {
-        check("A discovery reply hint cannot override the officially verified parent relationship", () =>
+        check("An unfamiliar language flagged by a discovery source keeps verified reset context but never becomes confirmation or an alert", () =>
         {
             using var f = new Fixture();
-            var claimed=f.Add("Day 17/ Reset",3);
-            var actual=f.Add("Day 18/ Reset",2);
-            var reply=f.Add("Lands tomorrow before 10am PST.",1,claimed.Id);
-            f.Parents[reply.Id]=actual.Id;
+            var root = f.Add("Day 23/ Today is a reset.", 3);
+            var reply = f.Add("C’est fait. À demain pour des nouvelles.", 1, root.Id);
+            var feed = JsonNode.Parse(f.Feed())!;
+            foreach (var row in feed["tweets"]!.AsArray())
+                if (row!["id"]!.GetValue<string>() == reply.Id) row["tibo_lane"] = "reset_related";
+            f.FeedOverride = feed.ToJsonString();
             f.Refresh();
-            require(f.Service.Snapshot.Partial && f.Service.Snapshot.Items.All(item=>item.Id!=reply.Id));
+            var pending = f.Service.Snapshot.Items.Single(item => item.Id == reply.Id);
+            require(pending.Kind == "uncertain" && pending.GroupId == reply.Id && pending.Text.Contains(root.Text) && pending.Text.Contains(reply.Text));
+            var calendar = ResetCalendarModel.Events(f.Service.Snapshot.Items, f.Now);
+            require(calendar.Count == 2 && calendar.Any(item => item.Id == root.Id && !item.Completed) && calendar.Any(item => item.Id == reply.Id && item.State == "uncertain"));
+            require(f.Service.TryTakeAlert(out var alert) && alert?.Id == root.Id && !f.Service.TryTakeAlert(out _));
+        });
+        check("An And-it-is-done quote confirms its verified reset chain even when tomorrow mentions unrelated good news", () =>
+        {
+            foreach (var phrase in new[] { "And it's done. See you tomorrow for some good news.", "And it’s done. See you tomorrow for some good news.", "And it is done. See you tomorrow." })
+            {
+                using var f = new Fixture(true);
+                var root = f.Historical("Day 23/ Just kidding, today is a reset.", 3);
+                var timing = f.Historical("Lands by midnight PST.", 2);
+                var done = f.Historical(phrase, 1);
+                f.Parents[timing.Id] = root.Id;
+                f.Quotes[done.Id] = timing.Id;
+                f.Refresh();
+                var result = f.Service.Snapshot.Items.Single(item => item.Id == done.Id);
+                require(result.Kind == "announced" && result.GroupId == root.Id && !result.Historical);
+                var calendar = ResetCalendarModel.Events(f.Service.Snapshot.Items, f.Now);
+                require(calendar.Count == 1 && calendar[0].Completed && calendar[0].Id == done.Id);
+                require(f.Service.TryTakeAlert(out var alert) && alert?.Id == done.Id && !f.Service.TryTakeAlert(out _));
+                require(ResetNewsService.Classify(phrase) is null);
+            }
+        });
+        check("A completion phrase without a verified reset quote cannot turn a product announcement into a reset", () =>
+        {
+            foreach (var phrase in new[] { "And it's done. See you tomorrow for some good news.", "And it's not done. See you tomorrow.", "And it’s done? See you tomorrow." })
+            {
+                using var f = new Fixture();
+                var product = f.Add("A new editor feature has shipped.", 3);
+                var reply = f.Add(phrase, 1);
+                f.Quotes[reply.Id] = product.Id;
+                f.Refresh();
+                require(f.Service.Snapshot.Items.All(item => item.Id != reply.Id) && !f.Service.TryTakeAlert(out _));
+            }
+        });
+        check("A previously misclassified completion is rechecked after a rule upgrade while notification acknowledgements survive", () =>
+        {
+            using var f = new Fixture(true);
+            var root = f.Historical("Day 23/ Today is a reset.", 3);
+            var done = f.Historical("And it's done. See you tomorrow for some good news.", 1);
+            f.Quotes[done.Id] = root.Id;
+            f.Refresh();
+            var saved = JsonNode.Parse(System.IO.File.ReadAllText(f.StateFile))!;
+            saved["discoveryRevision"] = 2;
+            foreach (var item in saved["items"]!.AsArray())
+                if (item!["id"]!.GetValue<string>() == done.Id) item["kind"] = "upcoming";
+            saved["historyChecked"] = new JsonObject { [done.Id] = f.Now.ToString("O") };
+            saved["historyNextPage"] = f.Now.AddHours(6).ToString("O");
+            saved["seen"] = new JsonObject { [done.Id] = f.Now.ToString("O") };
+            saved["seenStages"] = new JsonObject { [root.Id + ":upcoming"] = f.Now.ToString("O") };
+            saved["pending"] = new JsonArray();
+            System.IO.File.WriteAllText(f.StateFile, saved.ToJsonString());
+            f.Now = f.Now.AddMinutes(6);
+            using var next = f.Another();
+            next.RefreshAsync().GetAwaiter().GetResult();
+            require(next.Snapshot.Items.Single(item => item.Id == done.Id).Kind == "announced");
+            require(ResetCalendarModel.Events(next.Snapshot.Items, f.Now).Single().Completed);
+            require(!next.TryTakeAlert(out _));
+            var updated = JsonNode.Parse(System.IO.File.ReadAllText(f.StateFile))!;
+            require(updated["seen"]![done.Id] is not null && updated["seenStages"]![root.Id + ":upcoming"] is not null);
+        });
+        check("A discovery reply hint cannot override the officially verified parent relationship", () =>
+        {
+            foreach (var phrase in new[] { "Lands tomorrow before 10am PST.", "Codex quota has reset. Enjoy." })
+            {
+                using var f = new Fixture();
+                var claimed=f.Add("Day 17/ Reset",3);
+                var actual=f.Add("Day 18/ Reset",2);
+                var reply=f.Add(phrase,1,claimed.Id);
+                f.Parents[reply.Id]=actual.Id;
+                f.Refresh();
+                require(f.Service.Snapshot.Partial && f.Service.Snapshot.Items.All(item=>item.Id!=reply.Id));
+            }
         });
         check("Feed recovery does not lose a recent officially verified secondary-source message or repeat its alert", () =>
         {
