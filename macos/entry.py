@@ -502,6 +502,7 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                       const rendered=document.querySelectorAll('.release-item').length>0&&document.activeElement.id==='release-done';
                       document.getElementById('release-done').click();await poll(()=>!dialog.open);
                       trigger.click();await poll(()=>dialog.open);document.getElementById('release-close').click();
+                      await poll(()=>!dialog.open&&document.activeElement===trigger);
                       diagnostic.phase='closed';diagnostic.finalFocus=document.activeElement.id;diagnostic.closed=!dialog.open;
                       window.__RELEASE_NOTES_SMOKE__=rendered&&!dialog.open&&document.activeElement===trigger;
                     })().catch(error=>{window.__RELEASE_NOTES_SMOKE__=false;window.__RELEASE_NOTES_DIAGNOSTICS__={...(window.__RELEASE_NOTES_DIAGNOSTICS__||{}),errorName:error.name};});''')
