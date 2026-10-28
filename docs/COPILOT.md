@@ -2,7 +2,7 @@
 
 ## 当前使用说明（2026-10-28）
 
-Windows v0.3.18 与 Mac preview.21 已包含两种搬家方式：
+Windows v0.3.19 与 Mac preview.22 已包含两种搬家方式：
 
 | 方式 | 在 Copilot 中的结果 |
 | --- | --- |

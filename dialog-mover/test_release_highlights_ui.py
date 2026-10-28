@@ -31,6 +31,7 @@ class HighlightsUiTests(unittest.TestCase):
                 page.locator('input').first.focus()
                 page.evaluate("document.getElementById('workspace-version').click()")
                 page.locator('#release-highlights').wait_for(state='visible');page.get_by_role('button',name='知道了',exact=True).click()
+                page.wait_for_function("document.activeElement.id==='workspace-version'")
                 self.assertEqual(page.evaluate('document.activeElement.id'),'workspace-version')
             finally:browser.close()
 

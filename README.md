@@ -20,7 +20,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ### Mac 版
 
-**[⬇ Mac 预览版下载（preview.21 · 内置续跑与 Copilot 搬入）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.21)**
+**[⬇ Mac 预览版下载（preview.22 · 内置续跑与 Copilot 搬入）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.22)**
 
 苹果 M 系列选 `macos-arm64.dmg`，Intel Mac 选 `macos-x86_64.dmg`。打开 DMG，拖到「应用程序」，之后直接打开，不需要源码或开发环境。
 
@@ -34,7 +34,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ### 推荐：Windows 安装版
 
-**[⬇ 下载 Windows 安装包 v0.3.18](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.18/AI-First-Tools-Setup-0.3.18.exe)**
+**[⬇ 下载 Windows 安装包 v0.3.19](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.19/AI-First-Tools-Setup-0.3.19.exe)**
 
 1. 下载上面的安装包，双击打开。
 2. 点击「安装」，等它完成。
@@ -46,7 +46,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ### 可选：Windows 免安装版
 
-**[⬇ 下载免安装压缩包 v0.3.18](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.18/AI-First-Tools-Portable-0.3.18-win-x64.zip)**
+**[⬇ 下载免安装压缩包 v0.3.19](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.19/AI-First-Tools-Portable-0.3.19-win-x64.zip)**
 
 解压**整个压缩包**，进入文件夹，双击「AI一手工具箱.exe」。不能只拿走一个 EXE，也不要直接在压缩包里面运行。可以给这个 EXE 创建桌面快捷方式，以后不用再找文件夹。
 
@@ -118,11 +118,11 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ## 更新、卸载与反馈
 
-**下一版新增「本次更新」小窗**：首次打开简短展示新增或改进内容，同版关闭后不反复提示，点右上角版本号可回看。说明离线可读，正在操作时不延后打断。Windows v0.3.19 / Mac preview.22 正在验收，当前安装包不变；详见[更新展示说明](docs/WHATS-NEW.md)。
+**更新后，一眼知道变了什么**：Windows v0.3.19 / Mac preview.22 起，首次正常打开用小窗简短展示本次变化，同版关闭后不反复提示；点右上角版本号可回看。说明离线可读，已开始操作时不延后打断。详见[更新展示说明](docs/WHATS-NEW.md)。
 
 - **Windows 和 Mac 都会自动提醒更新**：有新版时出现「下载并更新」，点一次即可下载、校验、更新并重新打开。也能点击「检查更新」。新工具随工具箱一起更新，无需单独添加。
 - 安装版自动覆盖更新；免安装版更新原来的整个程序目录。不操作各 AI 软件的对话目录，保留工具箱设置。搬运未结束时不会强制停止；下载可取消，网络不通仍能正常使用。
-- Windows v0.3.6 及更早需先手动安装一次 v0.3.18；已使用 v0.3.7 的用户可以软件内升级。Mac preview.1/2 需最后一次手动替换到 preview.21；preview.3 及之后可软件内升级。旧版自动提醒没出现时先点一次「检查更新」升级到本版；仓库提交不会直接改写已安装的旧程序。
+- Windows v0.3.6 及更早需先手动安装一次 v0.3.19；已使用 v0.3.7 的用户可以软件内升级。Mac preview.1/2 需最后一次手动替换到 preview.22；preview.3 及之后可软件内升级。旧版自动提醒没出现时先点一次「检查更新」升级到本版；仓库提交不会直接改写已安装的旧程序。
 - Mac 旧版若一直停在「校验更新包」且取消无效，请在没有搬家任务时正常退出，再手动安装 preview.13 一次。新版显示具体准备步骤与已用时间，支持准备过程取消和时间预算；旧更新器不会随发布自动改变。若停在“释放安装包（8/8）”且窗口完全无响应，确认没有搬运任务后，可用 macOS「强制退出」仅关闭工具箱，再用 preview.13 完整 DMG 替换。
 - Cursor → 本机 Work 报“历史工具调用缺少配对结果”：更新到 preview.13 后重新搬一次。缺少返回的历史工具日志会完整保留为明确说明，不编造结果；完整配对继续保留 64 字符兼容保护。
 - 旧版 Mac 搬到本机 Work 后只见尾部、上翻重试的记录：更新到 preview.7 或之后的版本，再从来源重新搬一次，打开新副本；原记录和旧副本保留，不需删数据库。新版完整比较正文并写入可分页历史，原生验证边界见 [Mac 测试记录](docs/MACOS-QA.md)。

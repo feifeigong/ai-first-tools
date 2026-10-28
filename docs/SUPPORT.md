@@ -1,6 +1,6 @@
 # 支持范围与验证边界
 
-当前公开版本为 [Windows v0.3.18](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.18) 与 [Mac preview.21](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.21)。下面列出已实现的范围，不表示所有软件版本与账号场景都已完成原生验收。
+当前公开版本为 [Windows v0.3.19](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.19) 与 [Mac preview.22](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.22)。下面列出已实现的范围，不表示所有软件版本与账号场景都已完成原生验收。
 
 ## 两种搬家方式
 
