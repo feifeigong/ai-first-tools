@@ -20,7 +20,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ### Mac 版
 
-**[⬇ Mac 预览版下载（preview.22 · 内置续跑与 Copilot 搬入）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.22)**
+**[⬇ Mac 预览版下载（preview.23 · 内置续跑与 Copilot 搬入）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.23)**
 
 苹果 M 系列选 `macos-arm64.dmg`，Intel Mac 选 `macos-x86_64.dmg`。打开 DMG，拖到「应用程序」，之后直接打开，不需要源码或开发环境。
 
@@ -34,7 +34,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ### 推荐：Windows 安装版
 
-**[⬇ 下载 Windows 安装包 v0.3.19](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.19/AI-First-Tools-Setup-0.3.19.exe)**
+**[⬇ 下载 Windows 安装包 v0.3.20](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.20/AI-First-Tools-Setup-0.3.20.exe)**
 
 1. 下载上面的安装包，双击打开。
 2. 点击「安装」，等它完成。
@@ -46,7 +46,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ### 可选：Windows 免安装版
 
-**[⬇ 下载免安装压缩包 v0.3.19](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.19/AI-First-Tools-Portable-0.3.19-win-x64.zip)**
+**[⬇ 下载免安装压缩包 v0.3.20](https://github.com/feifeigong/ai-first-tools/releases/download/v0.3.20/AI-First-Tools-Portable-0.3.20-win-x64.zip)**
 
 解压**整个压缩包**，进入文件夹，双击「AI一手工具箱.exe」。不能只拿走一个 EXE，也不要直接在压缩包里面运行。可以给这个 EXE 创建桌面快捷方式，以后不用再找文件夹。
 
@@ -68,7 +68,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 打开「续跑与重置」→ 在「重置日历」打开「提醒」。发现明确的新重置消息时弹框提醒，关闭工具箱窗口后也能继续提醒。
 
-日历保留预告、完成公告和重置卡消息，提供中文说明、北京时间及原帖链接。原帖给出时间时按表述换算；存在时区歧义或未给具体时间时会说明，不把估计当作确定到账时间。网络或公开来源暂时不可用时会保留旧消息并自动重试，**轮询监控不保证实时或零遗漏**。
+日历区分等待重置、重置确认、预计生效和发卡消息，提供中文说明、北京时间及原帖链接。以官方原文及引用、回复链核对，关联表达无法可靠判断时保留“待核实”。确认帖的发帖时间与个人实际到账时间分别说明，详见[状态说明](docs/RESET-NOTICES.md)。原帖给出时间时按表述换算；存在时区歧义或未给具体时间时会说明，不把估计当作确定到账时间。网络或公开来源暂时不可用时会保留旧消息并自动重试，**轮询监控不保证实时或零遗漏**。
 
 想等待 Tibo 的重置、保留自己的重置卡，可以手动关闭「自动续跑」，继续开着「提醒」。提醒本身不会替你暂停续跑或使用重置卡。
 
@@ -122,7 +122,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 - **Windows 和 Mac 都会自动提醒更新**：有新版时出现「下载并更新」，点一次即可下载、校验、更新并重新打开。也能点击「检查更新」。新工具随工具箱一起更新，无需单独添加。
 - 安装版自动覆盖更新；免安装版更新原来的整个程序目录。不操作各 AI 软件的对话目录，保留工具箱设置。搬运未结束时不会强制停止；下载可取消，网络不通仍能正常使用。
-- Windows v0.3.6 及更早需先手动安装一次 v0.3.19；已使用 v0.3.7 的用户可以软件内升级。Mac preview.1/2 需最后一次手动替换到 preview.22；preview.3 及之后可软件内升级。旧版自动提醒没出现时先点一次「检查更新」升级到本版；仓库提交不会直接改写已安装的旧程序。
+- Windows v0.3.6 及更早需先手动安装一次 v0.3.20；已使用 v0.3.7 的用户可以软件内升级。Mac preview.1/2 需最后一次手动替换到 preview.23；preview.3 及之后可软件内升级。旧版自动提醒没出现时先点一次「检查更新」升级到本版；仓库提交不会直接改写已安装的旧程序。
 - Mac 旧版若一直停在「校验更新包」且取消无效，请在没有搬家任务时正常退出，再手动安装 preview.13 一次。新版显示具体准备步骤与已用时间，支持准备过程取消和时间预算；旧更新器不会随发布自动改变。若停在“释放安装包（8/8）”且窗口完全无响应，确认没有搬运任务后，可用 macOS「强制退出」仅关闭工具箱，再用 preview.13 完整 DMG 替换。
 - Cursor → 本机 Work 报“历史工具调用缺少配对结果”：更新到 preview.13 后重新搬一次。缺少返回的历史工具日志会完整保留为明确说明，不编造结果；完整配对继续保留 64 字符兼容保护。
 - 旧版 Mac 搬到本机 Work 后只见尾部、上翻重试的记录：更新到 preview.7 或之后的版本，再从来源重新搬一次，打开新副本；原记录和旧副本保留，不需删数据库。新版完整比较正文并写入可分页历史，原生验证边界见 [Mac 测试记录](docs/MACOS-QA.md)。
