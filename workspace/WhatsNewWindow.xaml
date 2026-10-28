@@ -1,0 +1,29 @@
+<Window x:Class="AIFirst.Workspace.WhatsNewWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="本次更新 · AI一手工具箱" Width="536" SizeToContent="Height" WindowStartupLocation="CenterOwner"
+ WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
+ ShowInTaskbar="False" FontFamily="Microsoft YaHei UI, Segoe UI" Foreground="#202C38" UseLayoutRounding="True"
+ PreviewKeyDown="DialogKeyDown">
+ <Border Margin="16" Padding="30,26,30,26" Background="White" CornerRadius="18" BorderBrush="#E2E7EE" BorderThickness="1">
+  <Border.Effect><DropShadowEffect BlurRadius="26" ShadowDepth="5" Opacity="0.12" Color="#172A40" /></Border.Effect>
+  <Grid KeyboardNavigation.TabNavigation="Cycle"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+   <Grid Margin="0,0,0,23"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <Border Width="48" Height="48" CornerRadius="12" BorderBrush="#E6EBF1" BorderThickness="1"><Image x:Name="BrandImage" Width="40" Height="40" Stretch="Uniform" /></Border>
+    <StackPanel Grid.Column="1" Margin="13,0,0,0" VerticalAlignment="Center"><TextBlock Text="本次更新" FontWeight="SemiBold" FontSize="14"/><TextBlock x:Name="ReleaseVersion" Foreground="#5F6F85" FontSize="12" Margin="0,3,0,0"/></StackPanel>
+    <Button Grid.Column="2" x:Name="CloseButton" Width="40" Height="40" Padding="0" Background="Transparent" Foreground="#687686" BorderThickness="0" VerticalAlignment="Top" Click="DismissClick" ToolTip="关闭" AutomationProperties.Name="关闭更新说明"><Path Data="M1,1 L13,13 M13,1 L1,13" Width="12" Height="12" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5"/></Button>
+   </Grid>
+   <StackPanel Grid.Row="1" Margin="0,0,0,26"><TextBlock x:Name="Heading" FontSize="23" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="32"/><TextBlock x:Name="Description" Foreground="#5F6F85" FontSize="13" Margin="0,8,0,0" TextWrapping="Wrap" LineHeight="21"/></StackPanel>
+   <ScrollViewer Grid.Row="2" x:Name="HighlightsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="340">
+    <ItemsControl x:Name="HighlightsList"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Margin="0,0,0,22">
+     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions><Border Background="#ECF4FE" CornerRadius="4" Padding="6,3" Margin="0,0,9,0" VerticalAlignment="Top"><TextBlock Text="{Binding Label}" Foreground="#125D9F" FontSize="11" FontWeight="SemiBold"/></Border><TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"/></Grid>
+     <TextBlock Text="{Binding Text}" Foreground="#536579" FontSize="13" TextWrapping="Wrap" LineHeight="22" Margin="0,8,0,0"/>
+    </StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+   </ScrollViewer>
+   <Border Grid.Row="3" BorderBrush="#E8ECF2" BorderThickness="0,1,0,0" Padding="0,20,0,0" Margin="0,2,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <Button x:Name="FullNotesButton" Content="完整更新说明 ↗" HorizontalAlignment="Left" Padding="0,8" Background="Transparent" Foreground="#536579" BorderThickness="0" Click="FullNotesClick" FontSize="12" AutomationProperties.Name="在浏览器查看完整更新说明"/>
+    <Button Grid.Column="1" x:Name="DismissButton" Content="知道了" MinWidth="112" MinHeight="42" Padding="20,10" Background="#0073E6" Foreground="White" FontWeight="SemiBold" FontSize="14" IsDefault="True" Click="DismissClick"/>
+   </Grid></Border>
+  </Grid>
+ </Border>
+</Window>

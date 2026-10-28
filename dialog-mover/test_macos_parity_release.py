@@ -42,6 +42,24 @@ class MacParityReleaseTests(unittest.TestCase):
     def test_both_native_architectures_require_the_complete_feature_reports(self):
         self.assertEqual(len(validated_assets(self.root,self.release)),23)
 
+    def test_new_releases_require_bundled_highlights_and_native_acknowledgement(self):
+        previous=self.release;self.release='0.4.0-macos-preview.22'
+        for arch in ('arm64','x86_64'):
+            directory=self.root/('macos-'+arch);name=f'AI-First-Tools-{self.release}-macos-{arch}.dmg'
+            (directory/f'AI-First-Tools-{previous}-macos-{arch}.dmg').rename(directory/name)
+            (directory/f'SHA256SUMS-{arch}.txt').write_text(hashlib.sha256(b'synthetic').hexdigest()+'  '+name+'\n')
+            for path in directory.glob('*-test.json'):
+                value=json.loads(path.read_text());value['version']['release']=self.release
+                if path.name=='self-test.json':
+                    value['checks'].update(dict.fromkeys(('localizedProductName','finderDisplayName','nativeProcessName','bundledReleaseHighlights'),True));value['finderScope']='product'
+                if path.name=='smoke-test.json':value['checks'].update(dict.fromkeys(('nativeReleaseHighlightsDialog','releaseHighlightsAcknowledgement'),True))
+                path.write_text(json.dumps(value))
+        self.assertEqual(len(validated_assets(self.root,self.release)),23)
+        for kind,key in (('self','bundledReleaseHighlights'),('smoke','nativeReleaseHighlightsDialog'),('smoke','releaseHighlightsAcknowledgement')):
+            path=self.root/'macos-arm64'/f'{kind}-test.json';original=path.read_text();value=json.loads(original);value['checks'].pop(key);path.write_text(json.dumps(value))
+            with self.assertRaisesRegex(ValueError,'release highlights'):validated_assets(self.root,self.release)
+            path.write_text(original)
+
     def test_staging_finder_fallback_cannot_replace_real_product_name_verification(self):
         previous=self.release
         self.release='0.4.0-macos-preview.21'

@@ -58,6 +58,9 @@ def validated_assets(directory: Path, release: str, *, local_preview: bool = Fal
                 raise ValueError('Native auto-resume page and bridge check is required')
             if kind == 'smoke' and number >= 19 and not {'resetCalendarBridge','independentReminderSwitch'} <= set(result['checks']):
                 raise ValueError('Native reset calendar and independent switch checks are required')
+            if number >= 22 and (kind == 'self' and result['checks'].get('bundledReleaseHighlights') is not True
+                    or kind == 'smoke' and not {'nativeReleaseHighlightsDialog','releaseHighlightsAcknowledgement'} <= set(result['checks'])):
+                raise ValueError('Bundled release highlights, native dialog and acknowledgement checks are required')
             if kind == 'memory' and not {'database_scope_guard','original_archive','bundled_stdio_mcp_handshake','discarded_legacy_entry_no_longer_blocks_move','source_badge_uses_current_entry','current_schema_rollback_preserves_legacy_orphan'} <= set(result['checks']):
                 raise ValueError('Native complete archive, read-only memory and repeat-move checks are required')
             if kind == 'reset' and not {'frozenSharedRuleBridgeAndSwitch','independentAfterLauncherExit','singleOwnedNotifier','nativeWindowClosePreservesNotifier','nativeChinesePopupHasNoAutomaticResumeAction','anotherPackageCannotStopNotifier','cooperativeUpdateRestoresNotifier','stopPreservesPreferences'} <= set(result['checks']):

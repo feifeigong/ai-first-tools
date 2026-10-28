@@ -247,6 +247,7 @@
       document.getElementById("workspace-version").textContent = info.developmentPreview ? 'Mac · 本地预览' : `Mac · v${info.release || info.version}`;
       checker.disabled = false;
       checker.hidden = Boolean(info.developmentPreview);
+      window.aiFirstReleaseNotesReady?.(!info.developmentPreview && !info.smokeAudit && !info.updateAudit);
       if (info.automaticChecks) {
         automaticChecks = true;
         if (info.updateMessage) show(info.updateMessage);

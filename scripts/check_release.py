@@ -45,6 +45,12 @@ def check(package: Path):
         legacy = package / 'AI一手工具工作台.exe'
         if not launcher.is_file() or not legacy.is_file() or launcher.read_bytes() != legacy.read_bytes():
             errors.append('New product launcher and compatible legacy apphost must both be present and identical')
+    if manifest_path.is_file() and tuple(map(int, manifest['version'].split('.'))) >= (0,3,19):
+        try:
+            highlights=json.loads((package/'assets/whats-new.json').read_text(encoding='utf-8'))
+            if highlights['schema']!=1 or highlights['versions']['windows']!=manifest['version'] or not 1<=len(highlights['items'])<=3:
+                raise ValueError('Release mismatch')
+        except (OSError,ValueError,KeyError,TypeError): errors.append('Matching bundled release highlights are required')
     engine = package / "tools" / "dialog-mover-v0.3" / "_internal" / "bin"
     if not (engine / "AI一手记忆服务.exe").is_file():
         errors.append("Missing bundled memory retrieval service")

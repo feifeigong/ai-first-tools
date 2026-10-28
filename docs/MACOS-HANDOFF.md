@@ -1,5 +1,9 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+## 新功能候选：preview.22
+
+新增更新后的简短变化弹窗，与Windows0.3.19共用whats-new.json；可点版本号回看，单版已关闭不自动重复。候选尚待两芯片原生报告，当前公开preview.21仍保留。新增bundledReleaseHighlights、nativeReleaseHighlightsDialog、releaseHighlightsAcknowledgement三项门槛；启动和更新审计模式不自动弹框干扰其他检查，smoke用隔离资料实际手动打开并检查已读状态。旧Copilot真机边界保留。
+
 ## 当前发布：AI一手工具箱 preview.21
 
 产品名已统一为“AI一手工具箱”。[preview.21](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.21) 已公开，固定源码db1842171ce10cc3ed342e579f981c08673ab940，原生构建40305808109两芯片各131项通过，23份资产摘要与报告已核对。旧.app物理名、可执行文件、bundle ID、用户资料与LaunchAgent身份保留；本地化显示名、原生进程名、窗口及DMG卷名使用新名。系统本地化、Finder显示名与进程名均实际通过，不只比对源码。原登录Copilot接续边界保持。

@@ -29,7 +29,7 @@
           </Button>
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" shell:WindowChrome.IsHitTestVisibleInChrome="True">
-          <TextBlock x:Name="VersionText" Foreground="#687686" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" />
+          <Button x:Name="ReleaseNotesButton" Background="Transparent" BorderThickness="0" Padding="8,6" Margin="0,0,4,0" MinHeight="36" Click="ReleaseNotesClick" ToolTip="查看本次更新" AutomationProperties.Name="查看本次更新"><TextBlock x:Name="VersionText" Foreground="#687686" FontSize="12" VerticalAlignment="Center" /></Button>
           <Button x:Name="CheckUpdateButton" Content="检查更新" Click="CheckUpdateClick" FontSize="12" Padding="12,5" Margin="0,7,12,7" ToolTip="从 AI一手的 GitHub 发布页检查新版本" AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" />
           <Button Style="{StaticResource CaptionButton}" ToolTip="最小化" AutomationProperties.Name="最小化" Click="MinimizeClick"><Path Data="M1,7 L13,7" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" /></Button>
           <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" ToolTip="最大化" AutomationProperties.Name="最大化" Click="MaximizeClick"><Path x:Name="MaximizeGlyph" Data="M1,1 H13 V13 H1 Z" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.5" /></Button>

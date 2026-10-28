@@ -38,6 +38,13 @@ public partial class App : Application
             Shutdown(output is null ? 2 : ResetVisualTests.Render(output));
             return;
         }
+        if (args.Args.Contains("--render-whats-new"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var output = Option(args.Args, "--render-whats-new");
+            Shutdown(output is null ? 2 : WhatsNewVisualTests.Render(output));
+            return;
+        }
         if (args.Args.Contains("--check-public-reset-feed"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;

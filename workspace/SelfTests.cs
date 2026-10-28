@@ -59,6 +59,7 @@ internal static class SelfTests
         ResetNewsPresentationTests.Run(Check, Require);
         ResetCalendarTests.Run(Check, Require);
         ResetMonitorTests.Run(Check, Require);
+        ReleaseHighlightsTests.Run(Check, Require);
         Check("Built-in startup IDs select catalog pages instead of overriding executable paths", () =>
         {
             foreach (var id in new[] { "dialog-mover", "auto-resume" })

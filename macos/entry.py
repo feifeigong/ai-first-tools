@@ -131,6 +131,21 @@ class MacApi(Api):
         self._update_ui_ready = None
         self._update_handoff_id = None
         self._update_failure = None
+        self._release_highlights = None
+
+    def release_notes(self) -> dict:
+        return self._release_highlights.info() if self._release_highlights else {}
+
+    def acknowledge_release_notes(self, release: str) -> dict:
+        return {'ok':bool(self._release_highlights and self._release_highlights.acknowledge(release))}
+
+    def open_release_notes(self) -> dict:
+        if self._release_highlights and self._release_highlights.content:
+            try:
+                open_external('https://github.com/feifeigong/ai-first-tools/releases/tag/v'+self._release_highlights.version)
+                return {'ok':True}
+            except (OSError,subprocess.SubprocessError): pass
+        return {'ok':False}
 
     def workspace_info(self) -> dict:
         message = None
@@ -145,7 +160,7 @@ class MacApi(Api):
             except (OSError, ValueError):
                 pass
         return {**info, "platform": "macOS", "architecture": platform.machine(), "automaticChecks": self._smoke or self._update_audit or info.get('developmentPreview') is not True,
-                "smokeAudit": self._smoke, "updateMessage": message}
+                "smokeAudit": self._smoke, "updateAudit": self._update_audit, "updateMessage": message}
 
     def check_update(self) -> dict:
         if self._update_audit:
@@ -363,6 +378,11 @@ def self_check(report: Path) -> bool:
     finder_observed = str(NSFileManager.defaultManager().displayNameAtPath_(str(bundle_path))).removesuffix('.app')
     checks['finderDisplayName'] = finder_scope != 'unknown' and finder_observed == finder_expected
     checks['nativeProcessName'] = NSProcessInfo.processInfo().processName() == expected_name
+    from release_highlights import parse as parse_highlights
+    try:
+        parse_highlights((ROOT/'ui/whats-new.json').read_text(encoding='utf-8'),info['release'])
+        checks['bundledReleaseHighlights']=all((ROOT/'ui'/name).is_file() for name in ('whats-new.js','whats-new.html'))
+    except (OSError,ValueError,TypeError): checks['bundledReleaseHighlights']=False
     result = subprocess.run([str(ROOT / "bin" / "txcript"), "--version"], capture_output=True, text=True, timeout=30)
     checks["native_engine"] = result.returncode == 0 and "txcript" in result.stdout
     if info.get('developmentPreview') is True:
@@ -473,6 +493,22 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                     resume_state=getattr(api,'_resume_fixture',None)
                     result['checks']['independentReminderSwitch']=(reset_ui is True and isinstance(notice_state,dict)
                         and notice_state.get('enabled') is True and isinstance(resume_state,dict) and resume_state.get('running') is False)
+                    window.evaluate_js('''(async()=>{
+                      const poll=async(fn)=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('notes_timeout');};
+                      const trigger=document.getElementById('workspace-version'),dialog=document.getElementById('release-highlights');
+                      trigger.click();await poll(()=>dialog.open);
+                      const rendered=document.querySelectorAll('.release-item').length>0&&document.activeElement.id==='release-done';
+                      document.getElementById('release-done').click();await poll(()=>!dialog.open);
+                      trigger.click();await poll(()=>dialog.open);document.getElementById('release-close').click();
+                      window.__RELEASE_NOTES_SMOKE__=rendered&&!dialog.open&&document.activeElement===trigger;
+                    })().catch(()=>window.__RELEASE_NOTES_SMOKE__=false);''')
+                    release_ui=False
+                    for _ in range(80):
+                        release_ui=window.evaluate_js('window.__RELEASE_NOTES_SMOKE__===true')
+                        if release_ui and api._release_highlights and api._release_highlights.has_seen():break
+                        time.sleep(.25)
+                    result['checks']['nativeReleaseHighlightsDialog']=release_ui is True
+                    result['checks']['releaseHighlightsAcknowledgement']=bool(release_ui and api._release_highlights and api._release_highlights.has_seen())
                     result["passed"] = all(result["checks"].values())
                     break
             time.sleep(0.25)
@@ -609,7 +645,8 @@ def run() -> int:
         fixture = update_audit.load_fixture(args.update_ui_audit, updater.running_bundle(), args.report)
     with tempfile.TemporaryDirectory(prefix="ai-first-macos-") as temporary:
         if args.smoke_test or fixture:
-            isolate_profile(Path(temporary))
+            # Canonicalize only our fresh synthetic root; /var is a system alias on Mac.
+            isolate_profile(Path(temporary).resolve())
         import fcntl
 
         state = appdata() / "AI一手工具工作台"
@@ -627,6 +664,8 @@ def run() -> int:
             except BlockingIOError:
                 return 0
             api = MacApi(args.smoke_test)
+            from release_highlights import Highlights
+            api._release_highlights = Highlights(ROOT/'ui/whats-new.json', state, version_info()['release'])
             if getattr(sys,'frozen',False) and not args.smoke_test and not fixture:
                 if not development: api.auto_resume_control('finish-update')
                 try: reset_notices.Monitor().ensure()

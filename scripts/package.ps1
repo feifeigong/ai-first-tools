@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.3.18',
+    [string]$Version = '',
     [string]$Python = 'python',
     [string]$MoverPackage,
     [string]$ResumePackage,
@@ -14,6 +14,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $artifacts = Join-Path $root 'artifacts'
 $package = Join-Path $artifacts 'package\AI-First-Tools'
 $project = [xml](Get-Content -LiteralPath (Join-Path $root 'workspace\AIFirst.Workspace.csproj') -Raw)
+if (!$Version) { $Version = [string]$project.Project.PropertyGroup.Version }
 if ($project.Project.PropertyGroup.Version -ne $Version) { throw 'Package version must match the workspace project version.' }
 if (!$MoverPackage -or !$ResumePackage -or !$AnalysisToc -or !$NsisDirectory -or !$WebViewBootstrapper) {
     throw 'Provide the frozen mover package, its Analysis TOC, the portable NSIS directory and Microsoft WebView2 bootstrapper.'

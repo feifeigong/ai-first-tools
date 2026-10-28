@@ -23,6 +23,11 @@ def main() -> None:
     checks = json.loads((root / "artifacts/windows/installed-self-test.json").read_text(encoding="utf-8-sig"))
     if report.get("passed") is not True or report.get("version") != version or not report.get("checks") or not all(value is True for value in report["checks"].values()) or checks.get("failed") != 0 or checks.get("passed", 0) < 62:
         raise ValueError("Installer audit did not pass")
+    if tuple(map(int,version.split('.'))) >= (0,3,19):
+        ui=json.loads((root/'artifacts/windows/release-highlights-ui/report.json').read_text(encoding='utf-8-sig'))
+        required={mode+name for mode in ('done','close','escape') for name in ('Layout','Focus','Acknowledged')}
+        if ui.get('passed') is not True or not required <= ui.get('checks',{}).keys() or not all(ui['checks'][name] is True for name in required):
+            raise ValueError('Native release highlights did not pass')
     release = root / "artifacts/release"
     assets = [release / f"AI-First-Tools-Setup-{version}.exe", release / f"AI-First-Tools-Portable-{version}-win-x64.zip"]
     sums = release / "SHA256SUMS.txt"

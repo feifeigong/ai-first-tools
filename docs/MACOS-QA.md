@@ -1,5 +1,9 @@
 # Mac 移植验证记录
 
+## preview.22 更新摘要候选
+
+候选新增同版一次的本次更新弹窗、版本号回看和本机已读记录。源码与浏览器检查、两芯片实际Cocoa/WebKit检查分别记录，未通过新三项门槛及既有全部检查的包不得发布。当前公开preview.21不变；不把本轮弹窗验收扩展成已登录Copilot或模型续聊通过。
+
 ## preview.21 改名验收范围
 
 已公开[preview.21](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.21)，源码db1842171ce10cc3ed342e579f981c08673ab940，完整构建及暂存[40305808109](https://github.com/feifeigong/ai-first-tools/actions/runs/40305808109)成功。Apple与Intel各10份原生报告、131项全部通过；23份远端资产、版本、芯片、DMG校验和与GitHub摘要逐项一致。真实登录Copilot及模型续聊仍按原约定接续，未用合成结果代替。

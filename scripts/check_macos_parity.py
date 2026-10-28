@@ -22,12 +22,13 @@ def fingerprint():
     paths.extend(ROOT/'dialog-mover'/name for name in ('main.py','memory_service.py'))
     paths.extend((ROOT/'auto-resume/tests').glob('test_*.py'))
     paths.extend(ROOT/'workspace'/name for name in ('ResetNewsService.cs','ResetNewsDiscovery.cs','ResetNewsPresentation.cs','ResetCalendarModel.cs'))
+    paths.append(ROOT/'workspace/assets/whats-new.json')
     paths.extend(ROOT/'dialog-mover'/name for name in ('requirements.txt','requirements-dev.txt','对话搬家.spec'))
     paths.extend(ROOT/'scripts'/name for name in ('check_macos_parity.py','package_macos.py','prepare_macos.py',
         'stage_macos_release.py','verify_macos_release.py','package_macos_development.py'))
     paths.extend(ROOT/'.github/workflows'/name for name in ('check.yml','macos.yml'))
     for path in sorted(paths):
-        if path.is_file() and path.suffix in {'.py','.js','.css','.html','.cs','.csproj','.spec','.txt','.yml'} and not any(part in {'bin','obj','__pycache__'} for part in path.relative_to(ROOT).parts):
+        if path.is_file() and path.suffix in {'.py','.js','.css','.html','.cs','.csproj','.spec','.txt','.yml','.json'} and not any(part in {'bin','obj','__pycache__'} for part in path.relative_to(ROOT).parts):
             sources[path.relative_to(ROOT).as_posix()]=hashlib.sha256(path.read_bytes()).hexdigest()
     return sources
 
@@ -61,11 +62,11 @@ def run(report: Path, ui: bool = False):
         check('shared-and-mac-backend',[sys.executable,'-m','unittest',
             'test_memory','test_codex_sources','test_codex_compressed','test_chatgpt','test_close_safety','test_copilot_import','test_copilot_refresh','test_macos_copilot_refresh',
             'test_codex_history','test_macos','test_macos_updater','test_macos_resume','test_macos_reset','test_macos_memory',
-            'test_macos_parity_release','test_macos_history','-v'],ROOT/'dialog-mover')
+            'test_macos_parity_release','test_macos_history','test_release_highlights','-v'],ROOT/'dialog-mover')
         check('resume-safety',[sys.executable,'-m','unittest','discover','-s','tests','-v'],ROOT/'auto-resume',{'PYTHONPATH':'src'})
         if ui:
             check('shared-and-mac-ui',[sys.executable,'-m','unittest','test_memory_ui','test_codex_sources_ui','test_agent_icons',
-                'test_import_ui','test_ui_polish','test_macos_ui','test_macos_resume_ui','test_macos_reset_ui','-v'],ROOT/'dialog-mover')
+                'test_import_ui','test_ui_polish','test_macos_ui','test_macos_resume_ui','test_macos_reset_ui','test_release_highlights_ui','-v'],ROOT/'dialog-mover')
         if fingerprint() != initial_sources: raise RuntimeError('Sources changed during checks')
         failure=None
     except (RuntimeError, OSError, subprocess.SubprocessError) as error:

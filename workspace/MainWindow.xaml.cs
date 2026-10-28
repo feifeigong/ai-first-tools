@@ -56,6 +56,10 @@ public partial class MainWindow : Window
     private DateTimeOffset lastResetStartAttempt;
     private bool resetWasEnabled;
     internal string? InitialToolId { get; set; }
+    private readonly ReleaseHighlights? releaseHighlights;
+    private readonly ReleaseHighlightsState releaseHighlightsState;
+    private bool releaseNotesInterrupted;
+    private bool releaseNotesOpen;
 
     public MainWindow(string configuration, string? toolOverride, string? report = null, bool developmentTools = false) : this(configuration, toolOverride, report, developmentTools, new UpdateClient()) { }
 
@@ -68,6 +72,11 @@ public partial class MainWindow : Window
         updateConfiguration = developmentTools ? configuration : null;
         updateTool = toolOverride;
         InitializeComponent();
+        releaseHighlights = ReleaseHighlights.Load(Path.Combine(AppContext.BaseDirectory, "assets", "whats-new.json"), UpdateClient.CurrentVersion);
+        releaseHighlightsState = new ReleaseHighlightsState(Path.GetDirectoryName(Path.GetFullPath(configuration))!, UpdateClient.CurrentVersion);
+        ReleaseNotesButton.IsEnabled = releaseHighlights is not null;
+        PreviewMouseDown += (_, _) => releaseNotesInterrupted = true;
+        PreviewKeyDown += (_, _) => releaseNotesInterrupted = true;
         if (!developmentTools && toolOverride is null)
         {
             resetNews = new ResetNewsService();
@@ -105,6 +114,7 @@ public partial class MainWindow : Window
             HostSlot.Children.Add(host);
             Dispatcher.BeginInvoke(() => ToolsList.SelectedIndex = Math.Max(0, tools.ToList().FindIndex(tool => tool.Id == InitialToolId)), DispatcherPriority.Loaded);
             monitor.Start();
+            if (!developmentTools && !App.IsDevelopmentPreview) _ = ShowReleaseNotesAfterOpeningAsync();
             if (resetNews is not null) { resetTimer.Start(); _ = EnsureResetMonitorAsync(); }
             if (!suppressUpdates)
             {
@@ -130,6 +140,27 @@ public partial class MainWindow : Window
         BrandLogo.Source = image;
         BrandLogo.Visibility = image is null ? Visibility.Collapsed : Visibility.Visible;
         BrandText.Visibility = image is null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async Task ShowReleaseNotesAfterOpeningAsync()
+    {
+        try { await Task.Delay(650, lifetime.Token); }
+        catch (OperationCanceledException) { return; }
+        // A single startup opportunity, never a delayed interruption while working.
+        if (!closing && !released && IsActive && !releaseNotesInterrupted && downloading is null && releaseHighlightsState.ShouldShow) ShowReleaseNotes();
+    }
+    private void ReleaseNotesClick(object sender, RoutedEventArgs args) => ShowReleaseNotes();
+    private void ShowReleaseNotes()
+    {
+        if (releaseHighlights is null || closing || released || releaseNotesOpen) return;
+        releaseNotesOpen = true;
+        try
+        {
+            var dialog = new WhatsNewWindow(releaseHighlights, () => releaseHighlightsState.Acknowledge()) { Owner = this };
+            dialog.Width = Math.Min(536, Math.Max(360, ActualWidth - 24));
+            dialog.ShowDialog(); ReleaseNotesButton.Focus();
+        }
+        finally { releaseNotesOpen = false; }
     }
 
     private void ResetNewsChanged(ResetNewsSnapshot value)
