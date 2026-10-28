@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from typing import Any
 
 
@@ -141,9 +142,14 @@ def five_hour_only_exhausted(snapshot: QuotaSnapshot, ready_used_percent: float)
 
 
 def weekly_needs_reset(snapshot: QuotaSnapshot, ready_used_percent: float) -> tuple[bool, str]:
-    if five_hour_only_exhausted(snapshot, ready_used_percent):
-        return False, "keep-weekly"
-    if not weekly_exhausted(snapshot, ready_used_percent):
+    # A conservative resume threshold (normally 99%) is not permission to spend
+    # a credit. Both the initial decision and the final live reread use this gate.
+    weekly = weekly_window(snapshot)
+    fully_used = bool(weekly and weekly.used_percent is not None
+                      and isfinite(weekly.used_percent) and weekly.used_percent >= 100.0)
+    if not fully_used:
+        if five_hour_only_exhausted(snapshot, ready_used_percent):
+            return False, "keep-weekly"
         return False, "weekly-ok"
     return True, "weekly-exhausted"
 

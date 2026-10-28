@@ -39,6 +39,13 @@ def run(report: Path) -> int:
         codex_home.mkdir()
         (codex_home / "config.toml").write_text('cli_auth_credentials_store = "file"\n[features]\nplugins = false\n', encoding="utf-8")
         check("Frozen Python and package-native Codex exist", lambda: require(getattr(sys, "frozen", False) and bundled_codex().is_file()))
+        def credit_boundary():
+            from .quota import QuotaSnapshot, QuotaWindow, should_redeem_weekly_reset
+            for used, expected in ((99.0, False), (99.9, False), (100.0, True)):
+                snapshot = QuotaSnapshot(primary=QuotaWindow(used_percent=100, window_minutes=300),
+                    secondary=QuotaWindow(used_percent=used, window_minutes=10080), reset_credit_count=1)
+                require(should_redeem_weekly_reset(snapshot, 1.0)[0] is expected)
+        check("Frozen credit policy never spends before full weekly exhaustion", credit_boundary)
         def native_version():
             process = hidden_popen([str(bundled_codex()), "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
             output, _ = process.communicate(timeout=20)

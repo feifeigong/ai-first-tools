@@ -103,6 +103,19 @@ class FakeLiveQuota:
 
 
 class RedeemDecisionTests(unittest.TestCase):
+    def test_credit_gate_requires_finite_full_weekly_usage_regardless_of_resume_threshold(self) -> None:
+        for ready in (1.0, 50.0, 99.0, 100.0):
+            for used in (0.0, 98.9, 99.0, 99.9, 99.999, 100.0, 100.1, float("inf"), float("nan")):
+                with self.subTest(ready=ready, weekly_used=used):
+                    snap = QuotaSnapshot(
+                        primary=QuotaWindow(used_percent=100, window_minutes=300),
+                        secondary=QuotaWindow(used_percent=used, window_minutes=10080),
+                        reset_credit_count=1,
+                        reset_credit_id="synthetic-credit",
+                    )
+                    want, _ = should_redeem_weekly_reset(snap, ready)
+                    self.assertEqual(want, used in (100.0, 100.1))
+
     def test_five_hour_full_weekly_remaining_does_not_redeem(self) -> None:
         snap = parse_quota_payload(
             {
@@ -164,6 +177,30 @@ class RedeemDecisionTests(unittest.TestCase):
 
 
 class SimulatedRedeemTests(unittest.TestCase):
+    def test_weekly_near_exhaustion_does_not_even_request_a_credit_read(self) -> None:
+        for used in (99.0, 99.9, 99.999):
+            with self.subTest(weekly_used=used):
+                client = FakeQuotaClient(primary_used=100, weekly_used=used, allow_consume=False)
+                snapshot = parse_quota_payload(client.read_rate_limits(), source="app-server", fetched_at=1)
+                assert snapshot is not None
+                try_redeem_weekly_reset(cfg=AppConfig(), snapshot=snapshot, state=AppState(), now=10, client=client)
+                self.assertEqual(client.read_calls, [False])
+                self.assertEqual(client.consume_calls, [])
+
+    def test_credit_reread_with_some_weekly_usage_remaining_prevents_consume(self) -> None:
+        class RecoveringClient(FakeQuotaClient):
+            def read_rate_limits(self, include_credits=False):
+                if include_credits:
+                    self.weekly_used = 99.9
+                return super().read_rate_limits(include_credits)
+        client = RecoveringClient(primary_used=100, weekly_used=100, allow_consume=False)
+        snapshot = parse_quota_payload(client.read_rate_limits(), source="app-server", fetched_at=1)
+        assert snapshot is not None
+        after, _ = try_redeem_weekly_reset(cfg=AppConfig(), snapshot=snapshot, state=AppState(), now=10, client=client)
+        self.assertEqual(after.secondary.used_percent, 99.9)
+        self.assertEqual(client.read_calls, [False, True])
+        self.assertEqual(client.consume_calls, [])
+
     def test_five_hour_only_never_calls_consume(self) -> None:
         client = FakeQuotaClient(primary_used=100, weekly_used=31.4, allow_consume=False)
         cfg = AppConfig(auto_redeem_weekly_reset=True)
@@ -273,6 +310,17 @@ class SimulatedRedeemTests(unittest.TestCase):
 
 
 class SimulatedDaemonTests(unittest.TestCase):
+    def test_disabled_tick_cannot_read_quota_consume_a_card_or_resume(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            cfg = _cfg(Path(temporary), enabled=False)
+            client = FakeQuotaClient(primary_used=100, weekly_used=100, credits=1, allow_consume=False)
+            with patch("codex_auto_resume.daemon.spawn_resume") as spawn:
+                state = tick(cfg, quota_reader=FakeLiveQuota(cfg, client))
+            self.assertEqual(state.last_status, "disabled")
+            self.assertEqual(client.read_calls, [])
+            self.assertEqual(client.consume_calls, [])
+            spawn.assert_not_called()
+
     @patch("codex_auto_resume.daemon.spawn_resume", side_effect=AssertionError("must not resume yet"))
     @patch("codex_auto_resume.daemon.process_running", return_value=False)
     def test_five_hour_wait_does_not_resume_or_consume(self, _running, _spawn) -> None:

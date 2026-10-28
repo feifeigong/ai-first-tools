@@ -362,6 +362,11 @@ def self_check(report: Path) -> bool:
     checks = {name: (ROOT / name).is_file() for name in required}
     from codex_auto_resume.paths import bundled_codex
     checks['bundledAutoResumeRuntime'] = bundled_codex().is_file()
+    from codex_auto_resume.quota import QuotaSnapshot, QuotaWindow, should_redeem_weekly_reset
+    checks['weeklyCreditRequiresExhaustion'] = all(
+        should_redeem_weekly_reset(QuotaSnapshot(primary=QuotaWindow(used_percent=100, window_minutes=300),
+            secondary=QuotaWindow(used_percent=used, window_minutes=10080), reset_credit_count=1), 1.0)[0] is expected
+        for used, expected in ((99.0, False), (99.9, False), (100.0, True)))
     from branding import display_name
     from Foundation import NSBundle, NSFileManager, NSProcessInfo
     expected_name = display_name(info.get('developmentPreview') is True)

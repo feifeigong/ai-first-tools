@@ -28,6 +28,11 @@ def main() -> None:
         required={mode+name for mode in ('done','close','escape') for name in ('Layout','Focus','Acknowledged')}
         if ui.get('passed') is not True or not required <= ui.get('checks',{}).keys() or not all(ui['checks'][name] is True for name in required):
             raise ValueError('Native release highlights did not pass')
+    if tuple(map(int,version.split('.'))) >= (0,3,21):
+        resume=json.loads((root/'artifacts/windows/resume-runtime-test.json').read_text(encoding='utf-8-sig'))
+        if resume.get('failed') != 0 or not any(check.get('name') == 'Frozen credit policy never spends before full weekly exhaustion'
+                and check.get('passed') is True for check in resume.get('results', [])):
+            raise ValueError('Packaged weekly credit boundary did not pass')
     release = root / "artifacts/release"
     assets = [release / f"AI-First-Tools-Setup-{version}.exe", release / f"AI-First-Tools-Portable-{version}-win-x64.zip"]
     sums = release / "SHA256SUMS.txt"
