@@ -271,9 +271,9 @@ def notice_dialog(alert):
     dialog = NSAlert.alloc().init()
     dialog.setMessageText_(alert['summary'])
     details = [alert.get('description', ''), alert.get('timeText', ''), alert.get('timeNote', ''),
-               '想等这次重置、保留重置卡，可以暂停自动续跑。']
+               '想等这次重置又保留卡，关闭自动用卡即可。自动续跑可以继续开启，额度到账后接着做。']
     dialog.setInformativeText_('\n\n'.join(value for value in details if value))
-    for title in ('知道了', '查看原帖', '暂停自动续跑'): dialog.addButtonWithTitle_(title)
+    for title in ('知道了', '查看原帖', '关闭自动用卡'): dialog.addButtonWithTitle_(title)
     return dialog
 
 
@@ -294,10 +294,10 @@ def show_notice(alert, configure=None):
         def pause():
             import auto_resume
             try:
-                result = auto_resume.Controller().action('stop')
-                message = '自动续跑已关闭，登录自启也已关闭。' if not result['running'] and not result['autostart'] else '请打开工具箱确认续跑状态。'
+                result = auto_resume.Controller().action('credit-off')
+                message = '自动用卡已关闭，续跑和计时开关保持原样。' if result.get('autoRedeem') is False else '请打开工具箱确认用卡设置。'
             except Exception:
-                message = '续跑尚未确认关闭，请打开工具箱刷新查看。'
+                message = '自动用卡尚未确认关闭，请打开工具箱刷新查看。'
             def report():
                 feedback = NSAlert.alloc().init()
                 feedback.setMessageText_(message)

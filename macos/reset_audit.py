@@ -109,7 +109,7 @@ def audit(report: Path) -> int:
             dialog_visible = []
             def configure(dialog):
                 require(str(dialog.messageText()) == alert['summary'])
-                require([str(button.title()) for button in dialog.buttons()] == ['知道了', '查看原帖', '暂停自动续跑'])
+                require([str(button.title()) for button in dialog.buttons()] == ['知道了', '查看原帖', '关闭自动用卡'])
                 def abort(timer):
                     dialog_visible.append(bool(dialog.window().isVisible()))
                     app.abortModal()

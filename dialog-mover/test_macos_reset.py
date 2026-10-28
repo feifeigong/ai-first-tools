@@ -197,7 +197,7 @@ class MacResetTests(unittest.TestCase):
             self.assertTrue(client.open_post(identity)['ok'])
             opened.assert_called_once_with(value['events'][0]['url'])
 
-    def test_popup_only_pauses_after_the_explicit_user_button(self):
+    def test_popup_only_disables_cards_after_the_explicit_user_button(self):
         alert = {'id':'2113162413008884099','url':'https://x.com/thsottiaux/status/2113162413008884099',
                  'summary':'合成重置消息','description':'合成说明','timeText':'北京时间 02:00 前','timeNote':''}
         dialog = Mock()
@@ -205,7 +205,7 @@ class MacResetTests(unittest.TestCase):
         fake_app = Mock()
         modules = {'AppKit':SimpleNamespace(NSAlert=fake_alert,NSApplication=fake_app),
                    'PyObjCTools':SimpleNamespace(AppHelper=SimpleNamespace(callAfter=lambda fn,*args:fn(*args)))}
-        with patch.dict(sys.modules,modules), patch.object(auto_resume.Controller,'action',return_value={'running':False,'autostart':False}) as action, \
+        with patch.dict(sys.modules,modules), patch.object(auto_resume.Controller,'action',return_value={'running':True,'autostart':True,'autoRedeem':False}) as action, \
              patch('core.common.open_external') as opened, patch('reset_notices.threading.Thread',side_effect=lambda target,daemon:SimpleNamespace(start=target)):
             dialog.runModal.return_value=1000
             notices.show_notice(alert)
@@ -215,7 +215,7 @@ class MacResetTests(unittest.TestCase):
             opened.assert_called_once_with(alert['url']);action.assert_not_called()
             dialog.runModal.return_value=1002
             notices.show_notice(alert)
-            action.assert_called_once_with('stop')
+            action.assert_called_once_with('credit-off')
 
 
 if __name__ == '__main__': unittest.main()

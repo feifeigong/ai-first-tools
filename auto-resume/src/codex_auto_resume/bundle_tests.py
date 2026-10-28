@@ -46,11 +46,20 @@ def run(report: Path) -> int:
                     secondary=QuotaWindow(used_percent=used, window_minutes=10080), reset_credit_count=1)
                 require(should_redeem_weekly_reset(snapshot, 1.0)[0] is expected)
         check("Frozen credit policy never spends before full weekly exhaustion", credit_boundary)
+        def automation_policy():
+            from .automation_checks import run as audit
+            require(all(audit().values()))
+        check("Frozen independent automation preserves timer deduplication and spending permissions", automation_policy)
         def native_version():
             process = hidden_popen([str(bundled_codex()), "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
             output, _ = process.communicate(timeout=20)
             require(process.returncode == 0 and b"codex" in output.lower())
         check("Native Codex runs without external Python Node or CLI", native_version)
+        def native_ephemeral():
+            process = hidden_popen([str(bundled_codex()), 'exec', '--help'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+            output, _ = process.communicate(timeout=20)
+            require(process.returncode == 0 and all(flag in output for flag in (b'--ephemeral', b'--ignore-user-config', b'--sandbox', b'--json')))
+        check("Native Codex supports the isolated ephemeral request flags without model requests", native_ephemeral)
         def isolated_bridge():
             with AppServerClient([str(bundled_codex())], env=env, timeout=20) as client:
                 result = client.request("account/read", {"refreshToken": False})

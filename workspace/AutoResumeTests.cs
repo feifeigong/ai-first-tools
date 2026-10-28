@@ -25,6 +25,12 @@ internal static class AutoResumeTests
             {
                 "stop" => Value with { Running = false, Autostart = false, WatcherCount = 0 },
                 "start" => Value with { Running = true, WatcherCount = 1 },
+                "resume-on" => Value with { Running = true, ResumeEnabled = true, WatcherCount = 1 },
+                "resume-off" => Value with { Running = Value.AutoStartWindow, ResumeEnabled = false, Autostart = Value.AutoStartWindow && Value.Autostart, WatcherCount = Value.AutoStartWindow ? 1 : 0 },
+                "credit-on" => Value with { AutoRedeem = true },
+                "credit-off" => Value with { AutoRedeem = false },
+                "timer-on" => Value with { AutoStartWindow = true, Running = true, WatcherCount = 1 },
+                "timer-off" => Value with { AutoStartWindow = false, Running = Value.ResumeActive, WatcherCount = Value.ResumeActive ? 1 : 0 },
                 "autostart-off" => Value with { Autostart = false },
                 "autostart-on" => Value with { Autostart = true },
                 _ => Value
@@ -35,6 +41,32 @@ internal static class AutoResumeTests
 
     internal static void Run(Action<string, Action> check, Action<bool> require)
     {
+        check("Credit permission is independent and never stops active resume", () =>
+        {
+            var fake = new FakeControl { Value = new(true, true, true, 1, AutoRedeem: true) };
+            using var page = new AutoResumePage(fake);
+            page.RefreshAsync().GetAwaiter().GetResult();
+            var credit = (ToggleButton)page.FindName("CreditSwitch");
+            credit.IsChecked = false;
+            credit.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            require(fake.Calls[^1] == "credit-off" && fake.Value.ResumeActive && !fake.Value.AutoRedeem && fake.Value.Autostart);
+        });
+        check("Stopping resume leaves opted-in timer running and disables credit control", () =>
+        {
+            var fake = new FakeControl { Value = new(true, true, true, 1, AutoStartWindow: true) };
+            using var page = new AutoResumePage(fake);
+            page.RefreshAsync().GetAwaiter().GetResult();
+            var power = (ToggleButton)page.FindName("RunningSwitch");
+            power.IsChecked = false;
+            power.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            require(!fake.Value.ResumeActive && fake.Value.Running && fake.Value.AutoStartWindow && fake.Value.Autostart);
+            require(!((ToggleButton)page.FindName("CreditSwitch")).IsEnabled && ((ToggleButton)page.FindName("TimerSwitch")).IsChecked == true);
+        });
+        check("Unconfirmed timer shows no invented next reset", () =>
+        {
+            require(AutoResumePage.TimerText(new(true,true,false,1,AutoStartWindow:true,TimerStatus:"unconfirmed")).Contains("未确认"));
+            require(!AutoResumePage.TimerText(new(true,true,false,1,AutoStartWindow:true,TimerStatus:"unconfirmed")).Contains("下次恢复"));
+        });
         check("Auto resume page reads service state without enabling anything", () =>
         {
             var fake = new FakeControl();
@@ -52,7 +84,7 @@ internal static class AutoResumeTests
             var power = (ToggleButton)page.FindName("RunningSwitch");
             power.IsChecked = false;
             power.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            require(fake.Calls[^1] == "stop" && !fake.Value.Running && !fake.Value.Autostart);
+            require(fake.Calls[^1] == "resume-off" && !fake.Value.Running && !fake.Value.Autostart);
             require(((ToggleButton)page.FindName("AutostartSwitch")).IsChecked == false);
         });
         check("Autostart switch keeps the current watcher running", () =>
@@ -86,20 +118,20 @@ internal static class AutoResumeTests
             var fake = new FakeControl { Value = new(true, false, false, 0) };
             using var page = new AutoResumePage(fake);
             page.RefreshAsync().GetAwaiter().GetResult();
-            fake.Handler = (action, _) => action == "start"
+            fake.Handler = (action, _) => action == "resume-on"
                 ? Task.FromException<AutoResumeStatus>(new System.IO.IOException("内部异常不应展示给用户"))
                 : Task.FromResult(fake.Value);
             var power = (ToggleButton)page.FindName("RunningSwitch");
             power.IsChecked = true;
             power.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            require(fake.Calls.Count == 3 && fake.Calls[1] == "start" && fake.Calls[2] == "status");
+            require(fake.Calls.Count == 3 && fake.Calls[1] == "resume-on" && fake.Calls[2] == "status");
             require(power.IsEnabled && power.IsChecked == false && !page.IsBusy);
             require(((Border)page.FindName("MessageCard")).Visibility == Visibility.Visible);
             require(!((TextBlock)page.FindName("MessageText")).Text.Contains("内部异常"));
             fake.Handler = null;
             power.IsChecked = true;
             power.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            require(fake.Calls[^1] == "start" && power.IsChecked == true && power.IsEnabled);
+            require(fake.Calls[^1] == "resume-on" && power.IsChecked == true && power.IsEnabled);
             require(((Border)page.FindName("MessageCard")).Visibility == Visibility.Collapsed);
         });
         check("Partially completed stop shows freshly read values instead of cached switches", () =>

@@ -15,6 +15,7 @@ $script:results=[Collections.Generic.List[object]]::new()
 $script:calls=[Collections.Generic.List[string]]::new()
 $script:monitorMutexes=[Collections.Generic.List[Threading.Mutex]]::new()
 function Reset-Fixture {
+    $script:policy=$null
     foreach($monitorMutex in $script:monitorMutexes){$monitorMutex.ReleaseMutex();$monitorMutex.Dispose()}
     $script:monitorMutexes.Clear()
     $script:fakeRunning=$false; $script:fakeLegacy=$false; $script:legacyRunning=$false; $script:legacyAuto=$false; $script:fakeRun=$null; $script:owner=$bundledExecutable; $script:readyAfter=0; $script:readyChecks=0; $script:monitorResponds=$false; $script:monitorLaunchFails=$false; $script:calls.Clear()
@@ -29,6 +30,19 @@ function Reset-Fixture {
     if(Test-Path -LiteralPath $marker){Remove-Item -LiteralPath $marker -Force}
 }
 function Connect-Resume { return $script:fakeLegacy }
+function Get-BundledAutomation {
+    param($Operation='status')
+    if(!$script:policy){$script:policy=@{resumeEnabled=$true;autoRedeem=$false;autoStartWindow=$false;timerStatus='waiting';nextResetAt=0}}
+    switch($Operation){
+        'resume-on'{$script:policy.resumeEnabled=$true}
+        'resume-off'{$script:policy.resumeEnabled=$false}
+        'credit-on'{$script:policy.autoRedeem=$true}
+        'credit-off'{$script:policy.autoRedeem=$false}
+        'timer-on'{$script:policy.autoStartWindow=$true}
+        'timer-off'{$script:policy.autoStartWindow=$false}
+    }
+    return $script:policy
+}
 function Get-Watchers { if($script:legacyRunning){[pscustomobject]@{ProcessId=501}} }
 function Get-ResumeStatus { param($Installed) @{autostart=$script:legacyAuto} }
 function Set-ResumeAutostart { param($Enabled) $script:legacyAuto=$Enabled; $script:calls.Add('legacy-startup-off') }
@@ -82,6 +96,21 @@ Check 'Fresh installation works without any legacy tool or external Python' {
 Check 'Repeated enable does not create another watcher' {
     $null=Invoke-BundledAction 'start'; $null=Invoke-BundledAction 'start'
     Require(@($script:calls|Where-Object {$_ -eq 'start'}).Count -eq 1)
+}
+Check 'Credit permission can be disabled while resume stays active' {
+    $null=Invoke-BundledAction 'resume-on'
+    $null=Invoke-BundledAction 'credit-on'
+    $value=Invoke-BundledAction 'credit-off'
+    Require($value.running -and $value.resumeEnabled -and !$value.autoRedeem)
+}
+Check 'Timer-only opt-in never enables resume or cards and survives resume off' {
+    $value=Invoke-BundledAction 'timer-on'
+    Require($value.running -and !$value.resumeEnabled -and !$value.autoRedeem -and $value.autoStartWindow)
+    $null=Invoke-BundledAction 'autostart-on'
+    $value=Invoke-BundledAction 'resume-off'
+    Require($value.running -and !$value.resumeEnabled -and $value.autoStartWindow -and $value.autostart)
+    $value=Invoke-BundledAction 'timer-off'
+    Require(!$value.running -and !$value.autostart)
 }
 Check 'Stop removes startup and shuts down only the packaged watcher' {
     $null=Invoke-BundledAction 'autostart-on'; $null=Invoke-BundledAction 'start'; $value=Invoke-BundledAction 'stop'

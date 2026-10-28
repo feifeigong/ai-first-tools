@@ -28,7 +28,7 @@ public partial class ResetNoticeWindow : Window
         NoticeSummary.Text = chinese.Summary;
         NoticeTime.Text = chinese.TimeText;
         NoticeTime.Visibility = chinese.TimeText.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        if (item.Kind == "announced") NoticeGuidance.Text = "公告不代表你的额度已经到账。想等额度恢复、保留还没使用的卡，可以先关闭续跑。";
+        if (item.Kind == "announced") NoticeGuidance.Text = "公告不代表你的额度已经到账。关闭自动用卡可以保留卡；自动续跑可以继续开启，等额度恢复后接着做。";
         if (item.Kind == "banked")
         {
             NoticeHeading.Text = "Codex 有重置卡消息";
@@ -57,8 +57,8 @@ public partial class ResetNoticeWindow : Window
             {
                 NoticeResultCard.Background = new SolidColorBrush(Color.FromRgb(234, 245, 239));
                 NoticeResultText.Foreground = new SolidColorBrush(Color.FromRgb(22, 106, 75));
-                NoticeResultText.Text = "续跑已关闭。准备好后，再回工具箱打开。";
-                PauseButton.Content = "已关闭续跑";
+                NoticeResultText.Text = "自动用卡已关闭。续跑和计时开关保持原样。";
+                PauseButton.Content = "已关闭自动用卡";
                 DismissButton.Content = "完成";
             }
             else ShowPauseFailure();

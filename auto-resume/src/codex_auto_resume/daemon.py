@@ -6,7 +6,8 @@ from dataclasses import asdict
 from typing import Callable
 
 from .app_server import AppServerClient, fetch_live_rate_limits
-from .config import AppConfig
+from .config import AppConfig, config_path, load_config
+from .automation import permitted
 from .paths import resolve_codex_command, sessions_dir
 from .quota import QuotaSnapshot, hint_reset_at, parse_quota_payload, quota_available, quota_recovered
 from .redeem import try_redeem_weekly_reset
@@ -43,7 +44,7 @@ def tick(
 
     if stopping():
         return state
-    if not cfg.enabled:
+    if not cfg.enabled and not cfg.auto_start_five_hour:
         state.last_status = "disabled"
         save_state(state_dir, state)
         return state
@@ -55,12 +56,10 @@ def tick(
         snapshot = reader.read(now)
         if stopping():
             return state
-        if cfg.auto_redeem_weekly_reset and snapshot:
+        if cfg.enabled and permitted(cfg, 'enabled') and cfg.auto_redeem_weekly_reset and permitted(cfg, 'auto_redeem_weekly_reset') and snapshot:
             previous_note = state.last_reset_credit_note
-            if should_stop is None:
-                snapshot, redeem_note = reader.try_redeem(snapshot, state, now)
-            else:
-                snapshot, redeem_note = reader.try_redeem(snapshot, state, now, should_stop=should_stop)
+            snapshot, redeem_note = reader.try_redeem(snapshot, state, now, should_stop=lambda:
+                (should_stop is not None and should_stop()) or not permitted(cfg, 'enabled') or not permitted(cfg, 'auto_redeem_weekly_reset'))
             if redeem_note and redeem_note != previous_note:
                 _log(cfg, redeem_note)
         if stopping():
@@ -99,7 +98,7 @@ def tick(
                 since=since,
                 ready_used_percent=cfg.ready_used_percent,
             )
-            if cfg.auto_discover
+            if cfg.enabled and permitted(cfg, 'enabled') and cfg.auto_discover
             else []
         )
         _log(cfg, f"quota={reason} source={state.last_quota_source} waiting={len(waiting)}")
@@ -121,6 +120,8 @@ def tick(
             )
 
         for thread_id, task in list(state.threads.items()):
+            if not cfg.enabled or not permitted(cfg, 'enabled'):
+                break
             if stopping():
                 return state
             if not task.enabled:
@@ -150,8 +151,15 @@ def tick(
                 if snapshot:
                     task.resets_at = hint_reset_at(snapshot, cfg.ready_used_percent) or task.resets_at
                 continue
-            _resume_one(cfg, state, task, match, now, should_stop=should_stop)
+            _resume_one(cfg, state, task, match, now, should_stop=lambda:
+                (should_stop is not None and should_stop()) or not permitted(cfg, 'enabled'))
 
+        if cfg.auto_start_five_hour:
+            from .window_timer import tick_timer
+            activity = any(task.enabled and (task.phase == 'submitting' or task.last_resume_at == now
+                or process_running(task.pid, started_at=task.last_resume_at or None)) for task in state.threads.values())
+            tick_timer(cfg, reader, snapshot, now, activity=activity,
+                should_stop=should_stop or (lambda: False))
         save_state(state_dir, state)
         return state
     finally:
@@ -171,6 +179,9 @@ def watch_forever(cfg: AppConfig) -> None:
     try:
         while not stop_file.exists():
             try:
+                if config_path(state_dir).exists():
+                    cfg = load_config(config_path(state_dir))
+                    reader.cfg = cfg
                 state = tick(cfg, quota_reader=reader, should_stop=stop_file.exists)
             except Exception as exc:
                 _log(cfg, f"tick failed: {exc}")
@@ -253,6 +264,10 @@ class LiveQuota:
         if self.client is not None:
             self.client.close()
             self.client = None
+
+    def start_window(self, should_stop) -> bool | None:
+        from .window_request import start_window
+        return start_window(self.cfg, should_stop)
 
 
 def read_quota(cfg: AppConfig, now: float) -> QuotaSnapshot | None:

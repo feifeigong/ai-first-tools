@@ -35,7 +35,8 @@ class AppConfig:
     skip_git_repo_check: bool = True
     prefer_queue_if_busy: bool = True
     extra_resume_args: list[str] = field(default_factory=list)
-    auto_redeem_weekly_reset: bool = True
+    auto_redeem_weekly_reset: bool = False
+    auto_start_five_hour: bool = False
     reset_credit_cooldown_seconds: float = 600
     codex_home: str = ""
     codex_bin: str = ""
@@ -72,7 +73,9 @@ def save_config(cfg: AppConfig, path: Path | None = None) -> Path:
     target = path or config_path(cfg.resolved_state_dir())
     target.parent.mkdir(parents=True, exist_ok=True)
     payload = asdict(cfg)
-    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary = target.with_suffix('.json.tmp')
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(target)
     example = tool_root() / "config.example.json"
     if not getattr(sys, "frozen", False) and not example.exists():
         example.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

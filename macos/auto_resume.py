@@ -27,6 +27,7 @@ class Controller:
         self.plist = self.home / 'Library/LaunchAgents' / (LABEL + '.plist')
         self.preference = self.root / 'startup.json'
         self.receipt = self.root / 'update.json'
+        self.policy_root = self.home / 'Library/Application Support/vibcoding/codex-auto-resume'
         self.domain = 'gui/' + str(os.getuid()) if hasattr(os,'getuid') else 'gui/synthetic'
         self._foreign = None
 
@@ -85,8 +86,9 @@ class Controller:
     def status(self):
         pids=self.watchers()
         if self._foreign is not None: return self._foreign.status()
+        from codex_auto_resume.automation import control
         return {'installed':self.executable.is_file(),'running':bool(pids),'autostart':self.registration() is not None and self.enabled(),
-                'watcherCount':len(pids),'error':''}
+                'watcherCount':len(pids),'error':'', **control('status', self.policy_root)}
 
     def start(self):
         if self.watchers(): return
@@ -131,6 +133,24 @@ class Controller:
         if self._foreign is not None and operation in {'start','stop','autostart-on','autostart-off'}:
             return self._foreign.act(operation)  # Only an explicit user switch controls the verified running copy.
         if operation=='status': return self.status()
+        if operation in {'resume-on','resume-off','credit-on','credit-off','timer-on','timer-off'}:
+            from codex_auto_resume.automation import control
+            before = self.status()
+            foreign = self._foreign
+            if before['running']:
+                self.stop()
+                self.launchctl('bootout', self.domain+'/'+LABEL)
+            if foreign is not None: foreign.startup(False)
+            if operation == 'timer-on' and not before['running']: control('resume-off', self.policy_root)
+            policy = control(operation, self.policy_root)
+            keep_running = before['running'] and (policy['resumeEnabled'] or policy['autoStartWindow'])
+            if operation in {'resume-on','timer-on'}: keep_running = True
+            if keep_running:
+                self.start()
+                if before['autostart']: self.startup(True)
+            elif operation in {'resume-off','timer-off'}:
+                self.startup(False)
+            return self.status()
         if operation=='start': self.start()
         elif operation=='stop':
             self.startup(False)

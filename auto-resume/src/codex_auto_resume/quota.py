@@ -57,6 +57,8 @@ class QuotaSnapshot:
     reset_credit_id: str | None = None
     source: str = ""
     fetched_at: float = 0.0
+    limit_id: str | None = None
+    ambiguous_bucket: bool = False
 
     @property
     def windows(self) -> list[QuotaWindow]:
@@ -90,6 +92,8 @@ def parse_quota_payload(payload: Any, *, source: str = "", fetched_at: float = 0
         reset_credit_id=credit_id,
         source=source,
         fetched_at=fetched_at,
+        limit_id=_pick(snapshot, 'limitId', 'limit_id') or ('codex' if isinstance(by_id, dict) and 'codex' in by_id else None),
+        ambiguous_bucket=isinstance(by_id, dict) and (len(by_id) != 1 or 'codex' not in by_id),
     )
 
 

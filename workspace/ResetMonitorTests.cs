@@ -16,7 +16,7 @@ internal static class ResetMonitorTests
         internal AutoResumeStatus Result = new(true, false, false, 0);
         public Task<AutoResumeStatus> ExecuteAsync(string action, CancellationToken cancellation)
         {
-            if (action != "stop") throw new InvalidOperationException("Unexpected command");
+            if (action != "credit-off") throw new InvalidOperationException("Unexpected command");
             Calls++;
             return Task.FromResult(Result);
         }
@@ -35,13 +35,13 @@ internal static class ResetMonitorTests
 
     internal static void Run(Action<string, Action> check, Action<bool> require)
     {
-        check("Reset monitor pauses only after an explicit callback and confirms both switches", () =>
+        check("Reset popup changes only credit permission after an explicit callback", () =>
         {
-            var fake = new FakeControl { Result = new(true, true, true, 1) };
+            var fake = new FakeControl { Result = new(true, true, true, 1, AutoRedeem: true) };
             require(!ResetMonitorHost.PauseAsync(fake).GetAwaiter().GetResult() && fake.Calls == 1);
-            fake.Result = new(true, false, true, 0);
+            fake.Result = new(true, true, true, 1, Error: "synthetic", AutoRedeem: false);
             require(!ResetMonitorHost.PauseAsync(fake).GetAwaiter().GetResult());
-            fake.Result = new(true, false, false, 0);
+            fake.Result = new(true, true, true, 1, AutoRedeem: false);
             require(ResetMonitorHost.PauseAsync(fake).GetAwaiter().GetResult() && fake.Calls == 3);
         });
         check("Reset monitor ignores stale or foreign-package stop requests", () =>

@@ -1,4 +1,4 @@
-﻿param([ValidateSet('status','start','stop','autostart-on','autostart-off','prepare-update','finish-update','uninstall')][string]$Action='status', [switch]$FunctionsOnly)
+﻿param([ValidateSet('status','start','stop','resume-on','resume-off','credit-on','credit-off','timer-on','timer-off','autostart-on','autostart-off','prepare-update','finish-update','uninstall')][string]$Action='status', [switch]$FunctionsOnly)
 $requested = $Action
 $bundleFunctionsOnly = $FunctionsOnly
 . (Join-Path $PSScriptRoot 'auto-resume-control.ps1') -FunctionsOnly
@@ -188,6 +188,17 @@ function Get-BundledPreference {
     if ($null -eq $value -or $value.autostart -isnot [bool]) { throw '开机设置暂时无法读取，请修复工具箱设置后重试。' }
     return $value.autostart
 }
+function Get-BundledAutomation([string]$Operation='status') {
+    $report = Join-Path ([IO.Path]::GetTempPath()) ('ai-first-automation-' + [guid]::NewGuid().ToString('N') + '.json')
+    try {
+        $probe = Start-Process -FilePath $script:bundledExecutable -ArgumentList @('--automation-control', $Operation, ('"' + $report + '"')) -WorkingDirectory (Split-Path $script:bundledExecutable -Parent) -WindowStyle Hidden -PassThru
+        if (!$probe.WaitForExit(8000)) { throw '自动续跑设置暂时无法确认，请稍后刷新。' }
+        if (!(Test-Path -LiteralPath $report)) { throw '自动续跑设置暂时无法确认，请稍后刷新。' }
+        $value = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($probe.ExitCode -ne 0 -or $value.ok -ne $true) { throw '自动续跑设置暂时无法读取，原设置已保留。' }
+        return $value
+    } finally { if (Test-Path -LiteralPath $report) { Remove-Item -LiteralPath $report -Force } }
+}
 function Get-BundleStatus {
     $watchers = @(Get-BundledWatchers)
     if (@($watchers | Where-Object { $_.Ready -eq $false }).Count -gt 0) { throw '自动续跑仍在准备，请稍后刷新确认。' }
@@ -200,7 +211,10 @@ function Get-BundleStatus {
     }
     $startup = (Test-BundledRunValue ([string](Get-BundledRunValue))) -and ((Get-BundledPreference) -ne $false)
     $count = $watchers.Count + $legacyWatchers.Count
-    @{installed=(Test-Path -LiteralPath $script:bundledExecutable -PathType Leaf); running=$count -gt 0; autostart=($startup -or $legacyStartup); watcherCount=$count; error=''}
+    $result = @{installed=(Test-Path -LiteralPath $script:bundledExecutable -PathType Leaf); running=$count -gt 0; autostart=($startup -or $legacyStartup); watcherCount=$count; error=''}
+    $policy = Get-BundledAutomation
+    foreach ($key in @('resumeEnabled','autoRedeem','autoStartWindow','timerStatus','nextResetAt')) { $result[$key] = $policy.$key }
+    return $result
 }
 function Disable-LegacyStartup {
     if ($script:hasLegacy) { Set-ResumeAutostart $false }
@@ -242,6 +256,29 @@ function Invoke-BundledAction([string]$Operation) {
     if (!(Test-Path -LiteralPath $script:bundledExecutable -PathType Leaf)) { throw '内置续跑组件缺失，请重新安装完整工具箱。' }
     $script:hasLegacy = Connect-Resume
     if ($Operation -eq 'status') { return Get-BundleStatus }
+    if ($Operation -in @('resume-on','resume-off','credit-on','credit-off','timer-on','timer-off')) {
+        $before = Get-BundleStatus
+        # A verified older watcher may not reload policy. Stop only its monitor,
+        # never its detached Codex tasks, before applying the explicit UI choice.
+        if ($before.running) {
+            if ($script:hasLegacy) { $null = Invoke-ResumeAction 'stop' }
+            Stop-BundledWatcher
+        }
+        if ($Operation -eq 'timer-on' -and !$before.running) { $null = Get-BundledAutomation 'resume-off' }
+        $policy = Get-BundledAutomation $Operation
+        $keepRunning = $before.running -and ($policy.resumeEnabled -or $policy.autoStartWindow)
+        if ($Operation -in @('resume-on','timer-on')) { $keepRunning = $true }
+        if ($keepRunning) {
+            Start-BundledWatcher
+            if ($before.autostart) { Disable-LegacyStartup; Save-BundledPreference $true; Set-BundledRunValue $true }
+        } elseif ($Operation -in @('resume-off','timer-off')) {
+            Disable-LegacyStartup
+            Save-BundledPreference $false
+            Set-BundledRunValue $false
+            if ($script:hasLegacy) { $null = Invoke-ResumeAction 'stop' }
+        }
+        return Get-BundleStatus
+    }
     New-Item -ItemType Directory -Path $settingsDirectory -Force | Out-Null
     switch ($Operation) {
         'start' { Start-BundledWatcher }

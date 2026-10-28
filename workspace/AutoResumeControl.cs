@@ -8,7 +8,11 @@ using System.Threading.Tasks;
 
 namespace AIFirst.Workspace;
 
-internal sealed record AutoResumeStatus(bool Installed, bool Running, bool Autostart, int WatcherCount, string Error = "");
+internal sealed record AutoResumeStatus(bool Installed, bool Running, bool Autostart, int WatcherCount, string Error = "",
+    bool ResumeEnabled = true, bool AutoRedeem = false, bool AutoStartWindow = false, string TimerStatus = "waiting", long NextResetAt = 0)
+{
+    internal bool ResumeActive => Running && ResumeEnabled;
+}
 
 internal interface IAutoResumeControl
 {
@@ -21,7 +25,7 @@ internal sealed class AutoResumeControl : IAutoResumeControl
 
     internal static async Task<AutoResumeStatus> ExecuteAtAsync(string directory, string action, CancellationToken cancellation)
     {
-        if (action is not ("status" or "start" or "stop" or "autostart-on" or "autostart-off" or "prepare-update" or "finish-update" or "uninstall")) throw new ArgumentException("未知操作。");
+        if (action is not ("status" or "start" or "stop" or "resume-on" or "resume-off" or "credit-on" or "credit-off" or "timer-on" or "timer-off" or "autostart-on" or "autostart-off" or "prepare-update" or "finish-update" or "uninstall")) throw new ArgumentException("未知操作。");
         var lifecycle = action is "prepare-update" or "finish-update" or "uninstall";
         var start = new ProcessStartInfo
         {

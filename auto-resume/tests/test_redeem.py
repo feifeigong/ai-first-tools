@@ -89,13 +89,14 @@ class FakeLiveQuota:
             fetched_at=now,
         )
 
-    def try_redeem(self, snapshot, state, now):
+    def try_redeem(self, snapshot, state, now, should_stop=None):
         return try_redeem_weekly_reset(
             cfg=self.cfg,
             snapshot=snapshot,
             state=state,
             now=now,
             client=self.client,
+            should_stop=should_stop,
         )
 
     def close(self) -> None:
@@ -538,7 +539,7 @@ class ResumeCapTests(unittest.TestCase):
                 def read(self, now):
                     return stale
 
-                def try_redeem(self, snapshot, state, now):
+                def try_redeem(self, snapshot, state, now, should_stop=None):
                     return snapshot, ""
 
                 def close(self) -> None:
@@ -564,7 +565,7 @@ class ResumeCapTests(unittest.TestCase):
                 def read(self, now):
                     return None
 
-                def try_redeem(self, snapshot, state, now):
+                def try_redeem(self, snapshot, state, now, should_stop=None):
                     return snapshot, ""
 
                 def close(self) -> None:

@@ -96,11 +96,20 @@ class MacApi(Api):
 
     def auto_resume_control(self, operation: str = 'status') -> dict:
         if self._smoke:
-            if not hasattr(self,'_resume_fixture'): self._resume_fixture={'installed':True,'running':False,'autostart':False,'watcherCount':0,'error':''}
+            if not hasattr(self,'_resume_fixture'): self._resume_fixture={'installed':True,'running':False,'autostart':False,'watcherCount':0,'error':'','resumeEnabled':False,'autoRedeem':False,'autoStartWindow':False,'timerStatus':'waiting','nextResetAt':0}
             value=self._resume_fixture
             if operation=='start': value['running']=True
             elif operation=='stop': value.update(running=False,autostart=False)
             elif operation in ('autostart-on','autostart-off'): value['autostart']=operation=='autostart-on'
+            elif operation in ('resume-on','resume-off'):
+                value['resumeEnabled']=operation=='resume-on'
+                value['running']=value['resumeEnabled'] or value['autoStartWindow']
+                if not value['running']: value['autostart']=False
+            elif operation in ('credit-on','credit-off'): value['autoRedeem']=operation=='credit-on'
+            elif operation in ('timer-on','timer-off'):
+                value['autoStartWindow']=operation=='timer-on'
+                value['running']=value['resumeEnabled'] or value['autoStartWindow']
+                if not value['running']: value['autostart']=False
             value['watcherCount']=int(value['running'])
             return dict(value)
         if not getattr(sys,'frozen',False): return {'error':'请使用完整工具箱安装包中的自动续跑功能。'}
@@ -362,6 +371,10 @@ def self_check(report: Path) -> bool:
     checks = {name: (ROOT / name).is_file() for name in required}
     from codex_auto_resume.paths import bundled_codex
     checks['bundledAutoResumeRuntime'] = bundled_codex().is_file()
+    from codex_auto_resume.automation_checks import run as automation_checks
+    checks.update(automation_checks())
+    native_help = subprocess.run([str(bundled_codex()), 'exec', '--help'], capture_output=True, timeout=20)
+    checks['nativeEphemeralSupport'] = native_help.returncode == 0 and all(flag in native_help.stdout for flag in (b'--ephemeral', b'--ignore-user-config', b'--sandbox', b'--json'))
     from codex_auto_resume.quota import QuotaSnapshot, QuotaWindow, should_redeem_weekly_reset
     checks['weeklyCreditRequiresExhaustion'] = all(
         should_redeem_weekly_reset(QuotaSnapshot(primary=QuotaWindow(used_percent=100, window_minutes=300),
@@ -465,11 +478,15 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                     result["checks"]["noUnrequestedDownload"] = api.update_status()["phase"] == "idle"
                     window.evaluate_js('''(async()=>{
                       const poll=async(fn)=>{for(let i=0;i<200;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('resume_ui_timeout');};
-                      const run=document.getElementById('resume-running'),boot=document.getElementById('resume-startup');
+                      const run=document.getElementById('resume-running'),boot=document.getElementById('resume-startup'),credit=document.getElementById('resume-credit'),timer=document.getElementById('resume-timer');
                       document.getElementById('workspace-resume').click();await poll(()=>!run.disabled);
                       run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='true');
+                      credit.click();await poll(()=>!credit.disabled&&credit.getAttribute('aria-checked')==='true');
+                      credit.click();await poll(()=>!credit.disabled&&credit.getAttribute('aria-checked')==='false'&&run.getAttribute('aria-checked')==='true');
+                      timer.click();await poll(()=>!timer.disabled&&timer.getAttribute('aria-checked')==='true');
                       boot.click();await poll(()=>!boot.disabled&&boot.getAttribute('aria-checked')==='true');
-                      run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='false'&&boot.getAttribute('aria-checked')==='false');
+                      run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='false'&&boot.getAttribute('aria-checked')==='true'&&credit.disabled);
+                      timer.click();await poll(()=>!timer.disabled&&timer.getAttribute('aria-checked')==='false'&&boot.getAttribute('aria-checked')==='false');
                       document.getElementById('workspace-mover').click();window.__RESUME_SMOKE__=true;
                     })().catch(()=>window.__RESUME_SMOKE__=false);''')
                     for _ in range(80):
@@ -477,6 +494,7 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                         if resume_ui: break
                         time.sleep(.25)
                     result['checks']['autoResumeControlBridge']=bool(resume_ui)
+                    result['checks']['independentAutomationBridge']=bool(resume_ui)
                     window.evaluate_js('''(async()=>{
                       const poll=async(fn)=>{for(let i=0;i<200;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('reset_ui_timeout');};
                       document.getElementById('workspace-resume').click();

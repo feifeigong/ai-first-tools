@@ -60,7 +60,7 @@ internal static class ResetVisualTests
                 new ResetNewsItem("synthetic-incomplete", "待核实", "Codex reset has been…", "uncertain", new DateTimeOffset(2026, 10, 7, 11, 35, 0, TimeSpan.FromHours(8)), "https://x.com/thsottiaux/status/1000000000000000007"),
                 new ResetNewsItem("synthetic-context-needed", "待核实", "Done", "uncertain", new DateTimeOffset(2026, 10, 18, 5, 12, 0, TimeSpan.FromHours(8)), "https://x.com/thsottiaux/status/1000000000000000008")
             };
-            var snapshot = new ResetNewsSnapshot(true, "正在留意 Tibo 的重置消息", "有新消息时会弹窗提醒，是否关闭续跑由你决定。",
+            var snapshot = new ResetNewsSnapshot(true, "正在留意 Tibo 的重置消息", "有新消息时会弹窗提醒，是否自动用卡由你决定。",
                 now, new[] { item }.Concat(older).ToArray(), true, now, now.AddMinutes(5));
             using var handler = new RejectNetworkHandler();
             using var http = new HttpClient(handler);

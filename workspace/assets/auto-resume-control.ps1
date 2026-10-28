@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet('status', 'start', 'stop', 'autostart-on', 'autostart-off')][string]$Action = 'status',
+    [ValidateSet('status', 'start', 'stop', 'resume-on', 'resume-off', 'credit-on', 'credit-off', 'timer-on', 'timer-off', 'autostart-on', 'autostart-off')][string]$Action = 'status',
     [switch]$FunctionsOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -198,6 +198,7 @@ if (!$FunctionsOnly) {
         & (Join-Path $PSScriptRoot 'auto-resume-bundled.ps1') -Action $Action
         exit $LASTEXITCODE
     }
+    if ($Action -in @('resume-on','resume-off','credit-on','credit-off','timer-on','timer-off')) { throw '请更新完整工具箱后使用自动化设置。' }
     $mutex = [Threading.Mutex]::new($false, ('Local\AI_FIRST_AUTO_RESUME_' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value))
     $locked = $false
     try {

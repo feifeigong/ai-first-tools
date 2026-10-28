@@ -28,6 +28,38 @@ class MacResumeTests(unittest.TestCase):
         self.assertFalse(self.controller.status()['autostart'])
         self.assertFalse(self.controller.root.exists())
 
+    def test_timer_only_and_resume_switches_preserve_independent_preferences(self):
+        running=False
+        def start():
+            nonlocal running
+            running=True
+        def stop():
+            nonlocal running
+            running=False
+        self.controller.start.side_effect=start;self.controller.stop.side_effect=stop
+        self.controller.watchers.side_effect=lambda:[123] if running else []
+        value=self.controller.act('timer-on')
+        self.assertTrue(value['running']);self.assertTrue(value['autoStartWindow'])
+        self.assertFalse(value['resumeEnabled']);self.assertFalse(value['autoRedeem'])
+        self.controller.startup(True)
+        value=self.controller.act('resume-on')
+        self.assertTrue(value['resumeEnabled']);self.assertFalse(value['autoRedeem'])
+        value=self.controller.act('resume-off')
+        self.assertTrue(value['running']);self.assertTrue(value['autoStartWindow']);self.assertTrue(value['autostart'])
+        self.assertFalse(value['resumeEnabled'])
+        value=self.controller.act('timer-off')
+        self.assertFalse(value['running']);self.assertFalse(value['autostart'])
+
+    def test_disable_credit_keeps_resume_startup_and_timer_choices(self):
+        from codex_auto_resume.automation import control
+        control('resume-on',self.controller.policy_root)
+        control('credit-on',self.controller.policy_root)
+        self.controller.watchers.return_value=[123]
+        self.controller.startup(True)
+        value=self.controller.act('credit-off')
+        self.assertTrue(value['resumeEnabled']);self.assertTrue(value['autostart']);self.assertFalse(value['autoRedeem'])
+        self.controller.stop.assert_called_once();self.controller.start.assert_called_once()
+
     def test_startup_is_self_contained_and_does_not_change_running(self):
         self.controller.startup(True)
         value=self.controller.registration()

@@ -28,7 +28,7 @@ class StopSafetyTests(unittest.TestCase):
         self.state_dir = self.root / "state"
         self.state_dir.mkdir()
         self.stop = self.state_dir / "stop.request"
-        self.cfg = AppConfig(state_dir=str(self.state_dir), codex_home=str(self.root / "codex"))
+        self.cfg = AppConfig(state_dir=str(self.state_dir), codex_home=str(self.root / "codex"), auto_redeem_weekly_reset=True)
         self.waiting = WaitingSession(thread_id=THREAD, cwd=str(self.root), path=self.root / "synthetic.jsonl",
                                       mark="synthetic-limit", resets_at=9999999999, observed_at=1,
                                       snapshot=None, reason="usage-limit")

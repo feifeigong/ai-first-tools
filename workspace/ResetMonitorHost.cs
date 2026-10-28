@@ -108,8 +108,8 @@ internal static class ResetMonitorHost
 
     internal static async Task<bool> PauseAsync(IAutoResumeControl control)
     {
-        var result = await control.ExecuteAsync("stop", CancellationToken.None);
-        return !result.Running && !result.Autostart && string.IsNullOrEmpty(result.Error);
+        var result = await control.ExecuteAsync("credit-off", CancellationToken.None);
+        return !result.AutoRedeem && string.IsNullOrEmpty(result.Error);
     }
 
     internal static bool StopRequested(string directory, string token, string executable)

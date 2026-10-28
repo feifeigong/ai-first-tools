@@ -121,13 +121,15 @@ public partial class AutoResumePage : UserControl, IDisposable
     internal async Task<bool> PauseForResetAsync()
     {
         if (IsBusy || disposed) return false;
-        await ExecuteAsync("stop");
-        return status is { Installed: true, Running: false, Autostart: false };
+        await ExecuteAsync("credit-off");
+        return status is { Installed: true, AutoRedeem: false };
     }
 
     internal Task RefreshAsync() => ExecuteAsync("status");
     private async void RefreshClick(object sender, RoutedEventArgs args) => await ExecuteFromUiAsync("status");
-    private async void RunningClick(object sender, RoutedEventArgs args) => await ExecuteFromUiAsync(RunningSwitch.IsChecked == true ? "start" : "stop");
+    private async void RunningClick(object sender, RoutedEventArgs args) => await ExecuteFromUiAsync(RunningSwitch.IsChecked == true ? "resume-on" : "resume-off");
+    private async void CreditClick(object sender, RoutedEventArgs args) => await ExecuteFromUiAsync(CreditSwitch.IsChecked == true ? "credit-on" : "credit-off");
+    private async void TimerClick(object sender, RoutedEventArgs args) => await ExecuteFromUiAsync(TimerSwitch.IsChecked == true ? "timer-on" : "timer-off");
     private async void AutostartClick(object sender, RoutedEventArgs args) => await ExecuteFromUiAsync(AutostartSwitch.IsChecked == true ? "autostart-on" : "autostart-off");
 
     private async Task ExecuteFromUiAsync(string action)
@@ -140,10 +142,10 @@ public partial class AutoResumePage : UserControl, IDisposable
     {
         if (IsBusy || disposed) return;
         IsBusy = true;
-        RunningSwitch.IsEnabled = AutostartSwitch.IsEnabled = RefreshButton.IsEnabled = false;
+        RunningSwitch.IsEnabled = CreditSwitch.IsEnabled = TimerSwitch.IsEnabled = AutostartSwitch.IsEnabled = RefreshButton.IsEnabled = false;
         if (action != "status")
         {
-            StateTitle.Text = action == "stop" ? "正在关闭…" : action == "start" ? "正在开启…" : "正在保存开机设置…";
+            StateTitle.Text = "正在保存…";
             StateDescription.Text = "请稍等。";
             StateBadge.Background = new SolidColorBrush(Color.FromRgb(232, 242, 254));
             StateTitle.Foreground = new SolidColorBrush(Color.FromRgb(0, 104, 217));
@@ -195,14 +197,16 @@ public partial class AutoResumePage : UserControl, IDisposable
             if (!disposed)
             {
                 RefreshButton.IsEnabled = true;
-                RunningSwitch.IsEnabled = AutostartSwitch.IsEnabled = status?.Installed == true;
+                RunningSwitch.IsEnabled = TimerSwitch.IsEnabled = AutostartSwitch.IsEnabled = status?.Installed == true;
+                CreditSwitch.IsEnabled = status?.Installed == true && status.ResumeActive;
             }
         }
     }
 
     private void PaintUnknownStatus()
     {
-        RunningSwitch.IsChecked = AutostartSwitch.IsChecked = null;
+        RunningSwitch.IsChecked = CreditSwitch.IsChecked = TimerSwitch.IsChecked = AutostartSwitch.IsChecked = null;
+        TimerDescription.Text = "状态暂时无法确认，请刷新后再试。";
         StateTitle.Text = "状态暂时无法确认";
         StateDescription.Text = "确认后就可以继续使用开关。";
         StateBadge.Background = new SolidColorBrush(Color.FromRgb(238, 242, 247));
@@ -211,12 +215,35 @@ public partial class AutoResumePage : UserControl, IDisposable
 
     private void PaintStatus(AutoResumeStatus value)
     {
-        RunningSwitch.IsChecked = value.Running;
+        RunningSwitch.IsChecked = value.ResumeActive;
+        CreditSwitch.IsChecked = value.AutoRedeem;
+        TimerSwitch.IsChecked = value.AutoStartWindow;
         AutostartSwitch.IsChecked = value.Autostart;
-        StateTitle.Text = !value.Installed ? "自动续跑暂时不可用" : value.Running ? "已开启" : "已关闭";
-        StateDescription.Text = !value.Installed ? "暂时无法开启，请稍后刷新再试。" : "5 小时额度用完后等待恢复；周额度用完时，有重置卡就自动使用，恢复后接着做。";
-        StateBadge.Background = new SolidColorBrush(value.Running ? Color.FromRgb(234, 245, 239) : Color.FromRgb(238, 242, 247));
-        StateTitle.Foreground = new SolidColorBrush(value.Running ? Color.FromRgb(22, 106, 75) : Color.FromRgb(91, 107, 126));
+        StateTitle.Text = !value.Installed ? "自动续跑暂时不可用" : value.ResumeActive ? "已开启" : "已关闭";
+        StateDescription.Text = !value.Installed ? "暂时无法开启，请稍后刷新再试。" : "5 小时或周额度用完后等待恢复，到账后接着原来的任务继续。是否用卡，由下面的开关决定。";
+        StateBadge.Background = new SolidColorBrush(value.ResumeActive ? Color.FromRgb(234, 245, 239) : Color.FromRgb(238, 242, 247));
+        StateTitle.Foreground = new SolidColorBrush(value.ResumeActive ? Color.FromRgb(22, 106, 75) : Color.FromRgb(91, 107, 126));
+        TimerDescription.Text = TimerText(value);
+    }
+
+    internal static string TimerText(AutoResumeStatus value)
+    {
+        if (!value.AutoStartWindow) return "已关闭，不会自动发送计时请求。";
+        if (!value.Running) return "暂未运行，请重新开启此功能。";
+        var stamp = value.NextResetAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(value.NextResetAt).ToOffset(TimeSpan.FromHours(8)).ToString("MM-dd HH:mm") : "";
+        return value.TimerStatus switch
+        {
+            "started" => $"本轮计时已开始 · 下次恢复（北京）{stamp}",
+            "normal-use" => $"已读取当前计时 · 下次恢复（北京）{stamp}",
+            "waiting" when stamp.Length > 0 => $"下次恢复（北京）{stamp} · 到时自动检查，无需重复请求。",
+            "activity" => "正在正常工作，本轮不额外发送计时请求。",
+            "quota-blocked" => "正在等待额度恢复，不会为计时使用重置卡。",
+            "unavailable" => "当前账号、模型或额度信息暂不适用，未确认计时。",
+            "pending" => "正在确认本轮计时，请稍候。",
+            "unconfirmed" => "本轮计时未确认，已暂停重复请求，避免多次消耗。",
+            "error" => "计时记录暂时无法读取，已暂停请求，原记录保留。",
+            _ => "已开启，正在检查本轮额度。"
+        };
     }
 
     public void Dispose()

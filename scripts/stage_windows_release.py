@@ -33,6 +33,13 @@ def main() -> None:
         if resume.get('failed') != 0 or not any(check.get('name') == 'Frozen credit policy never spends before full weekly exhaustion'
                 and check.get('passed') is True for check in resume.get('results', [])):
             raise ValueError('Packaged weekly credit boundary did not pass')
+    if tuple(map(int,version.split('.'))) >= (0,3,22):
+        if not any(check.get('name') == 'Frozen independent automation preserves timer deduplication and spending permissions'
+                and check.get('passed') is True for check in resume.get('results', [])):
+            raise ValueError('Packaged independent automation check did not pass')
+        if not any(check.get('name') == 'Native Codex supports the isolated ephemeral request flags without model requests'
+                and check.get('passed') is True for check in resume.get('results', [])):
+            raise ValueError('Native ephemeral request capability did not pass')
     release = root / "artifacts/release"
     assets = [release / f"AI-First-Tools-Setup-{version}.exe", release / f"AI-First-Tools-Portable-{version}-win-x64.zip"]
     sums = release / "SHA256SUMS.txt"

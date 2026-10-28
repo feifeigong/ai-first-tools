@@ -31,9 +31,17 @@
           </Grid>
           <TextBlock x:Name="StateDescription" Text="请稍等。" FontSize="13" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" LineHeight="22" Margin="0,9,0,0" />
           <TextBlock Text="关掉窗口也有效，关闭开关才会停止续跑。" FontSize="12" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" Margin="0,7,0,0" />
+          <Border Background="#F7F9FC" CornerRadius="10" Padding="16,12" Margin="0,18,0,0">
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+              <StackPanel Margin="0,0,20,0"><TextBlock Text="周额度用完时自动使用重置卡" FontSize="14" FontWeight="SemiBold" /><TextBlock Text="关闭后只等额度恢复，到账后仍会自动续跑。" FontSize="12" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" Margin="0,6,0,0" /></StackPanel>
+              <ToggleButton x:Name="CreditSwitch" Grid.Column="1" Style="{StaticResource Switch}" Click="CreditClick" IsEnabled="False" AutomationProperties.Name="周额度用完时自动使用重置卡" />
+            </Grid>
+          </Border>
           <Border x:Name="MessageCard" Background="#FFF5E4" CornerRadius="9" Padding="13,11" Visibility="Collapsed" Margin="0,16,0,0"><TextBlock x:Name="MessageText" Foreground="#8A5A1E" FontSize="13" TextWrapping="Wrap" LineHeight="22" AutomationProperties.LiveSetting="Polite" /></Border>
           <Border Height="1" Background="#E9EDF3" Margin="0,16,0,12" />
-          <Grid><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><StackPanel Margin="0,0,20,0"><TextBlock Text="开机自动开启" FontSize="14" FontWeight="SemiBold" /><TextBlock Text="下次登录电脑时自动打开续跑。" FontSize="12" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" Margin="0,6,0,0" /></StackPanel><ToggleButton x:Name="AutostartSwitch" Style="{StaticResource Switch}" Click="AutostartClick" Grid.Column="1" VerticalAlignment="Center" IsEnabled="False" AutomationProperties.Name="开机自动开启开关" /></Grid>
+          <Grid><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><StackPanel Margin="0,0,20,0"><TextBlock Text="自动开启 5 小时计时" FontSize="16" FontWeight="SemiBold" /><TextBlock Text="额度可用且没有任务续跑时，用轻量模型发一次极短请求。会消耗少量额度，不使用重置卡。" FontSize="12" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" LineHeight="20" Margin="0,6,0,0" /><TextBlock Text="独立于续跑开关；开启后，关闭续跑仍会执行这次请求。" FontSize="12" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" Margin="0,6,0,0" /><TextBlock x:Name="TimerDescription" Text="默认关闭，开启后自动检查。" FontSize="12" Foreground="#0068D9" TextWrapping="Wrap" LineHeight="20" Margin="0,9,0,0" AutomationProperties.LiveSetting="Polite" /></StackPanel><ToggleButton x:Name="TimerSwitch" Style="{StaticResource Switch}" Click="TimerClick" Grid.Column="1" VerticalAlignment="Top" IsEnabled="False" AutomationProperties.Name="自动开启5小时计时" /></Grid>
+          <Border Height="1" Background="#E9EDF3" Margin="0,18,0,14" />
+          <Grid><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><StackPanel Margin="0,0,20,0"><TextBlock Text="登录后自动运行" FontSize="14" FontWeight="SemiBold" /><TextBlock Text="下次登录电脑时，继续运行上面已开启的功能。" FontSize="12" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" Margin="0,6,0,0" /></StackPanel><ToggleButton x:Name="AutostartSwitch" Style="{StaticResource Switch}" Click="AutostartClick" Grid.Column="1" VerticalAlignment="Center" IsEnabled="False" AutomationProperties.Name="登录后自动运行开关" /></Grid>
         </StackPanel>
       </Border>
       <Border Background="White" BorderBrush="#DFE6EF" BorderThickness="1" CornerRadius="16" Padding="26,22">
@@ -44,7 +52,7 @@
           <Grid Margin="0,15,0,0"><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBlock x:Name="ResetCheckedText" Text="尚未检查" FontSize="12" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,14,0" /><Button x:Name="ResetRefreshButton" Grid.Column="1" Content="刷新" Style="{StaticResource QuietButton}" Click="ResetRefreshClick" IsEnabled="False" /></Grid>
         </StackPanel>
       </Border>
-      <TextBlock Text="想等 Tibo 的重置、保留还没使用的卡，可以先关闭续跑。" Foreground="{StaticResource ResumeMuted}" FontSize="13" TextWrapping="Wrap" Margin="4,18,4,0" />
+      <TextBlock Text="想等官方重置又保留卡，关闭“自动使用重置卡”即可，自动续跑可以继续开启。电脑关机或休眠期间无法执行。" Foreground="{StaticResource ResumeMuted}" FontSize="13" TextWrapping="Wrap" Margin="4,18,4,0" />
     </StackPanel>
   </ScrollViewer>
 </UserControl>

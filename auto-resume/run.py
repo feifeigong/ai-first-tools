@@ -13,6 +13,9 @@ if str(SRC) not in sys.path:
 from codex_auto_resume.workspace_control import allow_background_watch
 
 if __name__ == "__main__":
+    if len(sys.argv) == 4 and sys.argv[1] == '--automation-control':
+        from codex_auto_resume.automation import write_control
+        raise SystemExit(write_control(sys.argv[2], Path(sys.argv[3])))
     # These controls never load/save ordinary CLI settings or enter the quota loop.
     if len(sys.argv) == 3 and sys.argv[1] == "--watch-status":
         from codex_auto_resume.watch_control import write_status

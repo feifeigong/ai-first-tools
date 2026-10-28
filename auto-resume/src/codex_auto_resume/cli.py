@@ -141,7 +141,7 @@ def cmd_status(cfg: AppConfig) -> int:
 
 def cmd_once(cfg: AppConfig, dry_run: bool = False) -> int:
     if dry_run:
-        cfg = AppConfig(**{**cfg.__dict__, "enabled": False})
+        cfg = AppConfig(**{**cfg.__dict__, "enabled": False, "auto_start_five_hour": False})
         waiting = scan_waiting_sessions(
             sessions_dir(cfg.resolved_codex_home()),
             since=time.time() - cfg.lookback_hours * 3600,

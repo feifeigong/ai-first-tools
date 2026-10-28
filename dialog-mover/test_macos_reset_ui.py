@@ -35,8 +35,8 @@ class MacResetUiTests(unittest.TestCase):
 window.resumeCalls=[];window.resetCalls=[];window.failReset=false;
 window.resumeState={installed:true,running:false,autostart:false};
 window.pywebview.api.auto_resume_control=async(op)=>{
- resumeCalls.push(op);if(op==='start')resumeState.running=true;
- if(op==='stop'){resumeState.running=false;resumeState.autostart=false;}
+ resumeCalls.push(op);if(op==='resume-on')resumeState.running=true;
+ if(op==='resume-off'){resumeState.running=false;resumeState.autostart=false;}
  if(op==='autostart-on')resumeState.autostart=true;
  return {...resumeState};
 };

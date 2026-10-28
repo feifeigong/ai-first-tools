@@ -1,5 +1,9 @@
 # Mac 移植验证记录
 
+## preview.25 独立自动化候选
+
+新增原生self三项共用离线规则检查和smoke实际Cocoa开关组合检查，旧preview.24报告不能代替。模型请求参数、周期去重、预检重试、停用与用卡保护只用合成客户端验证，不实发模型或用卡，不读取真实聊天/认证。两芯片运行包结果待补，不将Windows浏览器排版当Cocoa已通过。
+
 ## preview.24 严格用卡边界已发布
 
 共用续跑测试83项通过；原生self-test新增weeklyCreditRequiresExhaustion，缺失或失败禁止暂存preview.24及之后版本。完整构建40657133947固定efab8144bde2e30aa61cbc9459e572b20557e7c6，Apple/Intel各139项通过，包含新的weeklyCreditRequiresExhaustion；23份资产的版本与摘要一致，不使用preview.23报告代替。未读真实账号、额度、认证或聊天，不发模型请求，不使用真实卡。已登录Copilot及模型续聊边界保持。

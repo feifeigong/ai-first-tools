@@ -166,7 +166,7 @@ internal sealed partial class ResetNewsService : IDisposable
         var fresh = IsFresh(value, clock());
         var title = !value.Enabled ? "重置消息提醒已关闭" : fresh ? value.Partial ? "消息已更新，部分内容正在重试" : "正在留意 Tibo 的重置消息" : value.LastCheckedAt is null ? "正在获取重置消息" : "暂时没取到最新消息，正在自动重试";
         var detail = !value.Enabled ? "旧消息仍可查看，重新开启后继续提醒。" : fresh
-            ? value.Partial ? "已核实的消息会正常提醒；暂时无法核对的内容会继续自动检查。" : "发现新的重置预告或完成消息时提醒你，由你决定是否关闭续跑。"
+            ? value.Partial ? "已核实的消息会正常提醒；暂时无法核对的内容会继续自动检查。" : "发现新的重置预告或确认消息时提醒你，是否自动用卡由你决定。"
             : value.LastCheckedAt is null ? "有重置预告或完成消息时，会弹窗提醒。" : value.Items.Count > 0 ? "下方是上次保存的消息，发布时间已标出。" : "取到最新消息后会在这里显示，无需一直点刷新。";
         Snapshot = new(value.Enabled, title, detail, value.LastCheckedAt, value.Items.ToArray(), fresh, value.LastSuccess, value.NextCheck, value.Partial);
         var encoded = JsonSerializer.Serialize(Snapshot, Json);
