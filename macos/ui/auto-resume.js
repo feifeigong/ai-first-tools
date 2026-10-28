@@ -56,7 +56,7 @@
       }
     } finally {
       busy=false;refresh.disabled=false;running.disabled=timer.disabled=startup.disabled=!state?.installed;
-      credit.disabled=!state?.installed || !active(state);
+      credit.disabled=!state?.installed;
     }
   }
   nav.addEventListener('click',()=>{

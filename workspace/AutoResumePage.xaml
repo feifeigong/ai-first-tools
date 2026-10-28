@@ -33,7 +33,7 @@
           <TextBlock Text="关掉窗口也有效，关闭开关才会停止续跑。" FontSize="12" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" Margin="0,7,0,0" />
           <Border Background="#F7F9FC" CornerRadius="10" Padding="16,12" Margin="0,18,0,0">
             <Grid><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-              <StackPanel Margin="0,0,20,0"><TextBlock Text="周额度用完时自动使用重置卡" FontSize="14" FontWeight="SemiBold" /><TextBlock Text="关闭后只等额度恢复，到账后仍会自动续跑。" FontSize="12" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" Margin="0,6,0,0" /></StackPanel>
+              <StackPanel Margin="0,0,20,0"><TextBlock Text="周额度用完时自动使用重置卡" FontSize="14" FontWeight="SemiBold" /><TextBlock Text="仅在续跑开启时生效；关闭后只等额度恢复。" FontSize="12" Foreground="{StaticResource ResumeMuted}" TextWrapping="Wrap" Margin="0,6,0,0" /></StackPanel>
               <ToggleButton x:Name="CreditSwitch" Grid.Column="1" Style="{StaticResource Switch}" Click="CreditClick" IsEnabled="False" AutomationProperties.Name="周额度用完时自动使用重置卡" />
             </Grid>
           </Border>

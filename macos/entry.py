@@ -480,12 +480,14 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                       const poll=async(fn)=>{for(let i=0;i<200;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('resume_ui_timeout');};
                       const run=document.getElementById('resume-running'),boot=document.getElementById('resume-startup'),credit=document.getElementById('resume-credit'),timer=document.getElementById('resume-timer');
                       document.getElementById('workspace-resume').click();await poll(()=>!run.disabled);
+                      credit.click();await poll(()=>!credit.disabled&&credit.getAttribute('aria-checked')==='true'&&run.getAttribute('aria-checked')==='false');
+                      credit.click();await poll(()=>!credit.disabled&&credit.getAttribute('aria-checked')==='false'&&run.getAttribute('aria-checked')==='false');
                       run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='true');
                       credit.click();await poll(()=>!credit.disabled&&credit.getAttribute('aria-checked')==='true');
                       credit.click();await poll(()=>!credit.disabled&&credit.getAttribute('aria-checked')==='false'&&run.getAttribute('aria-checked')==='true');
                       timer.click();await poll(()=>!timer.disabled&&timer.getAttribute('aria-checked')==='true');
                       boot.click();await poll(()=>!boot.disabled&&boot.getAttribute('aria-checked')==='true');
-                      run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='false'&&boot.getAttribute('aria-checked')==='true'&&credit.disabled);
+                      run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='false'&&boot.getAttribute('aria-checked')==='true'&&!credit.disabled);
                       timer.click();await poll(()=>!timer.disabled&&timer.getAttribute('aria-checked')==='false'&&boot.getAttribute('aria-checked')==='false');
                       document.getElementById('workspace-mover').click();window.__RESUME_SMOKE__=true;
                     })().catch(()=>window.__RESUME_SMOKE__=false);''')

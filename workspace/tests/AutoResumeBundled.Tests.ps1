@@ -103,6 +103,12 @@ Check 'Credit permission can be disabled while resume stays active' {
     $value=Invoke-BundledAction 'credit-off'
     Require($value.running -and $value.resumeEnabled -and !$value.autoRedeem)
 }
+Check 'Credit permission can be prepared before resume without launching a watcher' {
+    $value=Invoke-BundledAction 'credit-on'
+    Require(!$value.running -and $value.autoRedeem -and !$script:calls.Contains('start'))
+    $value=Invoke-BundledAction 'credit-off'
+    Require(!$value.running -and !$value.autoRedeem -and !$script:calls.Contains('start'))
+}
 Check 'Timer-only opt-in never enables resume or cards and survives resume off' {
     $value=Invoke-BundledAction 'timer-on'
     Require($value.running -and !$value.resumeEnabled -and !$value.autoRedeem -and $value.autoStartWindow)

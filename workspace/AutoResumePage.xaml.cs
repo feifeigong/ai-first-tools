@@ -198,7 +198,7 @@ public partial class AutoResumePage : UserControl, IDisposable
             {
                 RefreshButton.IsEnabled = true;
                 RunningSwitch.IsEnabled = TimerSwitch.IsEnabled = AutostartSwitch.IsEnabled = status?.Installed == true;
-                CreditSwitch.IsEnabled = status?.Installed == true && status.ResumeActive;
+                CreditSwitch.IsEnabled = status?.Installed == true;
             }
         }
     }

@@ -60,6 +60,13 @@ class MacResumeTests(unittest.TestCase):
         self.assertTrue(value['resumeEnabled']);self.assertTrue(value['autostart']);self.assertFalse(value['autoRedeem'])
         self.controller.stop.assert_called_once();self.controller.start.assert_called_once()
 
+    def test_credit_preference_before_start_never_launches_work(self):
+        value=self.controller.act('credit-on')
+        self.assertFalse(value['running']);self.assertTrue(value['autoRedeem'])
+        value=self.controller.act('credit-off')
+        self.assertFalse(value['running']);self.assertFalse(value['autoRedeem'])
+        self.controller.start.assert_not_called();self.controller.stop.assert_not_called()
+
     def test_startup_is_self_contained_and_does_not_change_running(self):
         self.controller.startup(True)
         value=self.controller.registration()
