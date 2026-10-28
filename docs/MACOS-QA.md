@@ -1,8 +1,10 @@
 # Mac 移植验证记录
 
-## preview.24 严格用卡边界候选
+## preview.24 严格用卡边界已发布
 
-共用续跑测试83项通过；原生self-test新增weeklyCreditRequiresExhaustion，缺失或失败禁止暂存preview.24及之后版本。需要重新生成Apple/Intel运行包并通过原有全部检查，不使用preview.23的138项报告代替。未读真实账号、额度、认证或聊天，不发模型请求，不使用真实卡。已登录Copilot及模型续聊边界保持。
+共用续跑测试83项通过；原生self-test新增weeklyCreditRequiresExhaustion，缺失或失败禁止暂存preview.24及之后版本。完整构建40657133947固定efab8144bde2e30aa61cbc9459e572b20557e7c6，Apple/Intel各139项通过，包含新的weeklyCreditRequiresExhaustion；23份资产的版本与摘要一致，不使用preview.23报告代替。未读真实账号、额度、认证或聊天，不发模型请求，不使用真实卡。已登录Copilot及模型续聊边界保持。
+
+Intel首轮在创建更新测试夹具的磁盘镜像时遇到hdiutil Resource busy，未进入该轮更新测试；失败报告已保存。相同源码仅重跑失败任务后，更新及完整运行包检查通过，未放宽发布门槛。
 
 ## preview.23 重置上下文已发布
 
