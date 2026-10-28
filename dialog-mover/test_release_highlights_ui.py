@@ -22,6 +22,18 @@ def bootstrap():
     '''.replace('PAYLOAD',json.dumps(data))
 
 class HighlightsUiTests(unittest.TestCase):
+    def test_manual_dialog_returns_to_its_version_entry_instead_of_a_previous_page_control(self):
+        with tempfile.TemporaryDirectory() as temporary,sync_playwright() as runtime:
+            resources=prepare(Path(temporary));browser=runtime.chromium.launch(channel='msedge' if sys.platform=='win32' else None,headless=True)
+            try:
+                page=browser.new_page();page.add_init_script(bootstrap());page.goto((resources/'ui/index.html').as_uri())
+                page.locator('#release-highlights').wait_for(state='visible');page.get_by_role('button',name='知道了',exact=True).click()
+                page.locator('input').first.focus()
+                page.evaluate("document.getElementById('workspace-version').click()")
+                page.locator('#release-highlights').wait_for(state='visible');page.get_by_role('button',name='知道了',exact=True).click()
+                self.assertEqual(page.evaluate('document.activeElement.id'),'workspace-version')
+            finally:browser.close()
+
     def test_automatic_once_manual_reopen_all_close_methods_and_keyboard_focus(self):
         with tempfile.TemporaryDirectory() as temporary,sync_playwright() as runtime:
             resources=prepare(Path(temporary));browser=runtime.chromium.launch(channel='msedge' if sys.platform=='win32' else None,headless=True)

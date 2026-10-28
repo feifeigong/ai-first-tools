@@ -494,14 +494,17 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                     result['checks']['independentReminderSwitch']=(reset_ui is True and isinstance(notice_state,dict)
                         and notice_state.get('enabled') is True and isinstance(resume_state,dict) and resume_state.get('running') is False)
                     window.evaluate_js('''(async()=>{
+                      const diagnostic=window.__RELEASE_NOTES_DIAGNOSTICS__={phase:'opening'};
                       const poll=async(fn)=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('notes_timeout');};
                       const trigger=document.getElementById('workspace-version'),dialog=document.getElementById('release-highlights');
                       trigger.click();await poll(()=>dialog.open);
+                      diagnostic.phase='opened';diagnostic.rows=document.querySelectorAll('.release-item').length;diagnostic.focus=document.activeElement.id;
                       const rendered=document.querySelectorAll('.release-item').length>0&&document.activeElement.id==='release-done';
                       document.getElementById('release-done').click();await poll(()=>!dialog.open);
                       trigger.click();await poll(()=>dialog.open);document.getElementById('release-close').click();
+                      diagnostic.phase='closed';diagnostic.finalFocus=document.activeElement.id;diagnostic.closed=!dialog.open;
                       window.__RELEASE_NOTES_SMOKE__=rendered&&!dialog.open&&document.activeElement===trigger;
-                    })().catch(()=>window.__RELEASE_NOTES_SMOKE__=false);''')
+                    })().catch(error=>{window.__RELEASE_NOTES_SMOKE__=false;window.__RELEASE_NOTES_DIAGNOSTICS__={...(window.__RELEASE_NOTES_DIAGNOSTICS__||{}),errorName:error.name};});''')
                     release_ui=False
                     for _ in range(80):
                         release_ui=window.evaluate_js('window.__RELEASE_NOTES_SMOKE__===true')
@@ -509,6 +512,7 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                         time.sleep(.25)
                     result['checks']['nativeReleaseHighlightsDialog']=release_ui is True
                     result['checks']['releaseHighlightsAcknowledgement']=bool(release_ui and api._release_highlights and api._release_highlights.has_seen())
+                    result['releaseHighlightsDiagnostics']=json.loads(window.evaluate_js('JSON.stringify(window.__RELEASE_NOTES_DIAGNOSTICS__||{})'))
                     result["passed"] = all(result["checks"].values())
                     break
             time.sleep(0.25)

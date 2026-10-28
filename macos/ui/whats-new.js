@@ -5,9 +5,9 @@
  let data = null, attempted = false, interrupted = false, origin = null;
  document.addEventListener("pointerdown", () => { interrupted = true; }, true);
  document.addEventListener("keydown", () => { interrupted = true; }, true);
- const open = () => {
+ const open = (manual = false) => {
   if (!data?.items?.length || dialog.open) return;
-  origin = document.activeElement;
+  origin = manual ? trigger : document.activeElement;
   document.getElementById("release-version").textContent = `AI一手工具箱 · v${data.release}`;
   document.getElementById("release-heading").textContent = data.title;
   document.getElementById("release-description").textContent = data.description;
@@ -29,15 +29,15 @@
  });
  dialog.addEventListener("close", () => {
   if (data) { data.automatic = false; Promise.resolve(window.pywebview?.api?.acknowledge_release_notes?.(data.release)).catch(() => {}); }
-  if (origin instanceof HTMLElement && origin !== document.body) origin.focus();
-  else trigger.focus();
+  if (origin instanceof HTMLElement && origin !== document.body && origin.isConnected && origin.getClientRects().length) origin.focus();
+  if (document.activeElement !== origin || origin === document.body) trigger.focus();
  });
  document.getElementById("release-close").addEventListener("click", dismiss);
  document.getElementById("release-done").addEventListener("click", dismiss);
  document.getElementById("release-full").addEventListener("click", () => Promise.resolve(window.pywebview?.api?.open_release_notes?.()).catch(() => {}));
  trigger.addEventListener("click", async () => {
   if (!data) { try { data = await window.pywebview?.api?.release_notes?.(); } catch {} }
-  open();
+  open(true);
  });
  window.aiFirstReleaseNotesReady = async automatic => {
   try { data = await window.pywebview?.api?.release_notes?.(); } catch { return; }

@@ -388,7 +388,7 @@ class MacResourceTests(unittest.TestCase):
         window.events.loaded.wait.return_value = True
         window._ai_first_content_attached = True
         window._ai_first_bundled_file_load = True
-        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True, None, True, None, True, None, True]
+        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True, None, True, None, True, None, True, json.dumps({'phase':'closed','closed':True,'finalFocus':'workspace-version'})]
         api = MacApi(smoke=True)
         api._release_highlights = Mock()
         api._release_highlights.info.return_value = {'automatic': False}
@@ -412,7 +412,7 @@ class MacResourceTests(unittest.TestCase):
         window = Mock()
         window._ai_first_content_attached = False
         window.events.loaded.wait.return_value = True
-        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True, None, True, None, True, None, True]
+        window.evaluate_js.side_effect = [json.dumps({"passed": True, "checks": {"bridge": True}}), True, None, True, None, True, None, True, json.dumps({'phase':'closed','closed':True,'finalFocus':'workspace-version'})]
         api = MacApi(smoke=True)
         api._smoke_check_calls = 1
         api.auto_resume_control('status')
