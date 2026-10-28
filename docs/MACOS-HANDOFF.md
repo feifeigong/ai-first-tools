@@ -1,10 +1,10 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
-## 新候选：preview.25 独立用卡与 5 小时计时
+## 当前发布：preview.25 独立用卡与 5 小时计时
 
-共用Python新增automation/window_timer/window_request和三个冻结规则检查；Cocoa开关桥新增独立用卡、计时和登录运行含义。计时默认关闭，使用同一份合成检查，不请求真实模型或卡。必须以本候选重新构建两芯片，self报告含independentAutomationPolicy、ephemeralTimerWriteAhead、ephemeralRequestSafety、nativeEphemeralSupport，smoke报告含independentAutomationBridge，缺少任何字段禁止暂存。nativeEphemeralSupport实际运行包内Codex的exec --help核对临时/忽略配置/只读/JSON能力，不请求模型。原Copilot已登录侧栏和真实模型续聊边界保留；真实账号计时也未代测。规则见[FIVE-HOUR-TIMER.md](FIVE-HOUR-TIMER.md)。
+preview.25已公开，固定02b4146b5a1c9f3a30ceaa75685228e97eea9639，完整构建40673441448两芯片各144项通过，23份远端资产与摘要一致。共用Python新增automation/window_timer/window_request；Cocoa开关桥支持独立用卡、计时、登录运行，以及续跑关闭时先设置用卡权限。计时默认关闭，self报告含independentAutomationPolicy、ephemeralTimerWriteAhead、ephemeralRequestSafety、nativeEphemeralSupport，smoke报告含independentAutomationBridge，缺少任何字段禁止暂存。nativeEphemeralSupport实际运行包内Codex的exec --help核对临时/忽略配置/只读/JSON能力，不请求模型。原Copilot已登录侧栏和真实模型续聊边界保留；真实账号计时也未代测。规则见[FIVE-HOUR-TIMER.md](FIVE-HOUR-TIMER.md)。
 
-## 当前发布：preview.24 周额度用尽才用卡
+## 上一轮发布：preview.24 周额度用尽才用卡
 
 共用Python续跑规则把用卡门槛与99%的保守续跑阈值分开，仅有限的周用量>=100%时才授权尝试用卡。用卡前复读仍使用同一严格门槛；不改变用户的开关与配置。共用续跑83项合成回归通过，原生新增weeklyCreditRequiresExhaustion检查，preview.24发布必须包含该检查；preview.24已公开，完整构建40657133947固定efab8144bde2e30aa61cbc9459e572b20557e7c6，两芯片各139项通过；23份远端资产及摘要一致。
 
