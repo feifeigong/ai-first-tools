@@ -110,11 +110,11 @@ class Controller:
             time.sleep(.2)
         raise ControlError('续跑暂时没能开启，请稍后重试。')
 
-    def stop(self):
+    def stop(self, timeout=12):
         from codex_auto_resume.watch_control import request_stop
         if not self.watchers(): return
         if request_stop() != 0: raise ControlError('暂时无法确认续跑状态，没有停止其他任务。请刷新后重试。')
-        deadline=time.monotonic()+12
+        deadline=time.monotonic()+timeout
         while time.monotonic()<deadline:
             try:
                 if not self.watchers(): return
@@ -167,7 +167,7 @@ class Controller:
             if self._foreign is not None: return self._foreign.status()
             if self.watchers():
                 self.write(self.receipt,{'program':str(self.executable),'restart':True})
-                self.stop()
+                self.stop(timeout=40)  # Allow a bounded quota read to finish; never force a work task to stop.
                 self.launchctl('bootout',self.domain+'/'+LABEL)
         elif operation=='finish-update':
             import reset_notices

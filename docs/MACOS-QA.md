@@ -1,5 +1,9 @@
 # Mac 移植验证记录
 
+## preview.27 验证候选
+
+本机更新专项隔离测试已复现并修正ControlError阻断窗口恢复、后台恢复误触发回滚及失败诊断丢失。补充新助手来源、迟到退出、任务编号与应用归属回执保护。两芯片真实已发布preview.25 DMG及旧后台、C语言环境、正常新版UI将单独验证；目前不沿用preview.26的149项声称本轮通过。具体见[更新恢复QA](MACOS-UPDATE-RECOVERY-QA.md)。
+
 ## preview.26 原生与发布验证通过
 
 源码固定 `f7e2d6b7e92a54646440a707af643b3e785db061`。Windows完整构建[40801660932](https://github.com/feifeigong/ai-first-tools/actions/runs/40801660932)和Mac完整构建[40801619261](https://github.com/feifeigong/ai-first-tools/actions/runs/40801619261)均成功；Apple/Intel分别149/149项原生检查通过，新增C语言环境下的真实冻结启停/提醒与离线历史检查均通过。两端资产、版本、不可变标签和摘要已独立核对后公开。

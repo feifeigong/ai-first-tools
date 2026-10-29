@@ -25,6 +25,7 @@ APP_NAME = "AI一手工具工作台.app"
 EXECUTABLE = "AI First Tools"
 MAX_PACKAGE = 512 * 1024 * 1024
 PREPARATION_TIMEOUT = 180
+HELPER_READY_TIMEOUT = 180
 _audit_state = None
 
 
@@ -64,6 +65,22 @@ def checkpoint(control):
 
 def state_root() -> Path:
     return _audit_state or Path.home() / "Library/Application Support/AI一手工具工作台/updates"
+
+
+def update_notice(release: str) -> str | None:
+    receipt=state_root()/'result.json';seen=state_root()/'result-viewed.json'
+    try:
+        if not receipt.is_file() or receipt.is_symlink() or receipt.stat().st_size>16384:return None
+        raw=receipt.read_bytes();value=json.loads(raw)
+        if value.get('version')!=release or not isinstance(value.get('message'),str) or len(value['message'])>500:return None
+        digest=hashlib.sha256(raw).hexdigest()
+        if seen.is_file() and not seen.is_symlink() and seen.stat().st_size<512:
+            previous=json.loads(seen.read_text(encoding='utf8'))
+            if previous=={'format':'ai-first-update-viewed-v1','sha256':digest}:return None
+        if not seen.exists() or seen.is_file() and not seen.is_symlink():
+            write_json(seen,{'format':'ai-first-update-viewed-v1','sha256':digest})
+        return value['message']
+    except (OSError,ValueError):return None
 
 
 def running_bundle() -> Path:
@@ -267,18 +284,20 @@ def stage_bundle(target: Path, candidate: Path, version: str, current: str, arch
     helper = directory / "helper.app"
     if control:
         control.step("preparing_helper", 55, "准备更新程序")
-    command(["/usr/bin/ditto", str(target), str(helper)], control=control)
+    # The verified incoming build supplies fixes to the updater itself.
+    command(["/usr/bin/ditto", str(staged), str(helper)], control=control)
     if control:
         control.step("verifying", 70, "复核更新文件")
     validate_app(staged, version, architecture, control=control)
-    validate_app(helper, current, architecture, control=control)
+    validate_app(helper, version, architecture, control=control)
     if control:
         control.step("fingerprinting", 85, "核对应用完整性")
     snapshot = target.stat()
     job = directory / "job.json"
     write_json(job, {"target": str(target), "version": version, "current": current, "architecture": architecture,
                      "device": snapshot.st_dev, "inode": snapshot.st_ino, "originalDigest": fingerprint(target, control),
-                     "candidateDigest": fingerprint(staged, control), "parentPid": os.getpid(), "nonce": uuid.uuid4().hex})
+                     "candidateDigest": fingerprint(staged, control), "helperVersion": version,
+                     "parentPid": os.getpid(), "nonce": uuid.uuid4().hex})
     checkpoint(control)
     return job
 
@@ -350,6 +369,7 @@ def read_job(path: Path) -> dict:
         raise UpdateError("更新任务不完整。")
     if data.get("architecture") not in ("arm64", "x86_64") or updates.release_key(data.get("version", "")) is None or updates.release_key(data.get("current", "")) is None or updates.release_key(data["version"]) <= updates.release_key(data["current"]):
         raise UpdateError("更新版本或芯片不符合要求。")
+    if 'helperVersion' in data and data['helperVersion']!=data['version']:raise UpdateError('更新助手版本不符合要求。')
     if sys.platform == "darwin" and (directory.stat().st_uid != os.getuid() or path.stat().st_uid != os.getuid() or directory.stat().st_mode & 0o077):
         raise UpdateError("更新任务权限不符合要求。")
     return data
@@ -369,12 +389,14 @@ def start_helper(job: Path) -> subprocess.Popen:
     environment = launch_environment()
     process = subprocess.Popen([str(job.parent / "helper.app/Contents/MacOS" / EXECUTABLE), "--apply-update", str(job)],
                                env=environment, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + HELPER_READY_TIMEOUT
     try:
         while time.monotonic() < deadline:
             if ready.is_file():
                 result = json.loads(ready.read_text())
                 if result.get("nonce") == data["nonce"] and result.get("pid") == process.pid:
+                    if result.get('ready') is False:
+                        raise UpdateError('更新启动检查未完成，当前版本仍可使用。请重新打开后重试。')
                     return process
             if process.poll() is not None:
                 break
@@ -420,14 +442,85 @@ def start_app(bundle: Path, arguments=()) -> subprocess.Popen:
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
 
 
-def relaunch_app(bundle: Path) -> None:
-    process = start_app(bundle)
-    time.sleep(2)
-    if process.poll() is not None:
-        raise UpdateError("新版没有保持运行，正在恢复旧版。")
+def relaunch_app(bundle: Path, job: Path | None = None) -> None:
+    metadata=json.loads((bundle/'Contents/Resources/version.json').read_text(encoding='utf8')) if job is not None else {}
+    key=updates.release_key(metadata.get('release',''))
+    supports_health=key is not None and key>=updates.release_key('0.4.0-macos-preview.27')
+    if job is None or not supports_health:
+        process = start_app(bundle)
+        time.sleep(2)
+        if process.poll() is not None: raise UpdateError("新版没有保持运行，正在恢复旧版。")
+        return
+    data=read_job(job)
+    health=job.parent/'startup.json'
+    health.unlink(missing_ok=True)
+    process=start_app(bundle,('--update-startup',str(job),'--update-nonce',data['nonce']))
+    deadline=time.monotonic()+60
+    while time.monotonic()<deadline:
+        if health.is_file() and not health.is_symlink():
+            try:
+                if health.stat().st_size>4096:break
+                value=json.loads(health.read_text(encoding='utf8'))
+            except (OSError,ValueError):break
+            if value.get('nonce')==data['nonce'] and value.get('pid')==process.pid and value.get('version')==metadata['release'] and value.get('ready') is True:
+                time.sleep(3)
+                try:latest=json.loads(health.read_text(encoding='utf8'))
+                except (OSError,ValueError):break
+                if process.poll() is None or latest.get('closedByUser') is True and latest.get('nonce')==data['nonce'] and latest.get('pid')==process.pid:return
+                break
+        if process.poll() is not None:break
+        time.sleep(.2)
+    # Only this update's new process; never terminate a pre-existing user task.
+    stop_helper(process)
+    raise UpdateError('新版窗口没有准备好，正在恢复旧版。')
 
 
-def replace_bundle(job: Path, relaunch=None) -> bool:
+def startup_context(job: Path, nonce: str, bundle: Path, release: str) -> dict:
+    data=read_job(job)
+    if data['nonce']!=nonce or bundle.resolve()!=Path(data['target']).resolve() or release not in (data['version'],data['current']):
+        raise UpdateError('更新启动交接不匹配。')
+    report=job.parent/'startup.json'
+    if report.is_symlink() or report.exists() and not report.is_file():raise UpdateError('更新启动交接位置不符合要求。')
+    return {'report':report,'nonce':nonce,'pid':os.getpid(),'version':release,'ready':False}
+
+
+def write_startup(context: dict, *, closed=False) -> None:
+    write_json(context['report'],{key:context[key] for key in ('nonce','pid','version','ready')}|{'closedByUser':closed})
+
+
+def control_runtime(target: Path, data: dict, directory: Path, operation: str) -> None:
+    if (target/'Contents/Resources/auto-resume-native').exists():
+        import auto_resume
+        auto_resume.Controller(target,directory/'resume-audit-home' if data.get('audit') else None).action(operation)
+
+
+def restore_runtime(target: Path, data: dict, directory: Path) -> bool:
+    try:
+        control_runtime(target,data,directory,'finish-update')
+        return True
+    except Exception:
+        return False  # Background recovery must never suppress opening the application.
+
+
+def preflight(job: Path, data: dict) -> tuple:
+    target=Path(data['target']);candidate=job.parent/'candidate.app'
+    snapshot=target.stat()
+    if snapshot.st_dev!=data['device'] or snapshot.st_ino!=data['inode'] or (job.parent/'backup.app').exists():
+        raise UpdateError('当前应用已变化，更新没有执行。')
+    validate_app(target,data['current'],data['architecture'])
+    validate_app(candidate,data['version'],data['architecture'])
+    if fingerprint(target)!=data['originalDigest'] or fingerprint(candidate)!=data['candidateDigest']:
+        raise UpdateError('应用在下载后发生变化，更新没有执行。')
+    probe=job.parent/'probe.json'
+    subprocess.run([str(candidate/'Contents/MacOS'/EXECUTABLE),'--self-test','--report',str(probe)],
+                   check=True,timeout=60,capture_output=True,env=launch_environment())
+    if json.loads(probe.read_text(encoding='utf8')).get('passed') is not True:
+        raise UpdateError('新版启动自检未通过。')
+    control_runtime(target,data,job.parent,'prepare-update')
+    return data['nonce'],data['originalDigest'],data['candidateDigest']
+
+
+def replace_bundle(job: Path, relaunch=None, verified=None) -> bool:
     data = read_job(job)
     directory = job.parent
     target = Path(data["target"])
@@ -447,27 +540,19 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
         if fingerprint(target) != data["originalDigest"] or fingerprint(candidate) != data["candidateDigest"]:
             raise UpdateError("应用在下载后发生变化，更新没有执行。")
         phase = "preflight"
-        probe = directory / "probe.json"
-        environment = {**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"}
-        subprocess.run([str(candidate / "Contents/MacOS" / EXECUTABLE), "--self-test", "--report", str(probe)],
-                       check=True, timeout=60, capture_output=True, env=environment)
-        if json.loads(probe.read_text()).get("passed") is not True:
-            raise UpdateError("新版启动自检未通过。")
+        if verified != (data['nonce'],data['originalDigest'],data['candidateDigest']):
+            preflight(job,data)
         phase = "replacement"
-        if (target / 'Contents/Resources/auto-resume-native').exists():
-            import auto_resume
-            auto_resume.Controller(target, directory / 'resume-audit-home' if data.get('audit') else None).action('prepare-update')
         atomic_swap(target, candidate)
         moved = True
         phase = "backup"
         candidate.rename(backup)
         previous = backup
-        write_json(receipt, {"success": True, "version": data["version"], "message": f"已更新到 {data['version']}，原来的对话与设置保留。"})
         phase = "relaunch"
-        if (target / 'Contents/Resources/auto-resume-native').exists():
-            import auto_resume
-            auto_resume.Controller(target, directory / 'resume-audit-home' if data.get('audit') else None).action('finish-update')
         (relaunch or relaunch_app)(target)
+        restored=restore_runtime(target,data,directory)
+        write_json(receipt, {"success": True, "version": data["version"], 'automationRestored':restored,
+                            "message": f"已更新到 {data['version']}，原来的对话与设置保留。" if restored else '已更新，自动续跑或提醒暂未恢复，请在对应页面查看状态。'})
         return True
     except Exception as error:
         restored = False
@@ -485,12 +570,10 @@ def replace_bundle(job: Path, relaunch=None) -> bool:
                              "message": "更新没有完成，已恢复旧版。" if restored else "更新没有完成，旧版或备份仍保留。请检查文件权限后重试。"})
         if not moved or restored:
             try:
-                if (target / 'Contents/Resources/auto-resume-native').exists():
-                    import auto_resume
-                    auto_resume.Controller(target, directory / 'resume-audit-home' if data.get('audit') else None).action('finish-update')
                 (relaunch or relaunch_app)(target)
-            except (OSError, subprocess.SubprocessError):
+            except Exception:
                 pass
+            restore_runtime(target,data,directory)
         return False
 
 
@@ -518,13 +601,22 @@ def helper_main() -> int:
             fcntl.flock(operation, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return 1
-        write_json(job.parent / "ready.json", {"nonce": data["nonce"], "pid": os.getpid()})
-        result = _wait_and_replace(job, data)
+        try:
+            verified=preflight(job,data)
+        except Exception as error:
+            restore_runtime(Path(data['target']),data,job.parent)
+            write_json(state_root()/'result.json',{'success':False,'version':data['current'],'phase':'before_close',
+                       'errorCode':type(error).__name__,'message':'更新启动检查未完成，当前版本仍可使用。'})
+            write_json(job.parent/'ready.json',{'nonce':data['nonce'],'pid':os.getpid(),'ready':False})
+            write_json(job.parent/'completion.json',{'nonce':data['nonce'],'returnCode':1})
+            return 1
+        write_json(job.parent / "ready.json", {"nonce": data["nonce"], "pid": os.getpid(), 'ready':True})
+        result = _wait_and_replace(job, data, verified)
         write_json(job.parent / "completion.json", {"nonce": data["nonce"], "returnCode": result})
         return result
 
 
-def _wait_and_replace(job: Path, data: dict) -> int:
+def _wait_and_replace(job: Path, data: dict, verified=None) -> int:
     deadline = time.monotonic() + 120
     while True:
         try:
@@ -533,6 +625,7 @@ def _wait_and_replace(job: Path, data: dict) -> int:
             break
         if time.monotonic() >= deadline:
             write_json(state_root() / "result.json", {"success": False, "version": data["current"], "phase": "parent_exit", "errorCode": "timeout", "message": "软件尚未关闭，本次更新没有执行。"})
+            restore_runtime(Path(data['target']),data,job.parent)
             return 1
         time.sleep(0.25)
     audit = data.get("audit") is True
@@ -551,7 +644,7 @@ def _wait_and_replace(job: Path, data: dict) -> int:
         def relaunch(app):
             fcntl.flock(instance, fcntl.LOCK_UN)
             if not audit:
-                relaunch_app(app)
+                relaunch_app(app,job)
                 return
             report = job.parent / "relaunch.json"
             process = start_app(app, ("--smoke-test", "--report", str(report)))
@@ -564,7 +657,7 @@ def _wait_and_replace(job: Path, data: dict) -> int:
                 raise
             if not report.is_file() or json.loads(report.read_text()).get("passed") is not True:
                 raise UpdateError("隔离 Cocoa 重启检查失败。")
-        return 0 if replace_bundle(job, relaunch) else 1
+        return 0 if replace_bundle(job, relaunch, verified) else 1
 
 
 def audit_update(app: Path, report: Path) -> None:

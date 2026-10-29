@@ -336,6 +336,77 @@ class MacUpdaterTests(unittest.TestCase):
         self.assertEqual(updater.fingerprint(target), before)
         self.assertTrue((job.parent / "failed.app").is_dir())
 
+    def test_background_control_failure_never_prevents_original_window_reopening(self):
+        import auto_resume
+        target, candidate, job = self.job()
+        (target/'Contents/Resources/auto-resume-native').mkdir()
+        data=json.loads(job.read_text());data['originalDigest']=updater.fingerprint(target);updater.write_json(job,data)
+        reopen=Mock()
+        with patch.object(updater,'validate_app'),patch.object(updater.subprocess,'run',side_effect=self.probe), \
+                patch.object(auto_resume,'Controller') as controller:
+            controller.return_value.action.side_effect=auto_resume.ControlError('synthetic unavailable ownership')
+            self.assertFalse(updater.replace_bundle(job,reopen))
+        reopen.assert_called_once_with(target)
+        outcome=json.loads((self.state/'result.json').read_text())
+        self.assertFalse(outcome['success'])
+
+    def test_background_restore_failure_does_not_roll_back_a_working_new_window(self):
+        import auto_resume
+        target, candidate, job = self.job()
+        for app in (target,candidate): (app/'Contents/Resources/auto-resume-native').mkdir()
+        data=json.loads(job.read_text());data.update(originalDigest=updater.fingerprint(target),candidateDigest=updater.fingerprint(candidate));updater.write_json(job,data)
+        reopen=Mock()
+        def action(operation):
+            if operation=='finish-update': raise auto_resume.ControlError('synthetic unavailable restore')
+        with patch.object(updater,'validate_app'),patch.object(updater.subprocess,'run',side_effect=self.probe), \
+                patch.object(auto_resume,'Controller') as controller:
+            controller.return_value.action.side_effect=action
+            self.assertTrue(updater.replace_bundle(job,reopen))
+        reopen.assert_called_once_with(target)
+        self.assertEqual(json.loads((target/'Contents/Resources/version.json').read_text())['release'],'0.4.0-macos-preview.3')
+        self.assertFalse(json.loads((self.state/'result.json').read_text())['automationRestored'])
+
+    def test_update_failure_metadata_survives_display_without_exposing_paths(self):
+        from entry import MacApi
+        self.state.mkdir(exist_ok=True)
+        receipt=self.state/'result.json'
+        updater.write_json(receipt,{'success':False,'version':'0.4.0-macos-preview.2','phase':'replacement','errorCode':'ControlError','message':'更新没有完成，旧版保留。'})
+        with patch('entry.version_info',return_value={'release':'0.4.0-macos-preview.2'}):
+            self.assertIn('更新没有完成',MacApi().workspace_info()['updateMessage'])
+            self.assertTrue(receipt.is_file())
+            self.assertIsNone(MacApi().workspace_info()['updateMessage'])
+
+    def test_staging_uses_the_verified_incoming_helper_not_the_failing_old_build(self):
+        target,candidate,job=self.job()
+        def copy(arguments,**options):
+            if arguments[0].endswith('ditto'):shutil.copytree(arguments[1],arguments[2])
+            return Mock(stdout=b'arm64')
+        with patch.object(updater,'validate_app'),patch.object(updater,'command',side_effect=copy):
+            updater.stage_bundle(target,candidate,'0.4.0-macos-preview.3','0.4.0-macos-preview.2','arm64',job.parent)
+        self.assertEqual(json.loads((job.parent/'helper.app/Contents/Resources/version.json').read_text())['release'],'0.4.0-macos-preview.3')
+        self.assertEqual(updater.read_job(job)['helperVersion'],'0.4.0-macos-preview.3')
+
+    def test_new_window_requires_matching_readiness_and_rejects_late_exit(self):
+        target,candidate,job=self.job()
+        version='0.4.0-macos-preview.27'
+        (target/'Contents/Resources/version.json').write_text(json.dumps({'release':version}))
+        data=json.loads(job.read_text());data['version']=version;updater.write_json(job,data)
+        process=Mock(pid=7654,poll=Mock(return_value=None))
+        def start(app,arguments):
+            updater.write_json(job.parent/'startup.json',{'ready':True,'pid':7654,'nonce':data['nonce'],'version':version})
+            return process
+        def later(seconds):process.poll.return_value=1
+        with patch.object(updater,'start_app',side_effect=start),patch.object(updater.time,'sleep',side_effect=later):
+            with self.assertRaisesRegex(updater.UpdateError,'窗口没有准备好'):updater.relaunch_app(target,job)
+        self.assertFalse(json.loads((job.parent/'startup.json').read_text()).get('closedByUser',False))
+
+    def test_startup_handoff_rejects_stale_nonce_and_foreign_bundle(self):
+        target,candidate,job=self.job()
+        data=updater.read_job(job)
+        for nonce,bundle in (('b'*32,target),(data['nonce'],candidate)):
+            with self.assertRaises(updater.UpdateError):updater.startup_context(job,nonce,bundle,data['current'])
+        self.assertFalse((job.parent/'startup.json').exists())
+
     def test_job_cannot_point_outside_its_private_app_parent(self):
         target, candidate, job = self.job()
         data = json.loads(job.read_text())
@@ -356,7 +427,7 @@ class MacUpdaterTests(unittest.TestCase):
         process = Mock(poll=Mock(return_value=None))
         with patch.dict(os.environ, {"DYLD_LIBRARY_PATH": "old-libraries", "DYLD_FRAMEWORK_PATH": "old-frameworks"}), \
                 patch.object(updater.subprocess, "Popen", return_value=process) as launch, \
-                patch.object(updater.time, "monotonic", side_effect=[0, 16]):
+                patch.object(updater.time, "monotonic", side_effect=[0, updater.HELPER_READY_TIMEOUT+1]):
             with self.assertRaises(updater.UpdateError):
                 updater.start_helper(job)
         process.terminate.assert_called_once()

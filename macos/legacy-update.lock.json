@@ -1,0 +1,6 @@
+{
+  "release": "0.4.0-macos-preview.25",
+  "sourceCommit": "02b4146b5a1c9f3a30ceaa75685228e97eea9639",
+  "arm64": {"size": 186820662, "sha256": "f41e3d98cbcc7ddccffbf79ca4295d5466d3d2ca013509a5cf2ca7a175cfa225"},
+  "x86_64": {"size": 202295051, "sha256": "818e3c36639d9a3fd50aeec300bd09cd3a7f7cdaae9c6dfa606bab33e3935326"}
+}

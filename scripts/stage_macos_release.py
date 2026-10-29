@@ -52,6 +52,8 @@ def validated_assets(directory: Path, release: str, *, local_preview: bool = Fal
                 raise ValueError('The renamed product must be verified through native localized and Finder names')
             if kind == "update" and not {"nativeUpdateClick", "bridgeDrained", "nativeParentExit"}.issubset(result["checks"]):
                 raise ValueError("Native update click and bridge handoff checks are required")
+            if number>=27 and kind=='update' and not {'preflightBeforeParentExit','incomingUpdaterHelper','published25FailureReproduced','published25BackgroundRecovered','normalUpdatedWindowStaysReady'} <= set(result['checks']):
+                raise ValueError('Published updater recovery and real window readiness checks are required')
             if kind == 'resume' and not {'nativeRuntimeWithoutExternalInstallation','singlePackagedWatcher','startupSwitchIndependent','stopBlocksStartupRelaunch','updateRestoresRunningAndStartup','realLaunchAgentStopsWithoutRelaunch','finderRemovalCleansBackgroundAndStartup','cleanupPreservesUserSettings'} <= set(result['checks']):
                 raise ValueError('Actual bundled auto-resume lifecycle checks are required')
             if kind=='smoke' and int(release.rsplit('.',1)[1])>=15 and result['checks'].get('autoResumeControlBridge') is not True:

@@ -1,5 +1,9 @@
 # 完整开发背景、产品决策与架构
 
+## 2026-10-29：preview.25 更新失败并退出，preview.27 修复候选
+
+用户确认已从应用程序打开、当前preview.25。源码定位旧助手来自旧APP，关闭窗口后才交接后台；ControlError可在恢复分支再次抛出并跳过UI重开。三项隔离测试先复现失败，现修正为新版助手、关窗前自检/交接、实际界面就绪回执、后台恢复与UI重开分开、持久失败诊断。原签名/芯片/版本/指纹/所有权及不强停任务规则保持。真实已发布preview.25由固定摘要DMG供两芯片原生验证，不能仅用新代码改旧版本号代替。详细范围见[MACOS-UPDATE-RECOVERY-QA.md](MACOS-UPDATE-RECOVERY-QA.md)；目前是验证候选，未发布运行包，Windows保持0.3.23。
+
 ## 2026-10-29：0.3.23 / preview.26 已发布
 
 源码固定 `f7e2d6b7e92a54646440a707af643b3e785db061`。Windows完整构建[40801660932](https://github.com/feifeigong/ai-first-tools/actions/runs/40801660932)和Mac完整构建[40801619261](https://github.com/feifeigong/ai-first-tools/actions/runs/40801619261)均成功；Apple/Intel分别149/149项原生检查通过，新增C语言环境下的真实冻结启停/提醒与离线历史检查均通过。两端资产、版本、不可变标签和摘要已独立核对后公开。

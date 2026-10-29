@@ -14,6 +14,7 @@ from prepare_macos import ROOT, prepare
 from collect_licenses import collect_python
 from prepare_macos_auto_resume import prepare as prepare_resume
 from prepare_macos_reset import prepare as prepare_reset
+from prepare_macos_legacy_update import prepare as prepare_legacy_update
 
 
 def main() -> None:
@@ -31,6 +32,7 @@ def main() -> None:
         metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding='utf-8')
     prepare_resume(args.architecture)
     prepare_reset(args.architecture)
+    legacy_dmg=prepare_legacy_update(args.architecture)
     from PIL import Image
 
     with Image.open(ROOT / "workspace" / "assets" / "ai-first-app-icon.png") as image:
@@ -60,11 +62,12 @@ def main() -> None:
     launcher = app / "Contents" / "MacOS" / "AI First Tools"
     for flag in ("--self-test", '--memory-test', '--codex-import-test', '--reset-test', '--copilot-refresh-test', "--smoke-test", "--network-test", "--update-test", '--resume-test'):
         environment = os.environ.copy()
+        if flag=='--update-test':environment['AI_FIRST_LEGACY_UPDATE_DMG']=str(legacy_dmg)
         if flag == "--network-test":
             environment["SSL_CERT_FILE"] = str(output / "no-host-python-ca.pem")
             environment["SSL_CERT_DIR"] = str(output / "no-host-python-ca")
         subprocess.run([str(launcher), flag, "--report", str(output / (flag.removeprefix("--") + ".json"))],
-                       check=True, timeout=360 if flag in ("--update-test",'--resume-test') else 120, env=environment)
+                       check=True, timeout=540 if flag=='--update-test' else 360 if flag=='--resume-test' else 120, env=environment)
     version = json.loads((ROOT / "macos" / "version.json").read_text(encoding="utf-8"))["release"]
     if args.local_preview: version += '-local-parity'
     staging = output / "dmg-content"

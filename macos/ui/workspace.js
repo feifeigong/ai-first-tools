@@ -241,6 +241,7 @@
     try {
       const info = await bridgeRead("workspace_info", 10000);
       initialized = true;
+      window.__AI_FIRST_WORKSPACE_READY__ = true;
       startRetryCount = 0;
       if (initializationNotice && message.textContent === initializationNotice) notice.hidden = true;
       initializationNotice = null;

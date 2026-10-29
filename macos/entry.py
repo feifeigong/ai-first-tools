@@ -66,6 +66,7 @@ class MacApi(Api):
     def reset_news_control(self, operation: str = 'status') -> dict:
         if operation not in {'status', 'refresh', 'enable', 'disable'}:
             return {'error': '未知的提醒操作。'}
+        if getattr(self,'_handing_off',False) and operation!='status':return {'error':'正在更新，请完成后再操作。'}
         if self._smoke:
             if not hasattr(self, '_notice_fixture'):
                 self._notice_fixture = {'enabled': True, 'fresh': False, 'partial': False,
@@ -82,7 +83,7 @@ class MacApi(Api):
                 value = client.request('refresh', manual=True) if operation == 'refresh' else client.request()
             if value['enabled'] and getattr(sys, 'frozen', False):
                 monitor = reset_notices.Monitor(client=client)
-                if monitor.live_owner() is None: monitor.ensure()
+                if monitor.live_owner() is None and not getattr(self,'_handing_off',False): monitor.ensure()
                 value['monitorReady'] = monitor.live_owner() is not None
                 if not value['monitorReady']:
                     value.update(fresh=False, statusText='提醒正在准备，稍后会自动更新状态',
@@ -97,6 +98,7 @@ class MacApi(Api):
         except Exception: return {'error': '暂时无法打开原帖，请稍后再试。'}
 
     def auto_resume_control(self, operation: str = 'status') -> dict:
+        if getattr(self,'_handing_off',False) and operation!='status':return {'error':'正在更新，请完成后再操作。'}
         if self._smoke:
             if not hasattr(self,'_resume_fixture'): self._resume_fixture={'installed':True,'running':False,'autostart':False,'watcherCount':0,'error':'','resumeEnabled':False,'autoRedeem':False,'autoStartWindow':False,'timerStatus':'waiting','nextResetAt':0}
             value=self._resume_fixture
@@ -144,6 +146,7 @@ class MacApi(Api):
         self._update_ui_ready = None
         self._update_handoff_id = None
         self._update_failure = None
+        self._helper_prepared = False
         self._release_highlights = None
 
     def release_notes(self) -> dict:
@@ -161,17 +164,8 @@ class MacApi(Api):
         return {'ok':False}
 
     def workspace_info(self) -> dict:
-        message = None
         info = version_info()
-        receipt = updater.state_root() / "result.json"
-        if info.get('developmentPreview') is not True and receipt.is_file():
-            try:
-                result = json.loads(receipt.read_text(encoding="utf-8"))
-                if result.get("version") == version_info()["release"]:
-                    message = result.get("message")
-                    receipt.unlink()
-            except (OSError, ValueError):
-                pass
+        message=updater.update_notice(info['release']) if info.get('developmentPreview') is not True else None
         return {**info, "platform": "macOS", "architecture": platform.machine(), "automaticChecks": self._smoke or self._update_audit or info.get('developmentPreview') is not True,
                 "smokeAudit": self._smoke, "updateAudit": self._update_audit, "updateMessage": message}
 
@@ -333,6 +327,11 @@ class MacApi(Api):
 
         try:
             process = updater.start_helper(job)
+            try:
+                ready=json.loads((job.parent/'ready.json').read_text(encoding='utf8'))
+                probe=json.loads((job.parent/'probe.json').read_text(encoding='utf8'))
+                self._helper_prepared=ready.get('ready') is True and probe.get('passed') is True
+            except (OSError,ValueError):self._helper_prepared=False
             phase = "draining_bridge"
             self._window.evaluate_js("window.aiFirstFinishUpdate()", callback=close_after_bridge_drains)
             if not acknowledged.wait(10) or not self._update_closing:
@@ -343,6 +342,10 @@ class MacApi(Api):
         except Exception as error:
             if process is not None:
                 updater.stop_helper(process)
+            try:
+                data=updater.read_job(job)
+                updater.restore_runtime(Path(data['target']),data,job.parent)
+            except Exception:pass
             with self._update_gate:
                 if self._update_handoff_id is not handoff_id:
                     return
@@ -587,6 +590,24 @@ def signal_bridge_ready(window) -> None:
     window.run_js("window.__AI_FIRST_BRIDGE_READY__=true;window.dispatchEvent(new CustomEvent('ai-first-ready'));")
 
 
+def normal_window_startup(window, api, health, development):
+    # UI readiness is independent of quota/notification recovery and network I/O.
+    deadline=time.monotonic()+45
+    while time.monotonic()<deadline and not window.events.closed.is_set():
+        try:
+            if window.evaluate_js('Boolean(window.__AI_FIRST_WORKSPACE_READY__)'):
+                if health is not None:
+                    health['ready']=True;updater.write_startup(health)
+                break
+        except Exception:pass
+        time.sleep(.2)
+    else:return
+    if not development:api.auto_resume_control('finish-update')
+    if not getattr(api,'_handing_off',False):
+        try:reset_notices.Monitor().ensure()
+        except (reset_notices.NoticeError,OSError,ValueError):pass
+
+
 def load_bundled_content(window) -> None:
     # The UI is static bundled content. Cocoa can read it directly, with read access
     # limited to the UI directory, rather than using a loopback HTTP navigation.
@@ -642,8 +663,11 @@ def run() -> int:
     parser.add_argument('--reset-test', action='store_true')
     parser.add_argument('--copilot-refresh-test', action='store_true')
     parser.add_argument("--update-ui-audit", type=Path)
+    parser.add_argument('--update-startup',type=Path)
+    parser.add_argument('--update-nonce')
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
+    if bool(args.update_startup)!=bool(args.update_nonce):parser.error('Update startup requires a matching task and nonce')
     if sys.platform == 'darwin' and getattr(sys, 'frozen', False):
         from branding import apply_process_name
         apply_process_name(version_info().get('developmentPreview') is True)
@@ -672,6 +696,7 @@ def run() -> int:
         updater.audit_update(updater.running_bundle(), args.report)
         return 0 if json.loads(args.report.read_text()).get("passed") is True else 1
     fixture = None
+    health=updater.startup_context(args.update_startup,args.update_nonce,Path(sys.executable).parents[2],version_info()['release']) if args.update_startup else None
     if args.update_ui_audit:
         import update_audit
 
@@ -699,10 +724,6 @@ def run() -> int:
             api = MacApi(args.smoke_test)
             from release_highlights import Highlights
             api._release_highlights = Highlights(ROOT/'ui/whats-new.json', state, version_info()['release'])
-            if getattr(sys,'frozen',False) and not args.smoke_test and not fixture:
-                if not development: api.auto_resume_control('finish-update')
-                try: reset_notices.Monitor().ensure()
-                except (reset_notices.NoticeError, OSError, ValueError): pass
             if fixture:
                 update_audit.configure(api, fixture)
             window = webview.create_window("AI一手工具箱", js_api=api,
@@ -714,7 +735,19 @@ def run() -> int:
 
                 window.events.before_show += observe_navigation
             window.events.loaded += signal_bridge_ready
-            window.events.closing += lambda: window.evaluate_js("window.aiFirstBusyNotice && window.aiFirstBusyNotice()") if not api.can_close() else None
+            if getattr(sys,'frozen',False) and not args.smoke_test and not fixture:
+                started=threading.Event()
+                def loaded(window):
+                    if not started.is_set():
+                        started.set()
+                        threading.Thread(target=normal_window_startup,args=(window,api,health,development),daemon=True).start()
+                window.events.loaded += loaded
+            def closing():
+                if not api.can_close():
+                    window.run_js("window.aiFirstBusyNotice && window.aiFirstBusyNotice()")
+                    return False
+                if health is not None:updater.write_startup(health,closed=not api._handing_off)
+            window.events.closing += closing
             worker = (lambda: smoke_check(window, api, args.report)) if args.smoke_test else None
             if fixture:
                 worker = lambda: update_audit.click_update(window, api, fixture["root"])

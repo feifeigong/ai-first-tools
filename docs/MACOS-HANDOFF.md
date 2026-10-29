@@ -1,5 +1,9 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+## preview.27 更新恢复候选
+
+用户preview.25已在应用程序仍更新失败退出，见[更新恢复QA](MACOS-UPDATE-RECOVERY-QA.md)。必须通过两芯片真实已发布25助手/后台复现和新助手正常窗口回执五个新增门槛，以及既有全部检查后才发布。旧25助手自身无法通过仓库改动修复，失败用户须一次完整DMG替换到通过验证的新版本；资料保留，不能提供关闭Gatekeeper或解锁脚本。Windows本次不重打包。
+
 ## 当前发布：preview.26 状态与完整历史
 
 源码固定 `f7e2d6b7e92a54646440a707af643b3e785db061`。Windows完整构建[40801660932](https://github.com/feifeigong/ai-first-tools/actions/runs/40801660932)和Mac完整构建[40801619261](https://github.com/feifeigong/ai-first-tools/actions/runs/40801619261)均成功；Apple/Intel分别149/149项原生检查通过，新增C语言环境下的真实冻结启停/提醒与离线历史检查均通过。两端资产、版本、不可变标签和摘要已独立核对后公开。

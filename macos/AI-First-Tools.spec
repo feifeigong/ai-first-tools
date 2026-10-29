@@ -30,6 +30,7 @@ analysis = Analysis(
     pathex=[str(root / "macos"), str(root / "dialog-mover"), str(root / "dialog-mover" / "vendor"), str(root / 'auto-resume/src')],
     binaries=[(str(engine), "bin"), *native_binaries],
     datas=[(str(resources / "ui"), "ui"), (str(resources / "version.json"), "."),
+           (str(root / "macos/legacy-update.lock.json"), "."),
            (str(root / "licenses"), "licenses"), (str(root / "LICENSE"), "."), (str(root / "NOTICE"), "."), *native_data],
     hiddenimports=["webview.platforms.cocoa", "brotli", "zstd", "zstandard", "ccl_simplesnappy", "Security", "_scproxy", "truststore._macos"] + collect_submodules("ccl_chromium_reader"),
     excludes=["clr", "pythonnet", "webview.platforms.winforms", "webview.platforms.edgechromium"],

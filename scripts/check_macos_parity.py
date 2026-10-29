@@ -26,7 +26,7 @@ def fingerprint():
     paths.append(ROOT/'workspace/assets/reset-history.json')
     paths.extend(ROOT/'dialog-mover'/name for name in ('requirements.txt','requirements-dev.txt','对话搬家.spec'))
     paths.extend(ROOT/'scripts'/name for name in ('check_macos_parity.py','package_macos.py','prepare_macos.py',
-        'stage_macos_release.py','verify_macos_release.py','package_macos_development.py'))
+        'stage_macos_release.py','verify_macos_release.py','package_macos_development.py','prepare_macos_legacy_update.py'))
     paths.extend(ROOT/'.github/workflows'/name for name in ('check.yml','macos.yml'))
     for path in sorted(paths):
         if path.is_file() and path.suffix in {'.py','.js','.css','.html','.cs','.csproj','.spec','.txt','.yml','.json'} and not any(part in {'bin','obj','__pycache__'} for part in path.relative_to(ROOT).parts):

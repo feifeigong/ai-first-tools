@@ -66,7 +66,7 @@ class MacParityReleaseTests(unittest.TestCase):
             path.write_bytes(original)
 
     def test_new_automation_requires_both_architectures_and_native_controls(self):
-        previous=self.release;self.release='0.4.0-macos-preview.26'
+        previous=self.release;self.release='0.4.0-macos-preview.27'
         required=('weeklyCreditRequiresExhaustion','independentAutomationPolicy','ephemeralTimerWriteAhead','ephemeralRequestSafety','nativeEphemeralSupport')
         for arch in ('arm64','x86_64'):
             directory=self.root/('macos-'+arch);name=f'AI-First-Tools-{self.release}-macos-{arch}.dmg'
@@ -79,10 +79,11 @@ class MacParityReleaseTests(unittest.TestCase):
                 if path.name=='smoke-test.json': value['checks'].update(dict.fromkeys(('independentAutomationBridge','nativeReleaseHighlightsDialog','releaseHighlightsAcknowledgement'),True))
                 if path.name=='resume-test.json': value['checks']['finderLocaleWatcherIdentity']=True
                 if path.name=='reset-test.json': value['checks'].update(dict.fromkeys(('finderLocaleNotifierIdentity','bundledHistoryImmediatelyAvailable'),True))
+                if path.name=='update-test.json':value['checks'].update(dict.fromkeys(('preflightBeforeParentExit','incomingUpdaterHelper','published25FailureReproduced','published25BackgroundRecovered','normalUpdatedWindowStaysReady'),True))
                 path.write_text(json.dumps(value))
         self.assertEqual(len(validated_assets(self.root,self.release)),23)
         for arch in ('arm64','x86_64'):
-            for kind, names in (('self',required),('smoke',('independentAutomationBridge',)),('resume',('finderLocaleWatcherIdentity',)),('reset',('finderLocaleNotifierIdentity','bundledHistoryImmediatelyAvailable'))):
+            for kind, names in (('self',required),('smoke',('independentAutomationBridge',)),('resume',('finderLocaleWatcherIdentity',)),('reset',('finderLocaleNotifierIdentity','bundledHistoryImmediatelyAvailable')),('update',('preflightBeforeParentExit','incomingUpdaterHelper','published25FailureReproduced','published25BackgroundRecovered','normalUpdatedWindowStaysReady'))):
                 path=self.root/('macos-'+arch)/(kind+'-test.json');original=path.read_bytes()
                 for key in names:
                     value=json.loads(original);value['checks'].pop(key);path.write_text(json.dumps(value))

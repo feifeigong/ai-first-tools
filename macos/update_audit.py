@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
 import plistlib
 import re
@@ -125,6 +126,7 @@ def finish_ui_report(window, api, report: Path) -> bool:
     checks = {"nativeUpdateClick": api._update_audit_clicked is True,
               "preparationStages": api._update_trace == STEPS,
               "bridgeDrained": ready.get("ready") is True and ready.get("pendingUpdates") == 0,
+              "preflightBeforeParentExit": api._helper_prepared is True,
               "windowClosed": window.events.closed.is_set()}
     updater.write_json(report, {"passed": all(checks.values()), "checks": checks,
                                 "job": str(api._prepared) if api._prepared else None,
@@ -135,11 +137,15 @@ def finish_ui_report(window, api, report: Path) -> bool:
 
 def audit_update(app: Path, report: Path) -> None:
     checks = dict.fromkeys(("preparationStages", "nativeUpdateClick", "bridgeDrained", "nativeParentExit", "replacement",
-                            "nativeRelaunch", "backupPreserved", "version", "repeatNativeRelaunch"), False)
+                            "nativeRelaunch", "backupPreserved", "version", "repeatNativeRelaunch",
+                            'preflightBeforeParentExit','incomingUpdaterHelper','published25FailureReproduced','published25BackgroundRecovered','normalUpdatedWindowStaysReady'), False)
     diagnostics = {}
     version = json.loads((app / "Contents/Resources/version.json").read_text())["release"]
     with tempfile.TemporaryDirectory(prefix="ai-first-update-audit-") as temporary:
         root = Path(temporary).resolve()
+        original_env=os.environ.copy()
+        home=root/'synthetic-home';home.mkdir()
+        os.environ['HOME']=str(home)
         process = None
         def fixture_command(step, arguments):
             diagnostics["fixtureStep"] = step
@@ -181,7 +187,7 @@ def audit_update(app: Path, report: Path) -> None:
             ui = json.loads(ui_report.read_text()) if ui_report.is_file() else {}
             diagnostics["uiChecks"] = ui.get("checks")
             diagnostics["handoffFailure"] = ui.get("handoffFailure")
-            for key in ("preparationStages", "nativeUpdateClick", "bridgeDrained"):
+            for key in ("preparationStages", "nativeUpdateClick", "bridgeDrained",'preflightBeforeParentExit'):
                 checks[key] = ui.get("checks", {}).get(key) is True
             checks["nativeParentExit"] = process.returncode == 0 and ui.get("checks", {}).get("windowClosed") is True
             if not all(checks[key] for key in ("nativeParentExit", "bridgeDrained", "preparationStages", "nativeUpdateClick")):
@@ -190,6 +196,7 @@ def audit_update(app: Path, report: Path) -> None:
             if job.resolve().parent.parent != root or not job.parent.name.startswith(".ai-first-update-"):
                 raise updater.UpdateError("隔离交接任务位置无效。")
             data = updater.read_job(job)
+            checks['incomingUpdaterHelper']=json.loads((job.parent/'helper.app/Contents/Resources/version.json').read_text())['release']==version
             diagnostics["phase"] = "helper"
             completion = job.parent / "completion.json"
             deadline = time.monotonic() + 150
@@ -221,6 +228,13 @@ def audit_update(app: Path, report: Path) -> None:
                 repeat = json.loads(repeated_report.read_text()) if repeated_report.is_file() else {}
                 checks["repeatNativeRelaunch"] = process.returncode == 0 and repeat.get("passed") is True
                 diagnostics["repeatRelaunch"] = repeat
+            if all(checks[key] for key in ('replacement','nativeRelaunch','repeatNativeRelaunch')):
+                from legacy_update_audit import run as legacy_run
+                with tempfile.TemporaryDirectory(prefix='ai-first-update-audit-') as legacy_root:
+                    legacy=legacy_run(Path(legacy_root).resolve(),app)
+                diagnostics['publishedLegacy']=legacy
+                for key in ('published25FailureReproduced','published25BackgroundRecovered','normalUpdatedWindowStaysReady'):
+                    checks[key]=legacy.get('checks',{}).get(key) is True
             if all(checks.values()):
                 diagnostics["phase"] = "complete"
         except Exception as error:
@@ -233,4 +247,5 @@ def audit_update(app: Path, report: Path) -> None:
                 process.wait(timeout=15)
             report.write_text(json.dumps({"passed": all(checks.values()), "checks": checks, "version": {"release": version},
                                           "architecture": platform.machine(), "diagnostics": diagnostics,
-                                          "scope": "frozen Cocoa button click, real bridge handoff, native parent exit, helper, atomic replacement and two Cocoa relaunches; synthetic download fixture only"}, indent=2))
+                                          "scope": "frozen Cocoa button/bridge, incoming helper preflight, atomic replacement; actual checksum-pinned published preview.25 helper/watcher in C locale and normal new-window health; isolated signed-out workload, no model request"}, indent=2))
+            os.environ.clear();os.environ.update(original_env)
