@@ -1,10 +1,12 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
-## preview.26 修复候选：状态核对与完整历史
+## 当前发布：preview.26 状态与完整历史
 
-本轮覆盖 Finder/launchd 的中文路径和 C 语言环境，历史摘要不能逐字当原文核对，离线首开提供32条公开历史。关闭续跑会同时关闭用卡、子开关置灰，计时独立，自启说明当前作用。修复、原生门槛及验收边界见[专项 QA](MACOS-CONTROL-RESET-QA.md)。发布前必须完成两芯片 finderLocaleWatcherIdentity、finderLocaleNotifierIdentity、bundledHistoryImmediatelyAvailable 及既有全部报告；目前仍是候选，不能用preview.25的144项结果冒充本轮原生通过。
+源码固定 `f7e2d6b7e92a54646440a707af643b3e785db061`。Windows完整构建[40801660932](https://github.com/feifeigong/ai-first-tools/actions/runs/40801660932)和Mac完整构建[40801619261](https://github.com/feifeigong/ai-first-tools/actions/runs/40801619261)均成功；Apple/Intel分别149/149项原生检查通过，新增C语言环境下的真实冻结启停/提醒与离线历史检查均通过。两端资产、版本、不可变标签和摘要已独立核对后公开。
 
-## 当前发布：preview.25 独立用卡与 5 小时计时
+Finder/launchd中文路径、首次离线日历、历史摘要发现和开关联动已接入。关闭续跑同时关用卡、子开关置灰，重新开启续跑不用卡；独立计时继续运行，自启说明具体作用。详见[专项QA](MACOS-CONTROL-RESET-QA.md)。Mac实际用户环境仍需升级本版；真实账号计时、已登录Copilot及真实模型续聊未代测。
+
+## preview.25 历史发布 独立用卡与 5 小时计时
 
 preview.25已公开，固定02b4146b5a1c9f3a30ceaa75685228e97eea9639，完整构建40673441448两芯片各144项通过，23份远端资产与摘要一致。共用Python新增automation/window_timer/window_request；Cocoa开关桥支持独立用卡、计时、登录运行，以及续跑关闭时先设置用卡权限。计时默认关闭，self报告含independentAutomationPolicy、ephemeralTimerWriteAhead、ephemeralRequestSafety、nativeEphemeralSupport，smoke报告含independentAutomationBridge，缺少任何字段禁止暂存。nativeEphemeralSupport实际运行包内Codex的exec --help核对临时/忽略配置/只读/JSON能力，不请求模型。原Copilot已登录侧栏和真实模型续聊边界保留；真实账号计时也未代测。规则见[FIVE-HOUR-TIMER.md](FIVE-HOUR-TIMER.md)。
 
