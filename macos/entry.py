@@ -81,7 +81,9 @@ class MacApi(Api):
             else:
                 value = client.request('refresh', manual=True) if operation == 'refresh' else client.request()
             if value['enabled'] and getattr(sys, 'frozen', False):
-                value['monitorReady'] = reset_notices.Monitor(client=client).live_owner() is not None
+                monitor = reset_notices.Monitor(client=client)
+                if monitor.live_owner() is None: monitor.ensure()
+                value['monitorReady'] = monitor.live_owner() is not None
                 if not value['monitorReady']:
                     value.update(fresh=False, statusText='提醒正在准备，稍后会自动更新状态',
                                  detailText='已有历史仍可查看；若一直没有恢复，可以关闭提醒后再重新开启。')
@@ -103,6 +105,7 @@ class MacApi(Api):
             elif operation in ('autostart-on','autostart-off'): value['autostart']=operation=='autostart-on'
             elif operation in ('resume-on','resume-off'):
                 value['resumeEnabled']=operation=='resume-on'
+                value['autoRedeem']=False
                 value['running']=value['resumeEnabled'] or value['autoStartWindow']
                 if not value['running']: value['autostart']=False
             elif operation in ('credit-on','credit-off'): value['autoRedeem']=operation=='credit-on'
@@ -117,7 +120,8 @@ class MacApi(Api):
         try:
             return auto_resume.Controller().action(operation)
         except Exception as error:
-            return {'error':str(error) if isinstance(error,auto_resume.ControlError) else '操作没有完成，请刷新确认运行状态。'}
+            return {'error':str(error) if isinstance(error,auto_resume.ControlError) else '操作没有完成，请刷新确认运行状态。',
+                    'errorCode':error.code if isinstance(error,auto_resume.ControlError) else 'control_unavailable'}
         finally:
             self._resume_busy=False
 
@@ -480,14 +484,13 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                       const poll=async(fn)=>{for(let i=0;i<200;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('resume_ui_timeout');};
                       const run=document.getElementById('resume-running'),boot=document.getElementById('resume-startup'),credit=document.getElementById('resume-credit'),timer=document.getElementById('resume-timer');
                       document.getElementById('workspace-resume').click();await poll(()=>!run.disabled);
-                      credit.click();await poll(()=>!credit.disabled&&credit.getAttribute('aria-checked')==='true'&&run.getAttribute('aria-checked')==='false');
-                      credit.click();await poll(()=>!credit.disabled&&credit.getAttribute('aria-checked')==='false'&&run.getAttribute('aria-checked')==='false');
+                      if(!credit.disabled||credit.getAttribute('aria-checked')!=='false')throw Error('inactive_credit');
                       run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='true');
                       credit.click();await poll(()=>!credit.disabled&&credit.getAttribute('aria-checked')==='true');
                       credit.click();await poll(()=>!credit.disabled&&credit.getAttribute('aria-checked')==='false'&&run.getAttribute('aria-checked')==='true');
                       timer.click();await poll(()=>!timer.disabled&&timer.getAttribute('aria-checked')==='true');
                       boot.click();await poll(()=>!boot.disabled&&boot.getAttribute('aria-checked')==='true');
-                      run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='false'&&boot.getAttribute('aria-checked')==='true'&&!credit.disabled);
+                      run.click();await poll(()=>!run.disabled&&run.getAttribute('aria-checked')==='false'&&boot.getAttribute('aria-checked')==='true'&&credit.disabled&&credit.getAttribute('aria-checked')==='false');
                       timer.click();await poll(()=>!timer.disabled&&timer.getAttribute('aria-checked')==='false'&&boot.getAttribute('aria-checked')==='false');
                       document.getElementById('workspace-mover').click();window.__RESUME_SMOKE__=true;
                     })().catch(()=>window.__RESUME_SMOKE__=false);''')

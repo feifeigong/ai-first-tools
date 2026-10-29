@@ -4,6 +4,7 @@
   const days = byId('reset-days'), details = byId('reset-details'), recent = byId('reset-recent');
   const toggle = byId('reset-enabled'), refresh = byId('reset-refresh'), error = byId('reset-error');
   let snapshot = null, busy = false, selected = '', month = '', selectedByUser = false;
+  let openedAt = 0, lastReadAt = 0;
   const date = key => new Date(key + 'T00:00:00Z');
   const key = value => value.toISOString().slice(0, 10);
   const todayFallback = () => key(new Date(Date.now() + 8 * 3600000));
@@ -106,7 +107,7 @@
       error.textContent='暂时没取到最新消息，请稍后刷新；已有记录仍保留。';error.hidden=false;
       if(snapshot)snapshot={...snapshot,fresh:false,statusText:'暂时没取到最新消息，正在自动重试',detailText:'下方是上次保存的消息，发布时间已标出。'};
       render();
-    } finally { busy=false;refresh.disabled=false;toggle.disabled=!snapshot; }
+    } finally { busy=false;lastReadAt=Date.now();refresh.disabled=false;toggle.disabled=!snapshot; }
   }
   function moveMonth(offset) {
     const value=date(month+'-01');value.setUTCMonth(value.getUTCMonth()+offset);
@@ -118,6 +119,10 @@
   byId('reset-today').addEventListener('click',()=>choose(snapshot?.today||todayFallback()));
   toggle.addEventListener('click',()=>load(snapshot?.enabled?'disable':'enable'));
   refresh.addEventListener('click',()=>load('refresh'));
-  byId('workspace-resume').addEventListener('click',()=>{render();load();});
-  setInterval(()=>{if(!byId('auto-resume-page').hidden&&window.pywebview?.api)load();},30000);
+  byId('workspace-resume').addEventListener('click',()=>{openedAt=Date.now();render();load();});
+  // Paint the calendar immediately; after opening, pick up background updates
+  // promptly without forcing another network fetch or blocking the other switches.
+  render();
+  setInterval(()=>{if(!byId('auto-resume-page').hidden&&window.pywebview?.api
+    &&Date.now()-lastReadAt>=(Date.now()-openedAt<90000?2000:30000))load();},2000);
 })();

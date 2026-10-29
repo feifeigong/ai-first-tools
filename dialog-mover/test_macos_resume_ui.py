@@ -20,7 +20,7 @@ window.resumeCalls=[];window.failResume=false;
 window.pywebview.api.auto_resume_control=async(op)=>{
  window.resumeCalls.push(op);if(window.failResume)return {error:'合成连接失败'};
  if(op==='resume-on'){window.resumeState.running=true;window.resumeState.resumeEnabled=true;}
- if(op==='resume-off'){window.resumeState.running=window.resumeState.autoStartWindow;window.resumeState.resumeEnabled=false;if(!window.resumeState.running)window.resumeState.autostart=false;}
+ if(op==='resume-off'){window.resumeState.autoRedeem=false;window.resumeState.running=window.resumeState.autoStartWindow;window.resumeState.resumeEnabled=false;if(!window.resumeState.running)window.resumeState.autostart=false;}
  if(op==='credit-on')window.resumeState.autoRedeem=true;
  if(op==='credit-off')window.resumeState.autoRedeem=false;
  if(op==='timer-on'){window.resumeState.autoStartWindow=true;window.resumeState.running=true;}
@@ -35,12 +35,8 @@ window.pywebview.api.auto_resume_control=async(op)=>{
                 run.wait_for()
                 page.wait_for_function("!document.getElementById('resume-running').disabled")
                 credit=page.get_by_role('switch',name='周额度用完时自动使用重置卡')
-                self.assertTrue(credit.is_enabled())
-                credit.click()
-                page.wait_for_function("document.getElementById('resume-credit').getAttribute('aria-checked')==='true'")
+                self.assertTrue(credit.is_disabled())
                 self.assertEqual(run.get_attribute('aria-checked'),'false')
-                credit.click()
-                page.wait_for_function("document.getElementById('resume-credit').getAttribute('aria-checked')==='false'")
                 run.click()
                 page.locator('#resume-title').filter(has_text='已开启').wait_for()
                 page.get_by_role('switch',name='周额度用完时自动使用重置卡').click()
@@ -63,11 +59,12 @@ window.pywebview.api.auto_resume_control=async(op)=>{
                 page.get_by_role('switch',name='自动开启5小时计时').click()
                 page.wait_for_function("document.getElementById('resume-timer').getAttribute('aria-checked')==='true'")
                 self.assertEqual(run.get_attribute('aria-checked'),'false')
-                self.assertTrue(page.get_by_role('switch',name='周额度用完时自动使用重置卡').is_enabled())
+                self.assertTrue(page.get_by_role('switch',name='周额度用完时自动使用重置卡').is_disabled())
+                self.assertIn('仅运行 5 小时计时',page.locator('#startup-description').inner_text())
                 page.locator('#workspace-mover').click()
                 self.assertTrue(page.locator('.workspace-body > .app').is_visible())
                 self.assertFalse(page.locator('#auto-resume-page').is_visible())
-                self.assertEqual(page.evaluate('window.resumeCalls'),['status','credit-on','credit-off','resume-on','credit-on','credit-off','autostart-on','resume-off','status','status','timer-on'])
+                self.assertEqual(page.evaluate('window.resumeCalls'),['status','resume-on','credit-on','credit-off','autostart-on','resume-off','status','status','timer-on'])
             finally:browser.close()
 
 if __name__=='__main__':unittest.main()

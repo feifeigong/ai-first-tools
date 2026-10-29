@@ -25,8 +25,8 @@ internal static class AutoResumeTests
             {
                 "stop" => Value with { Running = false, Autostart = false, WatcherCount = 0 },
                 "start" => Value with { Running = true, WatcherCount = 1 },
-                "resume-on" => Value with { Running = true, ResumeEnabled = true, WatcherCount = 1 },
-                "resume-off" => Value with { Running = Value.AutoStartWindow, ResumeEnabled = false, Autostart = Value.AutoStartWindow && Value.Autostart, WatcherCount = Value.AutoStartWindow ? 1 : 0 },
+                "resume-on" => Value with { Running = true, ResumeEnabled = true, AutoRedeem = false, WatcherCount = 1 },
+                "resume-off" => Value with { Running = Value.AutoStartWindow, ResumeEnabled = false, AutoRedeem = false, Autostart = Value.AutoStartWindow && Value.Autostart, WatcherCount = Value.AutoStartWindow ? 1 : 0 },
                 "credit-on" => Value with { AutoRedeem = true },
                 "credit-off" => Value with { AutoRedeem = false },
                 "timer-on" => Value with { AutoStartWindow = true, Running = true, WatcherCount = 1 },
@@ -51,7 +51,7 @@ internal static class AutoResumeTests
             credit.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             require(fake.Calls[^1] == "credit-off" && fake.Value.ResumeActive && !fake.Value.AutoRedeem && fake.Value.Autostart);
         });
-        check("Stopping resume leaves opted-in timer running and credit permission editable", () =>
+        check("Stopping resume keeps independent timer but clears and disables credit permission", () =>
         {
             var fake = new FakeControl { Value = new(true, true, true, 1, AutoStartWindow: true) };
             using var page = new AutoResumePage(fake);
@@ -60,18 +60,16 @@ internal static class AutoResumeTests
             power.IsChecked = false;
             power.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             require(!fake.Value.ResumeActive && fake.Value.Running && fake.Value.AutoStartWindow && fake.Value.Autostart);
-            require(((ToggleButton)page.FindName("CreditSwitch")).IsEnabled && ((ToggleButton)page.FindName("TimerSwitch")).IsChecked == true);
+            require(!((ToggleButton)page.FindName("CreditSwitch")).IsEnabled && ((ToggleButton)page.FindName("TimerSwitch")).IsChecked == true);
+            require(((TextBlock)page.FindName("AutostartDescription")).Text.Contains("仅运行 5 小时计时"));
         });
-        check("Credit can be disabled before enabling resume without starting work", () =>
+        check("Inactive legacy credit preference is hidden and never enabled by resuming", () =>
         {
             var fake = new FakeControl { Value = new(true, false, false, 0, AutoRedeem: true) };
             using var page = new AutoResumePage(fake);
             page.RefreshAsync().GetAwaiter().GetResult();
             var credit = (ToggleButton)page.FindName("CreditSwitch");
-            require(credit.IsEnabled);
-            credit.IsChecked = false;
-            credit.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-            require(!fake.Value.Running && !fake.Value.AutoRedeem && fake.Calls[^1] == "credit-off");
+            require(!credit.IsEnabled && credit.IsChecked == false);
             var power = (ToggleButton)page.FindName("RunningSwitch");
             power.IsChecked = true;
             power.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));

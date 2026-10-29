@@ -181,10 +181,14 @@ class PolicyTests(unittest.TestCase):
         value=json.loads(p.read_text());self.assertTrue(value['enabled']);self.assertTrue(value['auto_redeem_weekly_reset'])
         self.assertEqual(value['custom'],{'keep':1})
 
-    def test_turn_off_resume_keeps_timer_and_credit_preference(self):
+    def test_turn_off_resume_keeps_timer_but_clears_credit_and_never_reenables_it(self):
         control('timer-on',self.root);control('credit-on',self.root)
         value=control('resume-off',self.root)
-        self.assertFalse(value['resumeEnabled']);self.assertTrue(value['autoStartWindow']);self.assertTrue(value['autoRedeem'])
+        self.assertFalse(value['resumeEnabled']);self.assertTrue(value['autoStartWindow']);self.assertFalse(value['autoRedeem'])
+        before=(self.root/'config.json').read_bytes()
+        with self.assertRaises(ValueError): control('credit-on',self.root)
+        self.assertEqual((self.root/'config.json').read_bytes(),before)
+        self.assertFalse(control('resume-on',self.root)['autoRedeem'])
 
     def test_invalid_boolean_is_not_treated_as_enabled_or_overwritten(self):
         p=self.root/'config.json';p.write_text('{"auto_start_five_hour":"false"}')

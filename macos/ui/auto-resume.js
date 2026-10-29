@@ -29,7 +29,9 @@
   }
   function display(result) {
     state=result;setSwitch(running,active(result));setSwitch(startup,result.autostart);
-    setSwitch(credit,!!result.autoRedeem);setSwitch(timer,!!result.autoStartWindow);
+    setSwitch(credit,active(result)&&!!result.autoRedeem);setSwitch(timer,!!result.autoStartWindow);
+    document.getElementById('credit-description').textContent=active(result)?'关闭后只等额度恢复；重新开启续跑不会自动打开用卡。':'开启续跑后可设置；当前不会自动使用重置卡。';
+    document.getElementById('startup-description').textContent=!active(result)&&result.autoStartWindow?'登录后仅运行 5 小时计时，不会续跑或使用重置卡。':active(result)?`登录后运行自动续跑${result.autoStartWindow?'和 5 小时计时':''}。`:'续跑和计时都已关闭，无需登录后自动运行。';
     document.getElementById('resume-title').textContent=active(result)?'已开启':'已关闭';
     document.getElementById('resume-title').dataset.state=active(result)?'on':'off';
     document.getElementById('resume-description').textContent=active(result)?'是否用卡，由下面的开关决定。':'续跑已关闭，不会继续任务或自动使用重置卡。';
@@ -56,7 +58,7 @@
       }
     } finally {
       busy=false;refresh.disabled=false;running.disabled=timer.disabled=startup.disabled=!state?.installed;
-      credit.disabled=!state?.installed;
+      credit.disabled=!state?.installed||!active(state);
     }
   }
   nav.addEventListener('click',()=>{

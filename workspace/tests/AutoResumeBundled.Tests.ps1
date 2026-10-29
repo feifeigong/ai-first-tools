@@ -34,8 +34,8 @@ function Get-BundledAutomation {
     param($Operation='status')
     if(!$script:policy){$script:policy=@{resumeEnabled=$true;autoRedeem=$false;autoStartWindow=$false;timerStatus='waiting';nextResetAt=0}}
     switch($Operation){
-        'resume-on'{$script:policy.resumeEnabled=$true}
-        'resume-off'{$script:policy.resumeEnabled=$false}
+        'resume-on'{$script:policy.resumeEnabled=$true;$script:policy.autoRedeem=$false}
+        'resume-off'{$script:policy.resumeEnabled=$false;$script:policy.autoRedeem=$false}
         'credit-on'{$script:policy.autoRedeem=$true}
         'credit-off'{$script:policy.autoRedeem=$false}
         'timer-on'{$script:policy.autoStartWindow=$true}

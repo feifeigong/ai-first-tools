@@ -9,6 +9,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../workspace/assets/reset-history.json" LogicalName="AIFirst.ResetHistory.json" />
     <Compile Include="Program.cs" />
     <Compile Include="../../workspace/ResetNewsService.cs" Link="Shared/ResetNewsService.cs" />
     <Compile Include="../../workspace/ResetNewsDiscovery.cs" Link="Shared/ResetNewsDiscovery.cs" />

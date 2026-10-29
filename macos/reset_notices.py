@@ -80,15 +80,16 @@ class Lease:
 
 
 def process_identity(pid: int):
-    from codex_auto_resume.watch_control import _darwin_process_start, WatchStateError
+    from codex_auto_resume.watch_control import _darwin_process_start, darwin_command, WatchStateError
     try:
-        result = subprocess.run(['/bin/ps', '-ww', '-p', str(pid), '-o', 'command='],
-                                capture_output=True, text=True, timeout=5, check=False)
-        started = _darwin_process_start(pid) if result.returncode == 0 else None
+        command = darwin_command(pid)
+        started = _darwin_process_start(pid)
+    except subprocess.CalledProcessError:
+        return None
     except (OSError, subprocess.SubprocessError, WatchStateError) as error:
         raise NoticeError('暂时无法确认提醒状态。') from error
-    if started is None or not result.stdout.strip(): return None
-    return {'started': started, 'command': result.stdout.strip()}
+    if started is None or not command: return None
+    return {'started': started, 'command': command}
 
 
 def default_directory():
@@ -181,6 +182,7 @@ class Monitor:
             raise NoticeError('提醒状态暂时无法核对，已保留现有设置。')
         actual = process_identity(owner['pid'])
         if actual is None: return None
+        if actual['started'] != owner.get('started'): return None  # A reused PID is no longer our notifier.
         arguments = owner.get('arguments', [WATCH])
         if arguments != [WATCH]:
             if not isinstance(arguments, list) or len(arguments) != 2 or arguments[0] != '--reset-monitor-audit' or not isinstance(arguments[1], str):

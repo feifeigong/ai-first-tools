@@ -198,7 +198,7 @@ public partial class AutoResumePage : UserControl, IDisposable
             {
                 RefreshButton.IsEnabled = true;
                 RunningSwitch.IsEnabled = TimerSwitch.IsEnabled = AutostartSwitch.IsEnabled = status?.Installed == true;
-                CreditSwitch.IsEnabled = status?.Installed == true;
+                CreditSwitch.IsEnabled = status?.Installed == true && status.ResumeActive;
             }
         }
     }
@@ -216,14 +216,18 @@ public partial class AutoResumePage : UserControl, IDisposable
     private void PaintStatus(AutoResumeStatus value)
     {
         RunningSwitch.IsChecked = value.ResumeActive;
-        CreditSwitch.IsChecked = value.AutoRedeem;
+        CreditSwitch.IsChecked = value.ResumeActive && value.AutoRedeem;
         TimerSwitch.IsChecked = value.AutoStartWindow;
         AutostartSwitch.IsChecked = value.Autostart;
         StateTitle.Text = !value.Installed ? "自动续跑暂时不可用" : value.ResumeActive ? "已开启" : "已关闭";
-        StateDescription.Text = !value.Installed ? "暂时无法开启，请稍后刷新再试。" : "5 小时或周额度用完后等待恢复，到账后接着原来的任务继续。是否用卡，由下面的开关决定。";
+        StateDescription.Text = !value.Installed ? "暂时无法开启，请稍后刷新再试。" : value.ResumeActive ? "5 小时或周额度用完后等待恢复，到账后接着原来的任务继续。是否用卡，由下面的开关决定。" : "续跑已关闭，不会继续任务或自动使用重置卡。";
         StateBadge.Background = new SolidColorBrush(value.ResumeActive ? Color.FromRgb(234, 245, 239) : Color.FromRgb(238, 242, 247));
         StateTitle.Foreground = new SolidColorBrush(value.ResumeActive ? Color.FromRgb(22, 106, 75) : Color.FromRgb(91, 107, 126));
         TimerDescription.Text = TimerText(value);
+        CreditDescription.Text = value.ResumeActive ? "关闭后只等额度恢复；重新开启续跑不会自动打开用卡。" : "开启续跑后可设置；当前不会自动使用重置卡。";
+        AutostartDescription.Text = !value.ResumeActive && value.AutoStartWindow ? "登录后仅运行 5 小时计时，不会续跑或使用重置卡。"
+            : value.ResumeActive ? "登录后运行自动续跑" + (value.AutoStartWindow ? "和 5 小时计时。" : "。")
+            : "续跑和计时都已关闭，无需登录后自动运行。";
     }
 
     internal static string TimerText(AutoResumeStatus value)

@@ -23,6 +23,7 @@ def fingerprint():
     paths.extend((ROOT/'auto-resume/tests').glob('test_*.py'))
     paths.extend(ROOT/'workspace'/name for name in ('ResetNewsService.cs','ResetNewsDiscovery.cs','ResetNewsPresentation.cs','ResetCalendarModel.cs'))
     paths.append(ROOT/'workspace/assets/whats-new.json')
+    paths.append(ROOT/'workspace/assets/reset-history.json')
     paths.extend(ROOT/'dialog-mover'/name for name in ('requirements.txt','requirements-dev.txt','对话搬家.spec'))
     paths.extend(ROOT/'scripts'/name for name in ('check_macos_parity.py','package_macos.py','prepare_macos.py',
         'stage_macos_release.py','verify_macos_release.py','package_macos_development.py'))

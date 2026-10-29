@@ -12,7 +12,7 @@ namespace AIFirst.Workspace;
 
 internal sealed partial class ResetNewsService
 {
-    private const int DiscoveryRevision = 3;
+    private const int DiscoveryRevision = 4;
     private sealed record Scan(List<ResetNewsItem> Items, bool Partial, List<Candidate> Queue,
         Dictionary<string, DateTimeOffset> Checked, int Offset, string? From, DateTimeOffset? NextPage,
         Dictionary<string, DateTimeOffset> RetryAfter, DateTimeOffset? HeadCheckedAt, bool SourcePartial, bool VerificationFailed);
@@ -48,7 +48,7 @@ internal sealed partial class ResetNewsService
                 if (!PostAddress(String(row, "url"), id) || text.Length > 12000 || Math.Abs((IdTime(id) - at).TotalMinutes) > 5
                     || at > now.AddMinutes(2)) throw new System.IO.InvalidDataException();
                 if (now - at < TimeSpan.FromDays(30))
-                    result.Add(new(id, text, at, null, true, CompletionOnly(text)));
+                    result.Add(new(id, text, at, null, true, CompletionOnly(text), DiscoveryOnly: true));
             }
             catch (Exception exception) when (VerificationFailure(exception))
             {
@@ -78,10 +78,11 @@ internal sealed partial class ResetNewsService
         var sourcePartial = current && saved.HistorySourcePartial;
         var partial = 0;
         var recentFailed = 0;
-        var queue = saved.HistoryQueue.Where(item => now - item.At < TimeSpan.FromDays(30)).ToDictionary(item => item.Id);
+        var queue = saved.HistoryQueue.Where(item => current && now - item.At < TimeSpan.FromDays(30)).ToDictionary(item => item.Id);
         void Add(Candidate item)
         {
-            if (!queue.TryGetValue(item.Id, out var old) || item.Text.Length > old.Text.Length || item.Parent is not null)
+            if (!queue.TryGetValue(item.Id, out var old) || old.DiscoveryOnly && !item.DiscoveryOnly
+                || old.DiscoveryOnly == item.DiscoveryOnly && (item.Text.Length > old.Text.Length || item.Parent is not null))
                 queue[item.Id] = item with { Historical = true, Parent = item.Parent ?? old?.Parent, RelatedHint = item.RelatedHint || (old?.RelatedHint ?? false) };
         }
         if (includeHistory) foreach (var candidate in feed.History.Concat(feed.Candidates)) Add(candidate);
@@ -129,7 +130,10 @@ internal sealed partial class ResetNewsService
         {
             var uri = new Uri("https://publish.x.com/oembed?url=" + Uri.EscapeDataString(PostUrl(key)) + "&omit_script=true&hide_thread=true");
             var result = ParseEmbedCore(await ReadJsonAsync(uri, cancellation).ConfigureAwait(false), key, true);
-            if (candidates.TryGetValue(key, out var candidate) && candidate.Text.Length > 0)
+            // The history API's text is sometimes an editorial summary, not a
+            // transcript. Use it only to discover IDs. Classification and context
+            // still come exclusively from the independently verified X original.
+            if (candidates.TryGetValue(key, out var candidate) && !candidate.DiscoveryOnly && candidate.Text.Length > 0)
             {
                 var official = Normalize(result.Text);
                 var discovery = Normalize(candidate.Text);
@@ -197,7 +201,9 @@ internal sealed partial class ResetNewsService
             return kind is null ? null : new(kind, text, group);
         }
 
-        bool Needs(Candidate candidate) => candidate.RelatedHint || candidate.Text.Length == 0 || Classify(candidate.Text) is not null || CompletionOnly(candidate.Text) || TimingReply(candidate.Text)
+        bool Needs(Candidate candidate) => candidate.RelatedHint || candidate.Text.Length == 0
+            || candidate.DiscoveryOnly && Regex.IsMatch(candidate.Text, @"\b(?:resets?|quota|limits?)\b", RegexOptions.IgnoreCase)
+            || Classify(candidate.Text) is not null || CompletionOnly(candidate.Text) || TimingReply(candidate.Text)
             || (candidate.Parent is { } parent && TimingReply(candidate.Text) && (!candidates.TryGetValue(parent, out var context) || Classify(context.Text) is not null));
         var items = new ConcurrentBag<ResetNewsItem>();
         var completed = new ConcurrentBag<string>();

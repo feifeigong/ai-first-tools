@@ -46,6 +46,7 @@ internal static partial class ResetNewsTests
         internal int HistoryPageSize = 100;
         private readonly bool includeHistory;
         internal readonly Dictionary<string, string> EmbedOverrides = new();
+        internal readonly Dictionary<string, string> HistoryTextOverrides = new();
         internal string? FeedOverride;
         internal bool Stale;
         internal DateTimeOffset? FetchedAt;
@@ -76,7 +77,7 @@ internal static partial class ResetNewsTests
                 var page = HistoryPosts.Skip(offset).Take(HistoryPageSize).ToArray();
                 return Task.FromResult(Response(JsonSerializer.Serialize(new { api_version = "v1", handle = "thsottiaux", available = true, stale = true,
                     offset, next_offset = offset + page.Length < HistoryPosts.Count ? (int?)(offset + page.Length) : null,
-                    items = page.Select(value => new { id = value.Id, text = value.Text, published_at = value.At.ToString("O"), url = Url(value.Id) }) })));
+                    items = page.Select(value => new { id = value.Id, text = HistoryTextOverrides.GetValueOrDefault(value.Id) ?? value.Text, published_at = value.At.ToString("O"), url = Url(value.Id) }) })));
             }
             var decoded = Uri.UnescapeDataString(uri.Query);
             var post = Posts.Concat(HistoryPosts).FirstOrDefault(value => decoded.Contains("/status/" + value.Id, StringComparison.Ordinal) || decoded.Contains("id=" + value.Id, StringComparison.Ordinal)) ?? throw new HttpRequestException("Synthetic post missing");
@@ -133,6 +134,18 @@ internal static partial class ResetNewsTests
 
     internal static void Run(Action<string, Action> check, Action<bool> require)
     {
+        check("Bundled public history is instant offline, bounded, read-only and never fresh or alerting", () =>
+        {
+            using var fixture = new Fixture();
+            var now = DateTimeOffset.Parse("2026-10-29T00:00:00Z");
+            using var service = new ResetNewsService(fixture.DirectoryPath, fixture.Client, () => now, includeBootstrap: true);
+            require(service.Snapshot.Items.Count >= 10 && service.Snapshot.Items.All(item => item.Historical));
+            require(!service.Snapshot.Fresh && service.Snapshot.LastCheckedAt is null && service.Snapshot.LastSuccess is null);
+            require(fixture.Handler.Count == 0 && !Directory.Exists(fixture.DirectoryPath));
+            require(!service.TryTakeAlert(out _));
+            using var future = new ResetNewsService(fixture.DirectoryPath, fixture.Client, () => now.AddDays(31), includeBootstrap: true);
+            require(future.Snapshot.Items.Count == 0);
+        });
         RunDiscovery(check, require);
         check("Reset notices default enabled but constructor does not fetch or create files", () =>
         {

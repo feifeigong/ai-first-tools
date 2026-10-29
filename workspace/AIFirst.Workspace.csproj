@@ -17,7 +17,7 @@
     <Description>AI一手工具箱</Description>
     <RootNamespace>AIFirst.Workspace</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.22</Version>
+    <Version>0.3.23</Version>
     <ApplicationIcon>assets\ai-first-logo.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
@@ -29,6 +29,7 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);dist\**;artifacts\**;tests\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="assets/reset-history.json" LogicalName="AIFirst.ResetHistory.json" />
     <Content Include="assets\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="PublishToolboxLauncher" AfterTargets="Publish">

@@ -169,9 +169,13 @@ def _darwin_process_path(pid: int) -> Path | None:
 def _inspect_process(pid: int) -> dict | None:
     """Read only this PID's executable, start time and command line."""
     if sys.platform == "darwin":
+        # Finder/launchd do not inherit Terminal's UTF-8 locale. BSD ps uses
+        # strvis() and otherwise escapes the Chinese bundle/user path under C.
+        # Pin only this metadata subprocess's locale; never read its environment.
+        env = {**os.environ, 'LC_ALL': 'en_US.UTF-8', 'LANG': 'en_US.UTF-8'}
         try:
-            executable_text = subprocess.check_output(["/bin/ps", "-ww", "-p", str(pid), "-o", "comm="], text=True).strip()
-            command = subprocess.check_output(["/bin/ps", "-ww", "-p", str(pid), "-o", "command="], text=True).strip()
+            executable_text = subprocess.check_output(["/bin/ps", "-ww", "-p", str(pid), "-o", "comm="], encoding='utf-8', env=env, timeout=5).strip()
+            command = darwin_command(pid)
         except subprocess.CalledProcessError:
             return None
         started = _darwin_process_start(pid)
@@ -179,7 +183,9 @@ def _inspect_process(pid: int) -> dict | None:
         if not executable_text or started is None or image is None or not command: return None
         executable = Path(executable_text)
         if not executable.is_absolute() or not (command == executable_text or command.startswith(executable_text + " ")):
-            raise WatchStateError("identity_unverified")
+            # A stale PID can belong to an unrelated process with a short/mutable
+            # name. It must not block starts, nor be accepted as an owned watcher.
+            return {"pid": pid, "executable": str(image), "started_at": started, "argv": []}
         import shlex
         return {"pid": pid, "executable": str(image), "started_at": started,
                 "argv": [str(executable.resolve()), *shlex.split(command[len(executable_text):])]}
@@ -257,6 +263,13 @@ def _inspect_process(pid: int) -> dict | None:
         return {"pid": pid, "executable": name.value, "started_at": started, "argv": argv}
     finally:
         kernel.CloseHandle(handle)
+
+
+def darwin_command(pid: int) -> str:
+    """Only the target PID's command line, with consistent Unicode formatting."""
+    env = {**os.environ, 'LC_ALL': 'en_US.UTF-8', 'LANG': 'en_US.UTF-8'}
+    return subprocess.check_output(['/bin/ps', '-ww', '-p', str(pid), '-o', 'command='],
+                                   encoding='utf-8', env=env, timeout=5).strip()
 
 
 def _watcher(identity: dict) -> bool:

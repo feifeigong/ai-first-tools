@@ -67,6 +67,9 @@ def validated_assets(directory: Path, release: str, *, local_preview: bool = Fal
                 raise ValueError('Packaged independent automation and ephemeral timer checks are required')
             if number >= 25 and kind == 'smoke' and result['checks'].get('independentAutomationBridge') is not True:
                 raise ValueError('Native independent automation switches are required')
+            if number >= 26 and (kind == 'resume' and result['checks'].get('finderLocaleWatcherIdentity') is not True
+                    or kind == 'reset' and not {'finderLocaleNotifierIdentity','bundledHistoryImmediatelyAvailable'} <= set(result['checks'])):
+                raise ValueError('Finder/launchd locale identity checks are required')
             if kind == 'memory' and not {'database_scope_guard','original_archive','bundled_stdio_mcp_handshake','discarded_legacy_entry_no_longer_blocks_move','source_badge_uses_current_entry','current_schema_rollback_preserves_legacy_orphan'} <= set(result['checks']):
                 raise ValueError('Native complete archive, read-only memory and repeat-move checks are required')
             if kind == 'reset' and not {'frozenSharedRuleBridgeAndSwitch','independentAfterLauncherExit','singleOwnedNotifier','nativeWindowClosePreservesNotifier','nativeChinesePopupHasNoAutomaticResumeAction','anotherPackageCannotStopNotifier','cooperativeUpdateRestoresNotifier','stopPreservesPreferences'} <= set(result['checks']):

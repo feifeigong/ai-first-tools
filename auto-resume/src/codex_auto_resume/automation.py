@@ -39,6 +39,10 @@ def control(operation: str, directory: Path | None = None) -> dict:
     if operation != 'status':
         field = {'resume': 'enabled', 'credit': 'auto_redeem_weekly_reset', 'timer': 'auto_start_five_hour'}[operation.split('-')[0]]
         raw[field] = operation.endswith('-on')
+        if operation in {'resume-on', 'resume-off'}:
+            raw['auto_redeem_weekly_reset'] = False
+        if operation == 'credit-on' and raw.get('enabled', True) is not True:
+            raise ValueError('Resume must be enabled before automatic credit use')
         # First opt-in must never implicitly enable spending or the new timer.
         raw.setdefault('auto_redeem_weekly_reset', False)
         raw.setdefault('auto_start_five_hour', False)

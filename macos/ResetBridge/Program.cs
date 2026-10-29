@@ -103,7 +103,7 @@ internal static class Program
                 AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
             };
             using var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-            using var service = new ResetNewsService(directory, http, () => DateTimeOffset.UtcNow);
+            using var service = new ResetNewsService(directory, http, () => DateTimeOffset.UtcNow, includeBootstrap: true);
             if (operation == "enabled") await service.SetEnabledAsync(request.RootElement.GetProperty("enabled").GetBoolean());
             if (operation == "refresh")
                 await service.RefreshAsync(request.RootElement.TryGetProperty("manual", out var manual) && manual.GetBoolean());

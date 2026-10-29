@@ -31,6 +31,7 @@ internal sealed partial class ResetNewsService : IDisposable
     private readonly Func<DateTimeOffset> clock;
     private readonly bool ownsHttp;
     private readonly bool includeHistory;
+    private readonly bool includeBootstrap;
     private readonly CancellationTokenSource lifetime = new();
     private string previousSnapshot = "";
     private bool disposed;
@@ -64,7 +65,7 @@ internal sealed partial class ResetNewsService : IDisposable
         public bool HistorySourcePartial { get; set; }
     }
 
-    private sealed record Candidate(string Id, string Text, DateTimeOffset At, string? Parent, bool Historical = false, bool RelatedHint = false);
+    private sealed record Candidate(string Id, string Text, DateTimeOffset At, string? Parent, bool Historical = false, bool RelatedHint = false, bool DiscoveryOnly = false);
     private sealed record Feed(DateTimeOffset FetchedAt, List<Candidate> Candidates, List<Candidate> History);
     private sealed record Verified(string Id, string Text, bool Complete = true);
 
@@ -73,15 +74,16 @@ internal sealed partial class ResetNewsService : IDisposable
     internal ResetNewsSnapshot Snapshot { get; private set; } = new(true, "正在查看重置消息", "只在发现明确的新消息时提醒。", null, Array.Empty<ResetNewsItem>());
     internal event Action<ResetNewsSnapshot>? Changed;
 
-    internal ResetNewsService() : this(DefaultDirectory, CreateClient(), () => DateTimeOffset.UtcNow, true, true) { }
-    internal ResetNewsService(string dataDirectory, HttpClient httpClient, Func<DateTimeOffset> clock, bool includeHistory = true) : this(dataDirectory, httpClient, clock, false, includeHistory) { }
-    private ResetNewsService(string dataDirectory, HttpClient httpClient, Func<DateTimeOffset> clock, bool ownsHttp, bool includeHistory)
+    internal ResetNewsService() : this(DefaultDirectory, CreateClient(), () => DateTimeOffset.UtcNow, true, true, true) { }
+    internal ResetNewsService(string dataDirectory, HttpClient httpClient, Func<DateTimeOffset> clock, bool includeHistory = true, bool includeBootstrap = false) : this(dataDirectory, httpClient, clock, false, includeHistory, includeBootstrap) { }
+    private ResetNewsService(string dataDirectory, HttpClient httpClient, Func<DateTimeOffset> clock, bool ownsHttp, bool includeHistory, bool includeBootstrap)
     {
         DataDirectory = Path.GetFullPath(dataDirectory);
         http = httpClient;
         this.clock = clock;
         this.ownsHttp = ownsHttp;
         this.includeHistory = includeHistory;
+        this.includeBootstrap = includeBootstrap;
         ReadCached();
     }
 
@@ -123,7 +125,7 @@ internal sealed partial class ResetNewsService : IDisposable
     {
         Plain(DataDirectory);
         Plain(StateFile);
-        if (!File.Exists(StateFile)) return new Saved();
+        if (!File.Exists(StateFile)) return Bootstrap(new Saved());
         if (new FileInfo(StateFile).Length > MaxBytes) throw new InvalidDataException();
         var result = JsonSerializer.Deserialize<Saved>(File.ReadAllText(StateFile, Encoding.UTF8), Json) ?? throw new InvalidDataException();
         if (result.Version != 1 || result.Items is null || result.Pending is null || result.Seen is null || result.SeenStages is null
@@ -132,7 +134,25 @@ internal sealed partial class ResetNewsService : IDisposable
             || result.DiscoveryRevision is < 0 or > DiscoveryRevision || result.HistoryRetryAfter is null || result.HistoryRetryAfter.Count > 600
             || result.HistoryOffset is < 0 or > 2000 || result.HistoryQueue.Any(item => !ValidCandidate(item))
             || result.Items.Any(item => !ValidItem(item))) throw new InvalidDataException();
-        return result;
+        return Bootstrap(result);
+    }
+
+    // Both platforms ship the same previously verified PUBLIC posts. This is
+    // historical context only: no freshness, alerts or account quota inference.
+    private Saved Bootstrap(Saved value)
+    {
+        if (!includeBootstrap || !includeHistory) return value;
+        using var stream = typeof(ResetNewsService).Assembly.GetManifestResourceStream("AIFirst.ResetHistory.json");
+        if (stream is null || stream.Length > MaxBytes) throw new InvalidDataException();
+        using var document = JsonDocument.Parse(stream, new JsonDocumentOptions { MaxDepth = 32 });
+        if (document.RootElement.GetProperty("version").GetInt32() != 1) throw new InvalidDataException();
+        var verified = Time(document.RootElement.GetProperty("verifiedAt").GetString()!);
+        var items = document.RootElement.GetProperty("items").Deserialize<List<ResetNewsItem>>(Json) ?? throw new InvalidDataException();
+        if (items.Count > 120 || items.Any(item => !ValidItem(item) || !item.Historical || item.PublishedAt > verified)) throw new InvalidDataException();
+        var now = clock();
+        value.Items = value.Items.Concat(items.Where(item => item.PublishedAt <= now && now - item.PublishedAt < TimeSpan.FromDays(30)))
+            .DistinctBy(item => item.Id).OrderByDescending(item => item.PublishedAt).Take(120).ToList();
+        return value;
     }
 
     private void Save(Saved value)
@@ -356,6 +376,11 @@ internal sealed partial class ResetNewsService : IDisposable
 
     private async Task<string> ReadJsonAsync(Uri address, CancellationToken cancellation)
     {
+        // One unavailable source must not consume the entire refresh budget and
+        // prevent the independent history source/other official posts being read.
+        using var sourceTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        sourceTimeout.CancelAfter(TimeSpan.FromSeconds(8));
+        cancellation = sourceTimeout.Token;
         if (address.Scheme != "https" || !address.IsDefaultPort || address.UserInfo.Length != 0
             || !((address.Host == "codex-reset.com" && address.AbsolutePath == "/api/feed")
                 || (address.Host == "www.codexreset-news.com" && address.AbsolutePath == "/api/v1/tibo/history")

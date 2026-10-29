@@ -11,6 +11,20 @@ internal static partial class ResetNewsTests
 {
     private static void RunDiscovery(Action<string, Action> check, Action<bool> require)
     {
+        check("Historical editorial summaries discover IDs but only the X original determines their meaning", () =>
+        {
+            using var f = new Fixture(true);
+            var reset = f.Historical("The reset has been processed. Enjoy!", 96);
+            var card = f.Historical("Loaded one banked reset into every paid Codex account.", 72);
+            var unrelated = f.Historical("A new editor feature has shipped.", 48);
+            f.HistoryTextOverrides[reset.Id] = "Full reset for users, picked by community vote: the reset has been processed.";
+            f.HistoryTextOverrides[card.Id] = "Milestone: one banked reset loaded, alongside a new model.";
+            f.HistoryTextOverrides[unrelated.Id] = "Codex quota has reset. Enjoy.";
+            f.Refresh();
+            require(f.Service.Snapshot.Items.Single(item => item.Id == reset.Id).Kind == "announced");
+            require(f.Service.Snapshot.Items.Single(item => item.Id == card.Id).Kind == "banked");
+            require(f.Service.Snapshot.Items.All(item => item.Id != unrelated.Id) && !f.Service.TryTakeAlert(out _));
+        });
         check("An unfamiliar language flagged by a discovery source keeps verified reset context but never becomes confirmation or an alert", () =>
         {
             using var f = new Fixture();
@@ -298,7 +312,7 @@ internal static partial class ResetNewsTests
             f.Refresh();
             require(f.Service.Snapshot.Items.Single().Kind == "uncertain" && !f.Service.TryTakeAlert(out _));
         });
-        check("Mismatching historical body and author remain rejected even if archive calls them completed", () =>
+        check("Historical summaries never override the original kind or a wrong original author", () =>
         {
             foreach (var mode in new[] { "text", "author" })
             {
@@ -306,7 +320,8 @@ internal static partial class ResetNewsTests
                 var post = f.Historical("Codex quota has reset.");
                 f.EmbedOverrides[post.Id] = mode == "text" ? Embed(post, text: "Codex quota will reset tomorrow.") : Embed(post, author: "https://x.com/foreign");
                 f.Refresh();
-                require(f.Service.Snapshot.Items.Count == 0 && !f.Service.TryTakeAlert(out _));
+                require(mode == "text" ? f.Service.Snapshot.Items.Single().Kind == "upcoming" : f.Service.Snapshot.Items.Count == 0);
+                require(!f.Service.TryTakeAlert(out _));
             }
         });
         check("Standalone Done is pending history, not proof of a reset, and a product quote is irrelevant", () =>

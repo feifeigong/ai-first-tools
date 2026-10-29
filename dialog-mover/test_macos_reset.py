@@ -72,8 +72,10 @@ class MacResetTests(unittest.TestCase):
     def test_pid_reuse_and_owner_changes_cannot_stop_an_unrelated_process(self):
         notices.write_json(self.monitor.owner_path, self.owner)
         with patch('reset_notices.process_identity', return_value={**self.identity, 'started': 'different start'}):
-            with self.assertRaises(notices.NoticeError): self.monitor.stop_owned()
+            self.assertIsNone(self.monitor.live_owner())
+            self.monitor.stop_owned()
         self.assertFalse(self.monitor.stop_path.exists())
+        self.assertFalse(self.monitor.receipt.exists())
         with patch.object(self.monitor, 'live_owner', side_effect=[self.owner, {**self.owner, 'token':'b'*32}]):
             with self.assertRaises(notices.NoticeError): self.monitor.stop_owned()
         self.assertFalse(self.monitor.stop_path.exists())
@@ -180,7 +182,8 @@ class MacResetTests(unittest.TestCase):
     def test_actual_shared_bridge_is_offline_until_refresh_and_switches_are_independent(self):
         client = notices.Client(self.directory, ['dotnet',str(DLL)])
         first = client.request()
-        self.assertTrue(first['enabled']); self.assertEqual(first['events'], [])
+        self.assertTrue(first['enabled']); self.assertGreater(len(first['events']), 0)
+        self.assertFalse(first['fresh']); self.assertIsNone(first['lastSuccess'])
         self.assertFalse(self.directory.exists())
         self.assertFalse(client.request('enabled', enabled=False)['enabled'])
         self.assertFalse(client.request('refresh', manual=True)['enabled'])

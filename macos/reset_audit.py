@@ -75,20 +75,22 @@ def audit(report: Path) -> int:
         try:
             actual = notices.Client(root / 'rule-state')
             first = actual.request()
-            require(first['enabled'] and first['events'] == [] and not actual.directory.exists())
+            require(first['enabled'] and len(first['events']) > 0 and not first['fresh'] and not actual.directory.exists())
+            checks['bundledHistoryImmediatelyAvailable'] = True
             require(not actual.request('enabled', enabled=False)['enabled'])
             require(not actual.request('refresh', manual=True)['enabled'])
             require(actual.request('enabled', enabled=True)['enabled'])
             checks['frozenSharedRuleBridgeAndSwitch'] = True
-            environment = {**os.environ, 'PYINSTALLER_RESET_ENVIRONMENT': '1'}
+            environment = {**os.environ, 'PYINSTALLER_RESET_ENVIRONMENT': '1', 'LANG':'C', 'LC_ALL':'C', 'LC_CTYPE':'C'}
             launcher = subprocess.run([sys.executable, '--reset-launcher-audit', str(root)], env=environment, timeout=20)
             require(launcher.returncode == 0)
             wait(lambda: service.live_owner() is not None and (root / 'delivered.json').is_file()
                 and (root / 'popup-visible.json').is_file() and notices.read_json(root / 'popup-visible.json')['visible'])
             first_owner = service.live_owner()
-            with patch.dict(os.environ, {'TZ':'Asia/Shanghai'}):
+            with patch.dict(os.environ, {'TZ':'Asia/Shanghai', 'LANG':'C','LC_ALL':'C','LC_CTYPE':'C'}):
                 require(service.live_owner() == first_owner)
             checks['independentAfterLauncherExit'] = True
+            checks['finderLocaleNotifierIdentity'] = True
             service.ensure()
             require(service.live_owner() == first_owner)
             checks['singleOwnedNotifier'] = True
@@ -138,7 +140,7 @@ def audit(report: Path) -> int:
         finally:
             try: service.stop_owned('uninstall')
             except (notices.NoticeError, OSError, ValueError): pass
-    passed = failure is None and len(checks) == 8 and all(checks.values())
+    passed = failure is None and len(checks) == 10 and all(checks.values())
     report.parent.mkdir(parents=True, exist_ok=True)
     report.write_text(json.dumps({'passed': passed, 'checks': checks, 'errorType': failure,
         'architecture': platform.machine(), 'version': json.loads((Path(sys._MEIPASS) / 'version.json').read_text()),

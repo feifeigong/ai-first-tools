@@ -1,5 +1,9 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+## preview.26 修复候选：状态核对与完整历史
+
+本轮覆盖 Finder/launchd 的中文路径和 C 语言环境，历史摘要不能逐字当原文核对，离线首开提供32条公开历史。关闭续跑会同时关闭用卡、子开关置灰，计时独立，自启说明当前作用。修复、原生门槛及验收边界见[专项 QA](MACOS-CONTROL-RESET-QA.md)。发布前必须完成两芯片 finderLocaleWatcherIdentity、finderLocaleNotifierIdentity、bundledHistoryImmediatelyAvailable 及既有全部报告；目前仍是候选，不能用preview.25的144项结果冒充本轮原生通过。
+
 ## 当前发布：preview.25 独立用卡与 5 小时计时
 
 preview.25已公开，固定02b4146b5a1c9f3a30ceaa75685228e97eea9639，完整构建40673441448两芯片各144项通过，23份远端资产与摘要一致。共用Python新增automation/window_timer/window_request；Cocoa开关桥支持独立用卡、计时、登录运行，以及续跑关闭时先设置用卡权限。计时默认关闭，self报告含independentAutomationPolicy、ephemeralTimerWriteAhead、ephemeralRequestSafety、nativeEphemeralSupport，smoke报告含independentAutomationBridge，缺少任何字段禁止暂存。nativeEphemeralSupport实际运行包内Codex的exec --help核对临时/忽略配置/只读/JSON能力，不请求模型。原Copilot已登录侧栏和真实模型续聊边界保留；真实账号计时也未代测。规则见[FIVE-HOUR-TIMER.md](FIVE-HOUR-TIMER.md)。

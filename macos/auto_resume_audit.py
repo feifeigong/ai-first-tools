@@ -44,7 +44,7 @@ def audit(report: Path) -> int:
         state.mkdir(parents=True)
         (state/'config.json').write_text(json.dumps({'enabled':False,'poll_seconds':5,'state_dir':str(state),'codex_home':str(codex_home)}))
         old_env=os.environ.copy()
-        os.environ.update({'HOME':str(home),'CODEX_HOME':str(codex_home),'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','TZ':'UTC'})
+        os.environ.update({'HOME':str(home),'CODEX_HOME':str(codex_home),'PATH':'/usr/bin:/bin:/usr/sbin:/sbin','TZ':'UTC','LANG':'C','LC_ALL':'C','LC_CTYPE':'C'})
         for key in ('CODEX_BIN','PYTHONPATH'): os.environ.pop(key,None)
         controller=Controller(bundle,home)
         try:
@@ -65,6 +65,7 @@ def audit(report: Path) -> int:
             duplicate=subprocess.run([str(controller.executable),WATCH,'--manual'],env={**os.environ,'PYINSTALLER_RESET_ENVIRONMENT':'1'},timeout=15)
             require(duplicate.returncode==0 and controller.watchers()==original)
             checks['singlePackagedWatcher']=True
+            checks['finderLocaleWatcherIdentity']=True
             before=controller.watchers()
             require(controller.action('autostart-on')['autostart'])
             require(controller.action('autostart-off')['running'] and controller.watchers()==before)
@@ -160,7 +161,7 @@ def audit(report: Path) -> int:
         finally:
             with contextlib.suppress(Exception): controller.action('uninstall')
             os.environ.clear();os.environ.update(old_env)
-    passed=failure is None and len(checks)==8 and all(checks.values())
+    passed=failure is None and len(checks)==9 and all(checks.values())
     report.write_text(json.dumps({'passed':passed,'checks':checks,'errorType':failure,'failurePhase':phase if failure else None,'diagnostics':diagnostics,'architecture':platform.machine(),
                                  'version':json.loads((Path(sys._MEIPASS)/'version.json').read_text()),
                                  'scope':'real frozen process and launchd, isolated disabled workload and signed-out Codex profile; no model request'},indent=2))

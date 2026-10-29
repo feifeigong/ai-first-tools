@@ -29,6 +29,16 @@ class WatchControlTests(unittest.TestCase):
         self.assertEqual(value['started_at'], 1792994400123456)
         self.assertEqual(value['argv'][1:], ['--auto-resume-watch'])
         self.assertFalse(any('lstart=' in call.args[0] for call in ps.call_args_list))
+        for call in ps.call_args_list:
+            self.assertEqual(call.kwargs['env']['LC_ALL'], 'en_US.UTF-8')
+            self.assertEqual(call.kwargs['encoding'], 'utf-8')
+
+    def test_mac_unrelated_pid_with_short_command_is_not_a_state_failure(self):
+        with patch.object(watch.sys, 'platform', 'darwin'), \
+                patch.object(watch, '_darwin_process_start', return_value=123), \
+                patch.object(watch, '_darwin_process_path', return_value=self.root/'unrelated'), \
+                patch.object(watch.subprocess, 'check_output', side_effect=['unrelated', 'unrelated']):
+            self.assertFalse(watch._watcher(watch._inspect_process(123)))
 
     def test_mac_owner_uses_kernel_image_and_still_rejects_different_command_image(self):
         image = self.root / 'AI一手工具工作台.app/Contents/MacOS/AI First Tools'

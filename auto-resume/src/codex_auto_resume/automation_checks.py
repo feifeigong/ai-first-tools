@@ -14,9 +14,11 @@ def run() -> dict[str, bool]:
     with tempfile.TemporaryDirectory(prefix='automation-frozen-synthetic-') as temporary:
         root=Path(temporary)
         assert not AppConfig().auto_start_five_hour and not AppConfig().auto_redeem_weekly_reset
-        control('timer-on',root);control('resume-off',root)
+        control('timer-on',root);control('resume-on',root);control('credit-on',root);control('resume-off',root)
         policy=control('status',root)
         assert policy['autoStartWindow'] and not policy['resumeEnabled'] and not policy['autoRedeem']
+        assert not control('resume-on',root)['autoRedeem']
+        control('resume-off',root)
         before=QuotaSnapshot(primary=QuotaWindow(0,9000,300),secondary=QuotaWindow(20,90000,10080),limit_id='codex',source='app-server')
         after=QuotaSnapshot(primary=QuotaWindow(1,28000,300),secondary=QuotaWindow(20,90000,10080),limit_id='codex',source='app-server')
         class Reader:

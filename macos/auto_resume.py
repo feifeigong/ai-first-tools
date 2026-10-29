@@ -16,7 +16,9 @@ APP_NAMES = {APP, 'AI一手工具工作台预览.app'}
 WATCH = '--auto-resume-watch'
 
 class ControlError(RuntimeError):
-    pass
+    def __init__(self, message, code='control_unavailable'):
+        super().__init__(message)
+        self.code = code
 
 class Controller:
     def __init__(self, bundle: Path | None = None, home: Path | None = None):
@@ -53,8 +55,10 @@ class Controller:
     def watchers(self):
         from codex_auto_resume.watch_control import inspect_watch, state_path, WatchStateError
         try: value = inspect_watch(state_path())
-        except (WatchStateError, OSError, ValueError) as error:
-            raise ControlError('续跑状态暂时无法确认，请稍后刷新。') from error
+        except (WatchStateError, OSError, ValueError, subprocess.SubprocessError) as error:
+            code = error.code if isinstance(error, WatchStateError) else 'state_unavailable'
+            message = '续跑正在启动，稍后会自动更新。' if code == 'starting' else '续跑状态暂时无法核对，现有任务和设置已保留。'
+            raise ControlError(message, code) from error
         self._foreign = None
         if not value['running']: return []
         if Path(value['executable']).resolve() != self.executable:
