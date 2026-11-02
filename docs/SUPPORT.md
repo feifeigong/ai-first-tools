@@ -1,8 +1,8 @@
 # 支持范围与验证边界
 
-候选修订 Windows0.3.25 / Mac preview.29：补全两次发卡简写识别；完整搬入 Copilot 放进所选目录对应的项目；Windows 修复任务栏身份。发布前仍下载下方当前公开版本。详见[修复与验收说明](RESET-PROJECT-LOGO-QA.md)。
+Windows0.3.25 / Mac preview.29 已发布：补全两次发卡简写识别；完整搬入 Copilot 放进所选目录对应的项目；Windows 修复任务栏身份。详见[修复与验收说明](RESET-PROJECT-LOGO-QA.md)。
 
-当前公开版本为 [Windows v0.3.24](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.24) 与 [Mac preview.28](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.28)。下面列出已实现的范围，不表示所有软件版本与账号场景都已完成原生验收。
+当前公开版本为 [Windows v0.3.25](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.25) 与 [Mac preview.29](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.29)。下面列出已实现的范围，不表示所有软件版本与账号场景都已完成原生验收。
 
 ## 两种搬家方式
 
@@ -13,7 +13,7 @@
 
 [智能搬家使用说明](SMART-MIGRATION.md)包含操作步骤、重复搬家与已有项目保护范围。智能功能不支持把 VS Code、Copilot CLI、Cursor、ChatGPT 或 Claude 作为目的地。
 
-Copilot完整搬家兼容修复已发布于Windows0.3.24 / Mac preview.28：已核实新版官方条件触发器，不接受任意修改后的索引；仍不改已有项目、工作区或表结构，不自动重建缺失worktree。验证与发布状态见[COPILOT-INDEX-QA.md](COPILOT-INDEX-QA.md)。
+Copilot完整搬家兼容修复已发布于Windows0.3.25 / Mac preview.29：已核实新版官方条件触发器，不接受任意修改后的索引；新增项目会话与文件夹工作区，已有项目设置和表结构保留，不自动重建缺失worktree。验证与发布状态见[COPILOT-INDEX-QA.md](COPILOT-INDEX-QA.md)。
 
 ## 完整对话迁移的支持范围
 
@@ -29,7 +29,7 @@ Copilot完整搬家兼容修复已发布于Windows0.3.24 / Mac preview.28：已�
 | Antigravity CLI / Cursor CLI / Grok CLI | 写入对应本机历史，按结果页说明打开或恢复 |
 | OpenCode | 调用本机 OpenCode 官方导入入口，需已安装该软件 |
 | 豆包工作 | 只读来源；本机轨迹文件不等于服务器正式会话，界面不开放搬入 |
-| GitHub Copilot Desktop | 支持本机历史搬出和搬入 Desktop Chats；只列桌面端正式登记的记录，VS Code 自身聊天存储不在范围，见 [Copilot 说明](COPILOT.md) |
+| GitHub Copilot Desktop | 支持本机历史搬出和搬入所选项目；只列桌面端正式登记的记录，VS Code 自身聊天存储不在范围，见 [Copilot 说明](COPILOT.md) |
 | ChatGPT 云端 / Claude 普通聊天 / Hermes | 只读来源，不提供未实现的原生写回 |
 
 迁移记录不自动搬齐外部附件文件、项目文件、工作环境、插件、认证、权限或模型配置。已内嵌在消息中的图片按目标适配能力处理，不等于所有附件都已迁移。不同软件的消息、工具和多模态结构可能不同，导入提示须仔细阅读。

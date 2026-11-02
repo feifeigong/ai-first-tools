@@ -1,5 +1,11 @@
 # Windows 更新功能验收
 
+## 2026-11-02：Windows0.3.25 / Mac preview.29
+
+已发布 Windows0.3.25 / Mac preview.29，固定源码 `2810525e8d382c35e888d90fff8a8beb3cfb02c6`。Windows完整构建[41379844281](https://github.com/feifeigong/ai-first-tools/actions/runs/41379844281)与Mac完整构建[41379791000](https://github.com/feifeigong/ai-first-tools/actions/runs/41379791000)均成功；Apple/Intel分别160/160项原生检查通过。发卡、项目归属与原生安装检查通过，两端独立下载的资产与原始构建逐项摘要一致。
+
+本机从GitHub匿名公开下载正式0.3.25安装包原位更新，核对1297个发布文件。既有资料绑定、续跑/用卡/计时/自启设置保持，主窗口与内嵌工具就绪，安装快捷方式的任务栏身份回读通过。不读取真实聊天/认证/DB，不发模型请求作验证。
+
 ## 2026-11-02：Windows 0.3.24 / Mac preview.28
 
 已发布 Windows0.3.24 / Mac preview.28，固定源码 `6ca210491b41da675fbc3f1eafeeb2a04c3b625b`。Windows完整构建[41373764674](https://github.com/feifeigong/ai-first-tools/actions/runs/41373764674)与Mac完整构建[41373744331](https://github.com/feifeigong/ai-first-tools/actions/runs/41373744331)均成功；Apple/Intel分别156/156项原生检查通过。新旧索引完整搬家及未知触发器拒绝均在冻结包内通过；版本、不可变标签、原始CI报告和远端资产摘要核对后公开。

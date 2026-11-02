@@ -1,15 +1,17 @@
 # Copilot Desktop 对话搬家
 
-候选修订 Windows0.3.25 / Mac preview.29：补全两次发卡简写识别；完整搬入 Copilot 放进所选目录对应的项目；Windows 修复任务栏身份。发布前仍下载下方当前公开版本。详见[修复与验收说明](RESET-PROJECT-LOGO-QA.md)。
+Windows0.3.25 / Mac preview.29 已发布：补全两次发卡简写识别；完整搬入 Copilot 放进所选目录对应的项目；Windows 修复任务栏身份。详见[修复与验收说明](RESET-PROJECT-LOGO-QA.md)。
 
 ## 当前使用说明（2026-11-02）
 
-Windows v0.3.24 与 Mac preview.28 已包含两种搬家方式：
+Windows v0.3.25 与 Mac preview.29 已包含两种搬家方式：
 
 | 方式 | 在 Copilot 中的结果 |
 | --- | --- |
-| 完整对话迁移 | 新增 Desktop Chats 历史副本，旧消息按 Copilot 的显示方式呈现。 |
+| 完整对话迁移 | 在所选目录对应的项目下新增历史副本，旧消息按 Copilot 的显示方式呈现。 |
 | 智能省额度迁移 | 新增独立资料项目与「原名称（智能搬家）」对话，完整旧记录留在工具箱本机资料区供按需查找。 |
+
+完整搬家会复用所选目录对应的可见项目，未登记的目录创建为文件夹项目，不创建 Git worktree。完成后按会话编号请求打开新副本，任务和草稿保护保持。旧 Chats 副本保留；重新搬一次可归入所选项目，之后重复搬入沿用新副本。
 
 智能搬家不用选择已有工作目录或合并项目配置；每条分别保存，重复搬入会复用可核实的入口并保留后续聊天。完成后请求打开对话，用户发送下一步要求后才产生回复。操作与保护范围见[智能搬家指南](SMART-MIGRATION.md)。
 
@@ -17,7 +19,7 @@ Windows 已有受保护的列表刷新；任务或未发送内容存在时先保
 
 来源只读取桌面端已登记的正式记录，终端独有目录和 VS Code 自身聊天不混入。这两种搬家都适配已知本机格式，**不是 GitHub 官方的跨软件历史导入 API**；不改表结构、不迁移登录或模型权限，未知格式停止操作。下载与实际运行包验收见[首页](../README.md)、[Windows QA](UPDATER-QA.md)与[Mac QA](MACOS-QA.md)。
 
-Windows0.3.24 / Mac preview.28 已修复新版索引兼容问题：完整搬家和智能搬家共用精确规则。该版完整搬家新增普通 Chats；候选新版改为所选项目下的新对话，仍不重建或修改已有 worktree；`Worktree missing` 与新聊天登记失败属于不同问题，不能仅凭提示推断聊天正文损坏或其他工具改坏格式。已核实范围和运行包结果见[索引兼容QA](COPILOT-INDEX-QA.md)。
+Windows0.3.24 / Mac preview.28 已修复新版索引兼容问题：完整搬家和智能搬家共用精确规则。该版完整搬家新增普通 Chats；0.3.25 / preview.29 改为所选项目下的新对话，仍不重建或修改已有 worktree；`Worktree missing` 与新聊天登记失败属于不同问题，不能仅凭提示推断聊天正文损坏或其他工具改坏格式。已核实范围和运行包结果见[索引兼容QA](COPILOT-INDEX-QA.md)。
 
 ## 历史适配与验证记录
 
@@ -29,13 +31,13 @@ v2 去重允许旧格式记录再复制一次，源和旧副本都保留；新�
 
 上轮 v0.3.14 / preview.17 增加官方列表导航，但只对已有副本验证了打开，遗漏新写入记录的侧栏缓存。该导航不能视为可靠的自动刷新；当前提示和上述 v2 实际窗口检查已修正这一结论。
 
-当前流程在每批完成后请求官方本机 `ghapp://chats` → `ghapp://recent` 导航，并提供「在 Copilot 中查看」和失败重试。已搬过记录仍有列表入口。这个入口不按编号直接打开聊天：`ghapp://sessions/<编号>` 在该 Desktop 版本明确拒绝普通 Chats。官方入口参见 [GitHub 深链接文档](https://docs.github.com/en/copilot/how-tos/github-copilot-app/open-with-deep-links)。缓存仍在时按前述客户端步骤刷新；Mac 共用导航但未作 Desktop 真机显示验收。
+旧版普通 Chats 流程在每批完成后请求官方本机 `ghapp://chats` → `ghapp://recent` 导航，并提供「在 Copilot 中查看」和失败重试。已搬过记录仍有列表入口。这个旧入口不按编号直接打开普通聊天：`ghapp://sessions/<编号>` 在该 Desktop 版本明确拒绝普通 Chats；新版登记为项目对话后使用按编号打开。官方入口参见 [GitHub 深链接文档](https://docs.github.com/en/copilot/how-tos/github-copilot-app/open-with-deep-links)。缓存仍在时按前述客户端步骤刷新；Mac 已登录客户端显示仍待真机接续。
 
 Windows 搬入与列表修正版已公开 [v0.3.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.13)，构建与独立下载核验通过。Mac 搬入与列表修正版已公开 [preview.15](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.15)，两架构构建与全部资产独立下载核验通过；下文早期版本保留为历史。
 
 已随 [Windows v0.3.10](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.10)、[Mac preview.13](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.13) 公开。已有支持一键更新的版本可检查更新；更早版本下载完整安装包。构建与独立资产核验见 [Windows QA](UPDATER-QA.md)、[Mac QA](MACOS-QA.md)。
 
-当前支持 GitHub Copilot 独立桌面 App 的本机历史搬出和搬入：在「对话搬家」中选择 GitHub Copilot，按标题或文件夹搜索、勾选记录、选择现有目标和文件夹。支持刷新重新发现记录。搬入后登记到 Desktop 的 Chats（聊天）列表。VS Code 自身的 chatSessions 不在本轮范围。
+支持 GitHub Copilot 独立桌面 App 的本机历史搬出和搬入：在「对话搬家」中选择 GitHub Copilot，按标题或文件夹搜索、勾选记录、选择现有目标和文件夹。支持刷新重新发现记录。当前完整搬入登记到所选目录对应的项目下。VS Code 自身的 chatSessions 不在本轮范围。
 
 ## 来源和识别
 
@@ -49,11 +51,11 @@ Desktop 与 CLI 共用上述存储，不能把所有 `session-state` 文件夹�
 
 ## 搬入 Copilot Desktop
 
-在来源（包括 ChatGPT 普通聊天、本机 Work/Codex）选择已有完整正文的记录，目标选 GitHub Copilot，选择工作文件夹后确认。每条创建一个新的 UUID 聊天副本并登记为 `general_chat`，位于 Desktop 的 Chats，而非自动新建项目或 worktree。Windows v0.3.16 完成后自动刷新已识别的 Copilot Desktop 窗口并打开会话列表，侧栏同步重读。正在执行任务或编辑未发送内容时保留它们，处理完后点「在 Copilot 中查看」重试；窗口身份/草稿无法核实则不发送刷新键。Mac 仍需在任务结束后完全退出 Copilot 再打开。官方深链只导航，不会使侧栏缓存失效。
+在来源（包括 ChatGPT 普通聊天、本机 Work/Codex）选择已有完整正文的记录，目标选 GitHub Copilot，选择工作文件夹后确认。每条创建新的 UUID 项目对话与 folder 工作区，复用所选目录对应的可见项目；目录尚未登记时创建 folder 项目。不创建 Git worktree、不改已有项目设置。旧 Chats 副本保留，可再搬一次归入所选项目，之后复用新副本。Windows v0.3.16 完成后自动刷新已识别的 Copilot Desktop 窗口并打开会话列表，侧栏同步重读。正在执行任务或编辑未发送内容时保留它们，处理完后点「在 Copilot 中查看」重试；窗口身份/草稿无法核实则不发送刷新键。Mac 仍需在任务结束后完全退出 Copilot 再打开。官方深链只导航，不会使侧栏缓存失效。
 
-这是对本机格式的适配，不是 GitHub 官方提供的跨软件历史导入 API。先检查会话表字段和必填项；格式变化、数据库占用、未知正文块时停止。消息转换为版本 1 的连续事件，搬家格式为 v2：原用户/助手角色与完整文字、时间保留；思考通过 `assistant.message.reasoningText` 保留，因为原生恢复会过滤独立 `assistant.reasoning` 事件。用户内嵌图片写为原生 blob 附件；工具调用/结果和系统说明放入已完成且默认折叠的历史归档。外部附件文件和原项目环境不迁移，不获取任意本机路径或网络图片。
+这是对本机格式的适配，不是 GitHub 官方提供的跨软件历史导入 API。先检查会话表字段和必填项；格式变化、数据库占用、未知正文块时停止。消息转换为版本 1 的连续事件，搬家格式为 v3（旧 Chats 格式为 v2）：原用户/助手角色与完整文字、时间保留；思考通过 `assistant.message.reasoningText` 保留，因为原生恢复会过滤独立 `assistant.reasoning` 事件。用户内嵌图片写为原生 blob 附件；工具调用/结果和系统说明放入已完成且默认折叠的历史归档。外部附件文件和原项目环境不迁移，不获取任意本机路径或网络图片。
 
-写入新目录并在同一 SQLite 事务内登记、比较完整消息后提交；失败只撤销本次新行和仍与本次写入一致的文件，已有行及目录不覆盖。不复制认证、不创建自动批准或远程权限，不启动 Copilot 或模型。SQLite 写入授权只允许本次新增会话，并识别原生的条件 agent 触发器；未知触发器不能修改其他表或额外插入会话。格式版本参与去重。
+写入新目录并在同一 SQLite 事务内登记、比较完整消息后提交；失败只撤销本次新行和仍与本次写入一致的文件，已有行及目录不覆盖。不复制认证、不创建自动批准或远程权限，不启动 Copilot 或模型。SQLite 写入授权只允许本次新增项目、会话与工作区，并识别原生的条件 agent 触发器；未知触发器不能修改其他表或额外插入会话。格式版本参与去重。
 
 ## 转换和完整性
 
