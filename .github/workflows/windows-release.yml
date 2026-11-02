@@ -157,6 +157,7 @@ jobs:
           foreach($shortcut in @((Join-Path $desktop 'AI一手工具箱.lnk'),(Join-Path $programs 'AI一手工具箱/AI一手工具箱.lnk'))) {
             if (!(Test-Path -LiteralPath $shortcut)) { throw ('Missing branded shortcut: '+[IO.Path]::GetFileName($shortcut)) }
             if ([AIFirst.Toolbox.ShellLinkTarget]::Read($shortcut) -ne (Join-Path $target 'AI一手工具工作台.exe')) { throw 'Unicode shortcut target must retain the stable rollback-compatible apphost' }
+            if ([AIFirst.Toolbox.ShellLinkTarget]::ReadAppId($shortcut) -ne 'AI.First.Tools.Toolbox') { throw 'Installed shortcuts must retain the explicit running taskbar identity' }
           }
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json
           if ($LASTEXITCODE) { throw 'Installed background lifecycle checks failed' }
@@ -185,7 +186,7 @@ jobs:
           if ($uninstall.ExitCode -ne 0 -or (Test-Path -LiteralPath $app) -or !(Test-Path -LiteralPath $extra)) { throw 'Uninstall protection failed' }
           python scripts/audit_bundled_resume.py --package $target --report artifacts/windows/resume-control-test.json --stage uninstall
           if ($LASTEXITCODE) { throw 'Uninstall left background processes or startup behind' }
-          @{ passed=$true; checks=@{ silentInstall=$true; silentReinstall=$true; installedSelfChecks=$true; installedVersion=$true; extraFilePreserved=$true; safeUninstall=$true; bundledRuntime=$true; bundledControls=$true; backgroundUpgrade=$true; backgroundUninstall=$true; productBranding=$true; brandedShortcuts=$true; ownedLegacyShortcutRemoved=$true; foreignLegacyShortcutPreserved=$true }; version=$version; scope='Clean GitHub Windows runner, real installer and bundled background, synthetic disabled workload; no user installation or Agent data' } | ConvertTo-Json -Depth 4 | Set-Content artifacts/windows/installer-test.json
+          @{ passed=$true; checks=@{ silentInstall=$true; silentReinstall=$true; installedSelfChecks=$true; installedVersion=$true; extraFilePreserved=$true; safeUninstall=$true; bundledRuntime=$true; bundledControls=$true; backgroundUpgrade=$true; backgroundUninstall=$true; productBranding=$true; brandedShortcuts=$true; taskbarIdentity=$true; ownedLegacyShortcutRemoved=$true; foreignLegacyShortcutPreserved=$true }; version=$version; scope='Clean GitHub Windows runner, real installer and bundled background, synthetic disabled workload; no user installation or Agent data' } | ConvertTo-Json -Depth 4 | Set-Content artifacts/windows/installer-test.json
       - name: Audit full installer staging and incremental replacement
         shell: pwsh
         run: |

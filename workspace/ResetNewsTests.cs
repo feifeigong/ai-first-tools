@@ -137,7 +137,7 @@ internal static partial class ResetNewsTests
         check("Bundled public history is instant offline, bounded, read-only and never fresh or alerting", () =>
         {
             using var fixture = new Fixture();
-            var now = DateTimeOffset.Parse("2026-10-29T00:00:00Z");
+            var now = DateTimeOffset.Parse("2026-11-03T00:00:00Z");
             using var service = new ResetNewsService(fixture.DirectoryPath, fixture.Client, () => now, includeBootstrap: true);
             require(service.Snapshot.Items.Count >= 10 && service.Snapshot.Items.All(item => item.Historical));
             require(!service.Snapshot.Fresh && service.Snapshot.LastCheckedAt is null && service.Snapshot.LastSuccess is null);

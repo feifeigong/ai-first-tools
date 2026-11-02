@@ -196,6 +196,20 @@ def run(report: Path) -> int:
                 valid = valid and db.execute('SELECT count(*) FROM persistent_projects').fetchone()[0] == 0
                 valid = valid and db.execute('SELECT type,name,sql FROM sqlite_master ORDER BY type,name').fetchall() == schema
             checks.append({'name': 'current_full_chat_registration_without_worktree', 'passed': valid})
+            placed = copilot_import.import_document({**original, 'cwd': str(project)}, full, project=True)
+            with closing(sqlite3.connect(full / 'data.db')) as db:
+                existing = db.execute('SELECT * FROM projects').fetchall()
+                valid = len(existing) == 1 and db.execute('SELECT session_type FROM sessions WHERE id=?', (placed['id'],)).fetchone() == ('project',)
+                valid = valid and db.execute('SELECT project_id,workspace_type,source_path FROM workspaces WHERE session_id=?', (placed['id'],)).fetchone() == (placed['projectId'], 'folder', str(project))
+                valid = valid and db.execute('SELECT count(*) FROM persistent_projects').fetchone()[0] == 0
+                valid = valid and placed['openUrl'] == copilot_import.project_url(placed['id'])
+            checks.append({'name': 'full_history_uses_selected_folder_project', 'passed': valid})
+            again = copilot_import.import_document({**original, 'cwd': str(project)}, full, project=True)
+            with closing(sqlite3.connect(full / 'data.db')) as db:
+                reused = db.execute('SELECT * FROM projects').fetchall() == existing
+                reused = reused and db.execute('SELECT count(*) FROM workspaces WHERE project_id=? AND workspace_type=?', (placed['projectId'], 'folder')).fetchone()[0] == 2
+                reused = reused and again['projectId'] == placed['projectId']
+            checks.append({'name': 'full_history_reuses_project_without_worktree', 'passed': reused})
             with closing(sqlite3.connect(full / 'data.db')) as db, db:
                 db.execute('DROP TRIGGER sessions_insert_agent')
                 db.execute('''CREATE TRIGGER sessions_insert_agent AFTER INSERT ON sessions
@@ -207,7 +221,7 @@ def run(report: Path) -> int:
             except ValueError:
                 refused = True
             with closing(sqlite3.connect(full / 'data.db')) as db:
-                preserved = db.execute('SELECT id FROM sessions').fetchall() == [(copied['id'],)] and db.execute('SELECT count(*) FROM persistent_projects').fetchone()[0] == 0
+                preserved = {row[0] for row in db.execute('SELECT id FROM sessions')} == {copied['id'], placed['id'], again['id']} and db.execute('SELECT count(*) FROM persistent_projects').fetchone()[0] == 0
             checks.append({'name': 'unknown_full_chat_trigger_still_denied', 'passed': refused and preserved and files_before == {p.relative_to(full): p.read_bytes() for p in (full / 'session-state').rglob('*') if p.is_file()}})
     except Exception as error:
         checks.append({"name": "package_check", "passed": False, "error_type": type(error).__name__, "message": str(error),

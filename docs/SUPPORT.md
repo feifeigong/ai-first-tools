@@ -1,5 +1,7 @@
 # 支持范围与验证边界
 
+候选修订 Windows0.3.25 / Mac preview.29：补全两次发卡简写识别；完整搬入 Copilot 放进所选目录对应的项目；Windows 修复任务栏身份。发布前仍下载下方当前公开版本。详见[修复与验收说明](RESET-PROJECT-LOGO-QA.md)。
+
 当前公开版本为 [Windows v0.3.24](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.24) 与 [Mac preview.28](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.28)。下面列出已实现的范围，不表示所有软件版本与账号场景都已完成原生验收。
 
 ## 两种搬家方式

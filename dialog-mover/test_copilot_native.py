@@ -97,7 +97,10 @@ class NativeCopilotTests(unittest.TestCase):
     def test_current_index_import_survives_complete_native_read_and_strict_resume(self):
         self._complete_native_round_trip(current_index=True)
 
-    def _complete_native_round_trip(self, *, current_index):
+    def test_project_import_survives_complete_native_read_and_strict_resume(self):
+        self._complete_native_round_trip(current_index=True, project=True)
+
+    def _complete_native_round_trip(self, *, current_index, project=False):
         configured = os.environ.get("DIALOG_MOVER_NATIVE_COPILOT")
         if not configured:
             self.skipTest("Pinned official Copilot test runtime not prepared")
@@ -115,7 +118,7 @@ class NativeCopilotTests(unittest.TestCase):
             source = conversation(base / "project", 125)
             source["messages"][1]["content"].append({"type": "tool_result", "tool_use_id": "foreign-id", "content": "Historical result\n" * 1000})
             source["messages"].extend(visual_conversation(base / "project")["messages"])
-            result = copilot_import.import_document(source, base / "profile")
+            result = copilot_import.import_document(source, base / "profile", project=project)
             expected = [json.loads(line) for line in Path(result["location"]).read_text(encoding="utf-8").splitlines()]
             reader = NativeReader(binary, base)
             try:

@@ -11,19 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import copilot_import, copilot_local, memory_workspace
-from .copilot_index import known_trigger, known_agent_trigger_table
+from .copilot_index import (known_trigger, known_agent_trigger_table, project_schema as schema,
+                            project_at, PROJECT_REQUIRED as REQUIRED, PROJECT_WRITABLE as WRITABLE)
 
 FORMAT = "ai-first-memory-desktop-v1"
-REQUIRED = {
-    "projects": {"id", "name", "main_repo_path", "container_kind"},
-    "sessions": {"id", "title", "session_type", "created_at", "updated_at", "is_running", "auto_approve", "permission_mode"},
-    "workspaces": {"id", "project_id", "workspace_type", "branch", "name", "session_id", "source_path"},
-}
-WRITABLE = {
-    "projects": REQUIRED["projects"] | {"created_at", "last_opened_at", "auto_approve", "show_in_sidebar"},
-    "sessions": REQUIRED["sessions"] | {"mode", "was_interrupted", "remote_control_enabled", "remote_session_mode", "execution_location", "title_source", "provisional"},
-    "workspaces": REQUIRED["workspaces"] | {"created_at", "updated_at", "tab_order", "port", "name_source", "explicitly_opened", "provisional", "host_id", "is_initialized"},
-}
 
 
 def root():
@@ -46,39 +37,6 @@ def safe_path(base: Path, relative: str):
     if not path.resolve().is_relative_to(base.resolve()):
         raise ValueError("Copilot 对话的保存位置超出了预期范围，已停止写入。")
     return path
-
-
-def schema(connection):
-    result = {}
-    for table, required in REQUIRED.items():
-        kind = connection.execute("SELECT type FROM sqlite_master WHERE name=?", (table,)).fetchone()
-        columns = {r[1]: r for r in connection.execute(f'PRAGMA table_info("{table}")')}
-        if kind != ("table",) or not required <= columns.keys() or columns["id"][5] != 1:
-            raise ValueError("当前 Copilot 版本的项目格式暂不支持，未添加对话。可以返回改用完整对话迁移。")
-        if any(columns[name][2].upper() != "TEXT" for name in required - {"is_running", "auto_approve"}):
-            raise ValueError("Copilot 的项目保存方式发生了变化，已停止写入。可以返回改用完整对话迁移。")
-        if any(r[3] and r[4] is None and name not in WRITABLE[table] for name, r in columns.items()):
-            raise ValueError("当前 Copilot 项目有无法识别的必填信息，已停止写入。可以返回改用完整对话迁移。")
-        result[table] = set(columns)
-    return result
-
-
-def project_at(connection, workspace):
-    # Read only this folder's identity, never app settings, accounts or chat bodies.
-    columns = {r[1] for r in connection.execute('PRAGMA table_info("projects")')}
-    selected = ["id", "name", "main_repo_path", "container_kind"]
-    selected += [name for name in ("show_in_sidebar", "archived_at") if name in columns]
-    match = "replace(main_repo_path,char(92),'/') COLLATE NOCASE=replace(?,char(92),'/')" if os.name == "nt" else "main_repo_path=?"
-    rows = connection.execute("SELECT " + ",".join(selected) + " FROM projects WHERE " + match, (str(workspace),)).fetchall()
-    if len(rows) > 1:
-        raise ValueError("Copilot 中有多个同路径项目，请先在桌面端核对。")
-    if not rows: return None
-    row = dict(zip(selected, rows[0]))
-    if row["container_kind"] not in {"folder", "repository"}:
-        raise ValueError("这个路径属于其他类型的 Copilot 项目，未写入。")
-    if row.get("show_in_sidebar", 1) != 1 or row.get("archived_at"):
-        raise ValueError("这个 Copilot 项目已隐藏或归档，请先在桌面端恢复后重试。")
-    return row
 
 
 def prepare(workspace: Path, prompt: str, base: Path | None = None, *, title: str, project_name: str | None = None):

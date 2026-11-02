@@ -11,6 +11,33 @@ internal static partial class ResetNewsTests
 {
     private static void RunDiscovery(Action<string, Action> check, Action<bool> require)
     {
+        check("Banked numbered confirmations retain both issuance days without a reset keyword", () =>
+        {
+            require(ResetNewsService.Classify("Banked 1/2") == "banked");
+            require(ResetNewsService.Classify("Day 28/ Banked 2/2") == "banked");
+            foreach (var text in new[] { "Banked 1/2?", "Not banked 1/2", "Will bank 1/2 tomorrow", "Day 28/ Banked 3/2", "Banked 1/0", "My savings are banked 1/2 of the time" })
+                require(ResetNewsService.Classify(text) is null);
+            using var f = new Fixture(true);
+            f.Now = new DateTimeOffset(2026, 11, 2, 4, 0, 0, TimeSpan.Zero);
+            var first = f.Historical("Banked 1/2", 27);
+            var second = f.Historical("Day 28/ Banked 2/2", 4);
+            f.Refresh();
+            require(f.Service.Snapshot.Items.Count(item => item.Kind == "banked") == 2);
+            var dates = ResetCalendarModel.Events(f.Service.Snapshot.Items, f.Now);
+            require(dates.Count == 2 && dates.All(item => item.State == "banked") && dates.Select(item => item.Date).Distinct().Count() == 2);
+        });
+        check("Broken replacement characters at a truncated official ending remain incomplete evidence", () =>
+        {
+            using var f = new Fixture(true);
+            var post = f.Historical("Day 2/ The reset has been\uFFFD\uFFFD", 48);
+            f.EventPosts.Add(post);
+            f.Refresh();
+            var item = f.Service.Snapshot.Items.Single(item => item.Id == post.Id);
+            require(item.Kind == "uncertain");
+            require(ResetNewsPresentation.From(item, f.Now).Description.Contains("不完整"));
+            require(ResetCalendarModel.Events(new[] { item }, f.Now).Single().Badge == "原文待补全");
+            require(!f.Service.TryTakeAlert(out _));
+        });
         check("Historical editorial summaries discover IDs but only the X original determines their meaning", () =>
         {
             using var f = new Fixture(true);

@@ -17,8 +17,15 @@ internal sealed record ResetNewsPresentation(string Summary, string Description,
     internal static ResetNewsPresentation From(ResetNewsItem item, DateTimeOffset? now = null)
     {
         if (item.Kind == "announced") return new("Tibo 已确认重置完成", "依据 Tibo 的确认帖；具体到账以你的 Codex 用量为准。", "", "");
-        if (item.Kind == "banked") return new("Tibo 发布了重置卡消息", "这次是发放可留着以后使用的重置卡，不是直接恢复当前额度。是否收到以你的 Codex 显示为准。", "", "");
-        if (item.Kind == "uncertain") return new("这条历史消息还待核实", "原文不完整，或还不能确定它对应哪次重置。暂不计为已完成，也不会据此提醒。", "", "");
+        if (item.Kind == "banked")
+        {
+            var part = Regex.Match(item.Text, @"\bbanked\s+(?<part>\d{1,2})\s*/\s*(?<total>\d{1,2})\b", RegexOptions.IgnoreCase);
+            var series = part.Success ? "原帖标记为「重置卡 " + part.Groups["part"].Value + "/" + part.Groups["total"].Value + "」。" : "";
+            return new("Tibo 已确认发放重置卡", series + "重置卡可留着以后使用，不等于当前额度已经恢复。实际到账和数量以你的 Codex 显示为准。", "", "");
+        }
+        if (item.Kind == "uncertain") return ResetNewsService.IncompleteOriginal(item.Text)
+            ? new("原帖内容尚未取完整", "平台返回的原文不完整，程序正在补查。先保留这条历史，不把截断内容当作完成公告，也不需要你手动确认。", "", "")
+            : new("这条历史消息还待核实", "原帖与上下文暂不足以确定它对应哪次重置，程序会继续补查。暂不计为已完成，也不会据此提醒。", "", "");
         var text = item.Text;
         var result = new ResetNewsPresentation("Codex 额度重置预告", "Tibo 预告将进行一次额度重置。", "具体时间待公布", "原帖尚未给出可明确换算的时间，会继续留意后续消息。");
         // Only interpret bounded, explicit time statements. The source text remains in the local cache.

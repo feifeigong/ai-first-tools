@@ -76,6 +76,8 @@ def validated_assets(directory: Path, release: str, *, local_preview: bool = Fal
                 raise ValueError('Native complete archive, read-only memory and repeat-move checks are required')
             if number >= 28 and kind == 'memory' and not {'current_full_chat_registration_without_worktree','unknown_full_chat_trigger_still_denied'} <= set(result['checks']):
                 raise ValueError('Packaged Copilot full migration index compatibility checks are required')
+            if number >= 29 and kind == 'memory' and not {'full_history_uses_selected_folder_project','full_history_reuses_project_without_worktree'} <= set(result['checks']):
+                raise ValueError('Packaged Copilot selected project placement checks are required')
             if kind == 'reset' and not {'frozenSharedRuleBridgeAndSwitch','independentAfterLauncherExit','singleOwnedNotifier','nativeWindowClosePreservesNotifier','nativeChinesePopupHasNoAutomaticResumeAction','anotherPackageCannotStopNotifier','cooperativeUpdateRestoresNotifier','stopPreservesPreferences'} <= set(result['checks']):
                 raise ValueError('Native reset notification lifecycle checks are required')
             if kind == 'reset-rules' and (len(result['checks']) < 20 or set(result.get('sharedWindowsSources',{})) != {'ResetNewsService.cs','ResetNewsDiscovery.cs','ResetNewsPresentation.cs','ResetCalendarModel.cs'}):

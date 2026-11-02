@@ -33,6 +33,13 @@ CREATE TABLE app_state(key TEXT PRIMARY KEY,value TEXT);
 INSERT INTO app_state VALUES('synthetic-credential-canary','never-copy-this-test-value');
 CREATE TRIGGER sessions_insert_agent AFTER INSERT ON sessions WHEN NEW.session_type = 'agent'
 BEGIN INSERT INTO agents (session_id) VALUES (NEW.id); END;
+CREATE TABLE projects(id TEXT PRIMARY KEY NOT NULL,name TEXT NOT NULL,main_repo_path TEXT NOT NULL UNIQUE,
+container_kind TEXT NOT NULL DEFAULT 'folder',created_at TEXT NOT NULL DEFAULT '',last_opened_at TEXT NOT NULL DEFAULT '',auto_approve INTEGER DEFAULT 1,
+show_in_sidebar INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE workspaces(id TEXT PRIMARY KEY NOT NULL,project_id TEXT NOT NULL REFERENCES projects(id),workspace_type TEXT NOT NULL,
+branch TEXT NOT NULL,name TEXT NOT NULL,session_id TEXT,source_path TEXT,created_at TEXT NOT NULL DEFAULT '',updated_at TEXT NOT NULL DEFAULT '',
+tab_order INTEGER DEFAULT 0,port INTEGER DEFAULT 0,name_source TEXT DEFAULT 'auto',explicitly_opened INTEGER DEFAULT 0,
+provisional INTEGER DEFAULT 0,host_id TEXT DEFAULT 'local',is_initialized INTEGER DEFAULT 1);
 """)
 
 
@@ -222,12 +229,12 @@ class CopilotDestinationTests(unittest.TestCase):
         with patch.object(mover, "data_dir", return_value=self.base), patch.object(mover, "_run", side_effect=exported) as engine:
             state, message = mover.move_one("chatgpt", {"id": document["id"], "title": document["title"]}, "copilot_desktop", str(self.directory), details)
             self.assertEqual(state, "ok", message)
-            self.assertEqual(details["openUrl"], "ghapp://recent")
+            self.assertEqual(details["openUrl"], "ghapp://sessions/" + details['importedId'])
             self.assertEqual(engine.call_count, 1)  # Source export only; no resume/model/tool request.
             previous = Path(details["location"]).read_bytes()
             skipped = {}
             self.assertEqual(mover.move_one("chatgpt", {"id": document["id"]}, "copilot_desktop", str(self.directory), skipped)[0], "skipped")
-            self.assertEqual(skipped["openUrl"], "ghapp://recent")
+            self.assertEqual(skipped["openUrl"], details['openUrl'])
             self.assertEqual(engine.call_count, 1)
             self.assertEqual(Path(details["location"]).read_bytes(), previous)
             with closing(sqlite3.connect(self.root / "data.db")) as connection:
@@ -252,6 +259,23 @@ class CopilotDestinationTests(unittest.TestCase):
                 self.assertIn("Manage sessions", api.open_in_app(0)["error"])
                 opened.side_effect = None
                 self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": True})
+
+    def test_project_handoff_opens_only_the_saved_uuid_and_preserves_busy_or_draft_guards(self):
+        sid = '12345678-1234-4321-9876-123456789abc'
+        api = Api()
+        item = {'state':'ok','importedId':sid,'openUrl':'ghapp://sessions/'+sid}
+        api._job = SimpleNamespace(target='copilot_desktop',snapshot=lambda:{'items':[item]})
+        with patch('main.open_external') as opened, patch('main.time.sleep'), patch('main.copilot_refresh.refresh',return_value='requested'):
+            self.assertEqual(api.open_in_app(0),{'ok':True,'refreshed':True})
+            opened.assert_called_once_with(item['openUrl'])
+        for state in ('busy','draft'):
+            with patch('main.open_external') as opened, patch('main.copilot_refresh.refresh',return_value=state):
+                self.assertIn('error',api.open_in_app(0))
+                opened.assert_not_called()
+        item['importedId'] = 'different-result'
+        with patch('main.open_external') as opened:
+            self.assertIn('error',api.open_in_app(0))
+            opened.assert_not_called()
 
     def test_busy_or_unidentified_copilot_does_not_send_navigation_or_report_refresh_success(self):
         api = Api()
@@ -340,6 +364,82 @@ class CopilotDestinationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 copilot_import.import_document(conversation(self.directory))
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve")
+
+
+class CopilotProjectDestinationTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix='copilot-project-import-')
+        self.addCleanup(temporary.cleanup)
+        self.base = Path(temporary.name).resolve()
+        self.root = self.base / 'desktop'
+        self.directory = self.base / 'selected project'
+        self.directory.mkdir()
+        (self.directory/'keep.txt').write_text('synthetic original project',encoding='utf8')
+        self.enterContext(isolated_connections(self.base))
+        desktop_fixture(self.root)
+        persistent_projects_fixture(self.root)
+
+    def test_existing_repository_receives_new_folder_session_without_rewriting_old_project_or_files(self):
+        with closing(sqlite3.connect(self.root/'data.db')) as db, db:
+            db.execute("INSERT INTO projects(id,name,main_repo_path,container_kind,instructions) VALUES('project-one','Existing display name',?,'repository','KEEP CONFIG')", (str(self.directory),))
+            db.execute("INSERT INTO sessions(id,title,session_type,created_at,updated_at) VALUES('existing-session','Original','project','now','now')")
+            db.execute("INSERT INTO workspaces(id,project_id,workspace_type,branch,name,session_id,source_path) VALUES('existing-workspace','project-one','worktree','main','Original','existing-session',?)", (str(self.directory),))
+            original = {table:db.execute('SELECT * FROM '+table).fetchall() for table in ('projects','workspaces','sessions','app_state')}
+            schema = db.execute('SELECT type,name,sql FROM sqlite_master ORDER BY type,name').fetchall()
+        document = visual_conversation(self.directory)
+        result = copilot_import.import_document(document, self.root, project=True)
+        with closing(sqlite3.connect(self.root/'data.db')) as db:
+            self.assertEqual(db.execute('SELECT * FROM projects').fetchall(),original['projects'])
+            self.assertEqual(db.execute("SELECT * FROM workspaces WHERE id='existing-workspace'").fetchall(),original['workspaces'])
+            self.assertEqual(db.execute("SELECT * FROM sessions WHERE id='existing-session'").fetchall(),original['sessions'])
+            self.assertEqual(db.execute('SELECT * FROM app_state').fetchall(),original['app_state'])
+            self.assertEqual(db.execute('SELECT session_type,auto_approve FROM sessions WHERE id=?',(result['id'],)).fetchone(),('project',0))
+            self.assertEqual(db.execute('SELECT project_id,workspace_type,branch,source_path FROM workspaces WHERE session_id=?',(result['id'],)).fetchone(),('project-one','folder','',str(self.directory)))
+            self.assertEqual(db.execute('SELECT type,name,sql FROM sqlite_master ORDER BY type,name').fetchall(),schema)
+            self.assertEqual(db.execute('SELECT count(*) FROM persistent_projects').fetchone()[0],0)
+        self.assertEqual(result['projectName'],'Existing display name')
+        self.assertEqual(result['openUrl'],'ghapp://sessions/'+result['id'])
+        self.assertEqual([p.name for p in self.directory.iterdir()],['keep.txt'])
+        self.assertEqual(json.loads(Path(result['location']).with_name('.ai-first-source.json').read_text(encoding='utf8')),document)
+
+    def test_unregistered_folder_creates_one_project_and_separate_completed_history_sessions(self):
+        results = [copilot_import.import_document(conversation(self.directory), self.root, project=True) for _ in range(2)]
+        with closing(sqlite3.connect(self.root/'data.db')) as db:
+            self.assertEqual(db.execute('SELECT name,main_repo_path,container_kind,auto_approve FROM projects').fetchall(),[(self.directory.name,str(self.directory),'folder',0)])
+            self.assertEqual(db.execute('SELECT count(*) FROM workspaces').fetchone()[0],2)
+            self.assertEqual(db.execute("SELECT count(*) FROM sessions WHERE session_type='general_chat'").fetchone()[0],0)
+        self.assertNotEqual(results[0]['id'],results[1]['id'])
+        self.assertEqual(results[0]['projectId'],results[1]['projectId'])
+
+    def test_hidden_project_and_unknown_project_trigger_never_fall_back_to_chats(self):
+        with closing(sqlite3.connect(self.root/'data.db')) as db, db:
+            db.execute("INSERT INTO projects(id,name,main_repo_path,container_kind,show_in_sidebar) VALUES('hidden','Hidden',?,'folder',0)",(str(self.directory),))
+        with self.assertRaisesRegex(ValueError,'隐藏'):
+            copilot_import.import_document(conversation(self.directory),self.root,project=True)
+        self.assertFalse((self.root/'session-state').exists())
+        with closing(sqlite3.connect(self.root/'data.db')) as db, db:
+            db.execute('DELETE FROM projects')
+            db.execute("CREATE TRIGGER unknown_workspace AFTER INSERT ON workspaces BEGIN UPDATE app_state SET value='CORRUPTED'; END;")
+        with self.assertRaises(ValueError):
+            copilot_import.import_document(conversation(self.directory),self.root,project=True)
+        with closing(sqlite3.connect(self.root/'data.db')) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM projects').fetchone()[0],0)
+            self.assertEqual(db.execute('SELECT count(*) FROM sessions').fetchone()[0],0)
+            self.assertEqual(db.execute('SELECT count(*) FROM workspaces').fetchone()[0],0)
+            self.assertEqual(db.execute('SELECT value FROM app_state').fetchone()[0],'never-copy-this-synthetic-value')
+        self.assertEqual(list((self.root/'session-state').iterdir()),[])
+
+    def test_failed_project_readback_rolls_back_new_associations_and_preserves_existing_project(self):
+        with closing(sqlite3.connect(self.root/'data.db')) as db, db:
+            db.execute("INSERT INTO projects(id,name,main_repo_path,container_kind,instructions) VALUES('keep','Keep',?,'repository','KEEP')", (str(self.directory),))
+            before = {table:db.execute('SELECT * FROM '+table).fetchall() for table in ('projects','workspaces','sessions','app_state')}
+        with patch.object(copilot_local, '_read', side_effect=ValueError('synthetic readback failure')):
+            with self.assertRaisesRegex(ValueError, 'synthetic'):
+                copilot_import.import_document(conversation(self.directory), self.root, project=True)
+        with closing(sqlite3.connect(self.root/'data.db')) as db:
+            self.assertEqual({table:db.execute('SELECT * FROM '+table).fetchall() for table in before}, before)
+        self.assertEqual(list((self.root/'session-state').iterdir()), [])
+        self.assertEqual((self.directory/'keep.txt').read_text(encoding='utf8'), 'synthetic original project')
 
 
 if __name__ == "__main__":

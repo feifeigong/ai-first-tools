@@ -35,10 +35,10 @@ internal static class ResetCalendarModel
     {
         var view = ResetNewsPresentation.From(item, now);
         if (item.Kind == "banked")
-            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "banked", "发放重置卡", "Tibo 发布了重置卡消息",
+            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "banked", "发放重置卡", view.Summary,
                 view.Description, "公告发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url);
         if (item.Kind == "uncertain")
-            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "uncertain", "待核实", "这条消息还需核对原帖",
+            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "uncertain", ResetNewsService.IncompleteOriginal(item.Text) ? "原文待补全" : "待核实", view.Summary,
                 view.Description, "原帖发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url);
         if (item.Kind == "announced")
             return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "completed", "重置确认", "Tibo 已确认重置完成",

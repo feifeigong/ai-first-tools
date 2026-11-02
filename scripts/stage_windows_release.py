@@ -23,6 +23,8 @@ def main() -> None:
     checks = json.loads((root / "artifacts/windows/installed-self-test.json").read_text(encoding="utf-8-sig"))
     if report.get("passed") is not True or report.get("version") != version or not report.get("checks") or not all(value is True for value in report["checks"].values()) or checks.get("failed") != 0 or checks.get("passed", 0) < 62:
         raise ValueError("Installer audit did not pass")
+    if tuple(map(int, version.split('.'))) >= (0,3,25) and report['checks'].get('taskbarIdentity') is not True:
+        raise ValueError('Installed taskbar identity did not pass')
     if tuple(map(int,version.split('.'))) >= (0,3,19):
         ui=json.loads((root/'artifacts/windows/release-highlights-ui/report.json').read_text(encoding='utf-8-sig'))
         required={mode+name for mode in ('done','close','escape') for name in ('Layout','Focus','Acknowledged')}
@@ -45,6 +47,8 @@ def main() -> None:
         memory = json.loads((root/'artifacts/windows/memory-package-test.json').read_text(encoding='utf-8-sig'))
         results = {item['name']: item.get('passed') for item in memory.get('checks', [])}
         required = {'current_full_chat_registration_without_worktree','unknown_full_chat_trigger_still_denied'}
+        if tuple(map(int, version.split('.'))) >= (0,3,25):
+            required |= {'full_history_uses_selected_folder_project','full_history_reuses_project_without_worktree'}
         if memory.get('passed') is not True or memory.get('synthetic_only') is not True or memory.get('model_requests') != 0 or not required <= results.keys() or not all(results.values()):
             raise ValueError('Packaged Copilot full migration index compatibility did not pass')
     assets = [release / f"AI-First-Tools-Setup-{version}.exe", release / f"AI-First-Tools-Portable-{version}-win-x64.zip"]

@@ -29,6 +29,8 @@ def validated_assets(root: Path, version: str) -> list[Path]:
     required = {"silentInstall", "silentReinstall", "installedSelfChecks", "installedVersion", "extraFilePreserved", "safeUninstall"}
     if tuple(map(int, version.split('.'))) >= (0,3,12):
         required |= {"bundledRuntime", "bundledControls", "backgroundUpgrade", "backgroundUninstall"}
+    if tuple(map(int, version.split('.'))) >= (0,3,25):
+        required.add('taskbarIdentity')
     checks = installation.get("checks") or {}
     if installation.get("passed") is not True or installation.get("version") != version \
             or not required <= set(checks) or any(checks[name] is not True for name in required) \
@@ -48,6 +50,8 @@ def validated_assets(root: Path, version: str) -> list[Path]:
         memory = json.loads((root/'windows/memory-package-test.json').read_text(encoding='utf-8-sig'))
         results = {item['name']: item.get('passed') for item in memory.get('checks', [])}
         required = {'current_full_chat_registration_without_worktree','unknown_full_chat_trigger_still_denied'}
+        if tuple(map(int, version.split('.'))) >= (0,3,25):
+            required |= {'full_history_uses_selected_folder_project','full_history_reuses_project_without_worktree'}
         if memory.get('passed') is not True or memory.get('synthetic_only') is not True or memory.get('model_requests') != 0 or not required <= results.keys() or not all(results.values()):
             raise ValueError('Packaged Copilot full migration index compatibility did not pass')
     if tuple(map(int, version.split('.'))) >= (0,3,16):

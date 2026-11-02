@@ -385,7 +385,8 @@ class Api:
             return {"error": "这条记录尚未导入成功。"}
         url = str(items[index].get("openUrl", ""))
         imported = str(items[index].get("importedId", ""))
-        copilot = self._job.target == "copilot_desktop" and url == copilot_import.LIST_URL
+        copilot_project = bool(imported and url == copilot_import.project_url(imported))
+        copilot = self._job.target == "copilot_desktop" and (url == copilot_import.LIST_URL or copilot_project)
         state = items[index]["state"]
         if state != "ok" and not (copilot and state == "skipped"):
             return {"error": "这条记录尚未导入成功。"}
@@ -409,7 +410,7 @@ class Api:
             open_external(url)
         except (OSError, subprocess.SubprocessError) as error:
             mover.log(f"open_in_app {url}: {error!r}")
-            return {"error": "无法打开 Copilot 的会话列表，请在 Copilot 用户菜单选择 Manage sessions（管理会话）。" if copilot else "没有找到可以打开它的软件，请先安装并启动 ChatGPT。"}
+            return {"error": ("无法打开 Copilot 中的这条对话，请在对应项目下查看。" if copilot_project else "无法打开 Copilot 的会话列表，请在 Copilot 用户菜单选择 Manage sessions（管理会话）。") if copilot else "没有找到可以打开它的软件，请先安装并启动 ChatGPT。"}
         return {"ok": True, "refreshed": refreshed == "requested"} if copilot else {"ok": True}
 
     def move_status(self) -> dict:

@@ -96,6 +96,24 @@ internal static class SelfTests
         Check("Bundled brand image and multi-size Windows icon load", () => { Require(new BrandAssets(path).Load() is not null); Require(File.Exists(Path.Combine(AppContext.BaseDirectory, "assets", "ai-first-logo.ico"))); });
         Check("Brand wordmark has a compact horizontal layout", () => { var image = (System.Windows.Media.Imaging.BitmapSource)new BrandAssets(path).Load()!; Require(image.PixelWidth > image.PixelHeight * 1.8 && image.PixelWidth < image.PixelHeight * 2.2); });
         Check("Window icon retains multiple size frames including a high resolution frame", () => { var frame = BrandAssets.LoadWindowIcon(); Require(frame.PixelWidth == 256 && frame.Decoder!.Frames.Count >= 7); Require(frame.Decoder.Frames.Any(image => image.PixelWidth == 32)); });
+        Check("Running toolbox uses a stable explicit taskbar identity", () => Require(ShellIdentity.Read() == ShellIdentity.AppId));
+        Check("Native shortcut branding persists the matching taskbar identity and preserves foreign links", () =>
+        {
+            var own = Path.Combine(root, "native-owned-toolbox.lnk");
+            var foreign = Path.Combine(root, "native-foreign-toolbox.lnk");
+            var target = Path.Combine(root, "工具箱入口.exe");
+            var other = Path.Combine(root, "other.exe");
+            File.WriteAllText(target, "synthetic fixture; never executed");
+            File.WriteAllText(other, "synthetic fixture; never executed");
+            AIFirst.Toolbox.ShellLinkTarget.Create(own, target);
+            AIFirst.Toolbox.ShellLinkTarget.Create(foreign, other);
+            var before = File.ReadAllBytes(foreign);
+            var icon = Path.Combine(AppContext.BaseDirectory, "assets", "ai-first-logo.ico");
+            Require(AIFirst.Toolbox.ShellLinkTarget.ApplyBranding(own, target, ShellIdentity.AppId, icon));
+            Require(AIFirst.Toolbox.ShellLinkTarget.Read(own) == target && AIFirst.Toolbox.ShellLinkTarget.ReadAppId(own) == ShellIdentity.AppId);
+            Require(!AIFirst.Toolbox.ShellLinkTarget.ApplyBranding(foreign, target, ShellIdentity.AppId, icon));
+            Require(before.SequenceEqual(File.ReadAllBytes(foreign)));
+        });
         Check("Windows icon frames have transparent edges and no enclosing tile", () =>
         {
             foreach (var frame in BrandAssets.LoadWindowIcon().Decoder!.Frames)

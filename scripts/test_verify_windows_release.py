@@ -85,12 +85,26 @@ class WindowsVerificationTests(unittest.TestCase):
             validated_assets(self.root, version)
 
     def test_current_copilot_frozen_checks_are_required_for_new_release(self):
+        self._copilot_evidence('0.3.24')
+
+    def test_selected_project_and_installed_taskbar_checks_are_required(self):
+        self.report['checks']['taskbarIdentity'] = True
+        self._copilot_evidence('0.3.25', project=True)
+        value = json.loads(self.report_path.read_text())
+        del value['checks']['taskbarIdentity']
+        self.report_path.write_text(json.dumps(value))
+        with self.assertRaisesRegex(ValueError, 'installation'):
+            validated_assets(self.root, '0.3.25')
+
+    def _copilot_evidence(self, version, project=False):
         path = self.root / 'windows/memory-package-test.json'
         names = ('current_full_chat_registration_without_worktree','unknown_full_chat_trigger_still_denied')
+        if project:
+            names += ('full_history_uses_selected_folder_project','full_history_reuses_project_without_worktree')
         value = {'passed': True, 'synthetic_only': True, 'model_requests': 0,
                  'checks': [{'name': name, 'passed': True} for name in names]}
         path.write_text(json.dumps(value))
-        self._full_payload_evidence('0.3.24')
+        self._full_payload_evidence(version)
         for filename, fields in (('update-pipeline-test.json', ('newToolAttached',)),):
             audit_path = self.root / 'windows' / filename
             data = json.loads(audit_path.read_text())
@@ -100,10 +114,10 @@ class WindowsVerificationTests(unittest.TestCase):
             changed = {**value, 'checks': [item for item in value['checks'] if item['name'] != name]}
             path.write_text(json.dumps(changed))
             with self.assertRaisesRegex(ValueError, 'Copilot'):
-                validated_assets(self.root, '0.3.24')
+                validated_assets(self.root, version)
         path.write_text(json.dumps({**value, 'model_requests': 1}))
         with self.assertRaisesRegex(ValueError, 'Copilot'):
-            validated_assets(self.root, '0.3.24')
+            validated_assets(self.root, version)
 
 
 

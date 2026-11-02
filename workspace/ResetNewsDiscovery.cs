@@ -12,7 +12,7 @@ namespace AIFirst.Workspace;
 
 internal sealed partial class ResetNewsService
 {
-    private const int DiscoveryRevision = 4;
+    private const int DiscoveryRevision = 5;
     private sealed record Scan(List<ResetNewsItem> Items, bool Partial, List<Candidate> Queue,
         Dictionary<string, DateTimeOffset> Checked, int Offset, string? From, DateTimeOffset? NextPage,
         Dictionary<string, DateTimeOffset> RetryAfter, DateTimeOffset? HeadCheckedAt, bool SourcePartial, bool VerificationFailed);

@@ -23,8 +23,8 @@ internal static class ResetCalendarTests
             var records = ResetCalendarModel.Events(new[] { banked, pending }, Now);
             require(records.Count == 2 && records.All(item => !item.Completed));
             require(records.Single(item => item.State == "banked").Date == new DateTime(2026, 10, 8));
-            require(records.Single(item => item.State == "uncertain").Badge == "待核实");
-            require(ResetNewsPresentation.From(banked).Description.Contains("不是直接恢复"));
+            require(records.Single(item => item.State == "uncertain").Badge == "原文待补全");
+            require(ResetNewsPresentation.From(banked).Description.Contains("不等于当前额度"));
         });
         check("Within the next two hours retains its deadline meaning on the Beijing calendar", () =>
         {

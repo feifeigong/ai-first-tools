@@ -19,6 +19,8 @@ public partial class App : Application
 
     protected override async void OnStartup(StartupEventArgs args)
     {
+        try { ShellIdentity.Initialize(); }
+        catch (System.Runtime.InteropServices.COMException exception) { Log(exception); }
         base.OnStartup(args);
         if (args.Args.Contains("--reset-monitor"))
         {

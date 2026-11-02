@@ -1,7 +1,31 @@
 {
   "version": 1,
-  "verifiedAt": "2026-10-29T01:33:51.747886+00:00",
+  "verifiedAt": "2026-11-02T02:35:59.877401+00:00",
   "items": [
+    {
+      "id": "2117035794678546764",
+      "summary": "Tibo 发布了重置卡消息",
+      "text": "Day 28/ Banked 2/2",
+      "kind": "banked",
+      "publishedAt": "2026-11-01T23:27:20.731+00:00",
+      "url": "https://x.com/thsottiaux/status/2117035794678546764",
+      "sourceLabel": "Tibo · X",
+      "sourceUrl": "https://x.com/thsottiaux",
+      "groupId": "2117035794678546764",
+      "historical": true
+    },
+    {
+      "id": "2116692529970311254",
+      "summary": "Tibo 发布了重置卡消息",
+      "text": "Banked 1/2",
+      "kind": "banked",
+      "publishedAt": "2026-11-01T00:43:20.047+00:00",
+      "url": "https://x.com/thsottiaux/status/2116692529970311254",
+      "sourceLabel": "Tibo · X",
+      "sourceUrl": "https://x.com/thsottiaux",
+      "groupId": "2116692529970311254",
+      "historical": true
+    },
     {
       "id": "2115330127886463244",
       "summary": "Tibo 宣布已完成重置",

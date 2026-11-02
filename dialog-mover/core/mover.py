@@ -169,12 +169,15 @@ def already_moved(source: str, session_id: str, target: str, directory: str) -> 
     return saved is not None
 
 
-def _record_move(source: str, session_id: str, target: str, directory: str) -> None:
+def _record_move(source: str, session_id: str, target: str, directory: str, details: dict | None = None) -> None:
     history = _load_history()
     stamp = int(time.time())
     history_format = (codex_import.HISTORY_FORMAT if target in ("codex", "chatgpt_work") else
                       copilot_import.HISTORY_FORMAT if target == "copilot_desktop" else None)
-    history[history_key(source, session_id, target, directory)] = {"time": stamp, "format": history_format} if history_format else stamp
+    saved = {"time": stamp, "format": history_format} if history_format else stamp
+    if target == 'copilot_desktop' and details and copilot_import.project_url(details.get('importedId','')) == details.get('openUrl'):
+        saved['importedId'] = details['importedId']
+    history[history_key(source, session_id, target, directory)] = saved
     _save_history(history)
 
 
@@ -213,12 +216,13 @@ def _import_document(path: Path, document: dict, target: str, details: dict | No
     environment = destination_env(target)
     imports.preflight(target, environment)
     if target == "copilot_desktop":
-        report = copilot_import.import_document(document, Path(environment["COPILOT_HOME"]))
+        report = copilot_import.import_document(document, Path(environment["COPILOT_HOME"]), project=True)
         if details is not None:
             details.update({"importedId": report["id"], "location": report["location"], "resumeCommand": "",
                             "notice": TARGETS[target]["notice"], "mode": "local",
-                            "historicalToolNotes": report["historicalToolNotes"], "openUrl": copilot_import.LIST_URL})
-        return "ok", "已复制到 Copilot，正在打开会话列表"
+                            "historicalToolNotes": report["historicalToolNotes"], "openUrl": report['openUrl'],
+                            "projectName": report['projectName'], "projectId": report['projectId']})
+        return "ok", "已复制到 Copilot 的所选项目"
     moved = _run(["continue", str(path), "--with", TARGETS[target]["harness"], "--no-resume"], environment)
     if moved.returncode != 0:
         detail = (moved.stderr or moved.stdout or "").strip()
@@ -319,7 +323,7 @@ def _move_cached_claude(session: dict, target: str, directory: str, details: dic
         result = _import_document(path, document, target, details)
         if result[0] != "ok":
             return result
-        _record_move("claude_desktop", sid, target, directory)
+        _record_move("claude_desktop", sid, target, directory, details)
         log(f"moved claude_desktop/{sid} -> {target} in {directory}")
         return result
     except subprocess.TimeoutExpired:
@@ -346,10 +350,11 @@ def move_one(source: str, session: dict, target: str, directory: str, details: d
         return "failed", "请先选好要放进去的文件夹。"
     if already_moved(source, sid, target, directory):
         if target == "copilot_desktop" and details is not None:
-            # Older receipts intentionally contain no imported id. The fixed
-            # list link can refresh these copies too, without another write.
-            details.update({"openUrl": copilot_import.LIST_URL, "mode": "local"})
-            return "skipped", "之前已复制到 Copilot，打开会话列表查看；不重复搬运。"
+            saved = _load_history().get(history_key(source, sid, target, directory), {})
+            imported = saved.get('importedId','') if isinstance(saved,dict) else ''
+            details.update({"openUrl": copilot_import.project_url(imported) or copilot_import.LIST_URL,
+                            "importedId": imported, "mode": "local"})
+            return "skipped", "之前已复制到 Copilot，打开原对话查看；不重复搬运。"
         return "skipped", "之前已经搬到这个文件夹了，不重复搬。"
     if source == "claude_desktop":
         return _move_cached_claude(session, target, directory, details)
@@ -387,7 +392,7 @@ def move_one(source: str, session: dict, target: str, directory: str, details: d
         result = _import_document(path, document, target, details)
         if result[0] != "ok":
             return result
-        _record_move(source, sid, target, directory)
+        _record_move(source, sid, target, directory, details)
         log(f"moved {source}/{sid} -> {target} in {directory}")
         return result
     except subprocess.TimeoutExpired:
@@ -455,6 +460,11 @@ class DocumentJob:
                 try:
                     if already_moved(item["source"], item["source_id"], self.target, self.directory):
                         state, message = "skipped", "之前已经完整迁移到这里。"
+                        if self.target == 'copilot_desktop':
+                            saved = _load_history().get(history_key(item['source'], item['source_id'], self.target, self.directory), {})
+                            imported = saved.get('importedId', '') if isinstance(saved, dict) else ''
+                            details.update(openUrl=copilot_import.project_url(imported) or copilot_import.LIST_URL,
+                                           importedId=imported, mode='local')
                     else:
                         document = json.loads(item["original"].read_text(encoding="utf-8"))
                         document["cwd"] = self.directory
@@ -463,7 +473,7 @@ class DocumentJob:
                             path = Path(scratch) / "source.json"
                             path.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
                             state, message = _import_document(path, document, self.target, details)
-                        if state == "ok": _record_move(item["source"], item["source_id"], self.target, self.directory)
+                        if state == "ok": _record_move(item["source"], item["source_id"], self.target, self.directory, details)
                 except Exception as error:
                     state, message = "failed", str(error) if isinstance(error, ValueError) else "完整迁移失败，原始档案已保留。"
                 with self._lock: self.items[index].update(state=state, message=message, **details)

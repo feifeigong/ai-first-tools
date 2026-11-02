@@ -1,6 +1,7 @@
-"""Copy external history into a new, local Copilot Desktop chat.
+"""Copy external history into a new, local Copilot Desktop conversation.
 
-Only a new sessions row and a fresh UUID directory are written. Existing
+Project imports add a session and folder workspace, reusing the selected project
+or creating a folder project. Legacy chat imports only add a session. Existing
 conversations, credentials, permissions and project configuration stay untouched.
 """
 from __future__ import annotations
@@ -17,7 +18,8 @@ from pathlib import Path
 
 from . import copilot_index, copilot_local, copilot_media
 
-HISTORY_FORMAT = "copilot-desktop-chat-v2"
+CHAT_FORMAT = "copilot-desktop-chat-v2"
+HISTORY_FORMAT = "copilot-desktop-project-history-v3"
 HISTORY_TOOL = "imported_history"
 # Desktop's session-by-id link explicitly rejects general_chat sessions. Opening
 # Recent opens the native managed-session list. Running Desktop also needs a
@@ -30,6 +32,13 @@ WRITABLE = REQUIRED | {"is_running", "was_interrupted", "mode", "auto_approve", 
 
 def _linked(path: Path) -> bool:
     return path.is_symlink() or getattr(path, "is_junction", lambda: False)()
+
+
+def project_url(session_id: str) -> str:
+    try:
+        return 'ghapp://sessions/' + session_id if str(uuid.UUID(session_id)) == session_id else ''
+    except (ValueError, TypeError, AttributeError):
+        return ''
 
 
 def _safe_store(base: Path) -> None:
@@ -220,16 +229,11 @@ def _remove_new(directory: Path, written: dict[str, bytes]) -> None:
         pass  # Never remove a new user file, or a file changed after our write.
 
 
-def import_document(document: dict, base: Path | None = None) -> dict:
+def import_document(document: dict, base: Path | None = None, *, project: bool = False) -> dict:
     base = base or copilot_local.root()
     columns = validate(base)
     sid = str(uuid.uuid4())
     events, workspace, expected = prepare(document, sid)
-    store = base / "session-state"
-    store.mkdir(exist_ok=True)
-    _safe_store(base)
-    staging = Path(tempfile.mkdtemp(prefix=".ai-first-import-", dir=store))
-    destination = store / sid
     imported_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     row = {"id": sid, "title": workspace["name"], "session_type": "general_chat",
            "created_at": imported_at, "updated_at": imported_at, "is_running": 0,
@@ -237,8 +241,36 @@ def import_document(document: dict, base: Path | None = None) -> dict:
            "remote_control_enabled": 0, "remote_session_mode": "off", "execution_location": "local",
            "title_source": "user", "provisional": 0}
     row = {name: value for name, value in row.items() if name in columns}
-    receipt = {"format": HISTORY_FORMAT, "sessionId": sid, "sourceId": document.get("id"),
+    rows = {"sessions": row}
+    project_columns, existing_project, project_row = None, None, None
+    if project:
+        with closing(sqlite3.connect((base / "data.db").as_uri() + "?mode=ro", uri=True)) as connection:
+            project_columns = copilot_index.project_schema(connection)
+            existing_project = copilot_index.project_at(connection, Path(workspace['cwd']))
+        project_row = {"id": existing_project['id'] if existing_project else str(uuid.uuid4()),
+                       "name": existing_project['name'] if existing_project else Path(workspace['cwd']).name,
+                       "main_repo_path": workspace['cwd'], "container_kind": "folder", "created_at": imported_at,
+                       "last_opened_at": imported_at, "auto_approve": 0, "show_in_sidebar": 1}
+        row['session_type'] = 'project'
+        workspace_row = {"id": str(uuid.uuid4()), "project_id": project_row['id'], "session_id": sid,
+                         "workspace_type": "folder", "branch": "", "name": workspace['name'],
+                         "source_path": workspace['cwd'], "created_at": imported_at, "updated_at": imported_at,
+                         "tab_order": 0, "port": 0, "name_source": "user", "explicitly_opened": 1,
+                         "provisional": 0, "host_id": "local", "is_initialized": 1}
+        rows = {table: {key: value for key, value in values.items() if key in project_columns[table]}
+                for table, values in (("projects", project_row), ("sessions", row), ("workspaces", workspace_row))
+                if table != 'projects' or existing_project is None}
+    store = base / "session-state"
+    store.mkdir(exist_ok=True)
+    _safe_store(base)
+    staging = Path(tempfile.mkdtemp(prefix=".ai-first-import-", dir=store))
+    destination = store / sid
+    history_format = HISTORY_FORMAT if project else CHAT_FORMAT
+    receipt = {"format": history_format, "sessionId": sid, "sourceId": document.get("id"),
                "newRow": row, "existingRowsModified": False}
+    if project:
+        receipt.update(projectId=project_row['id'], workspaceId=rows['workspaces']['id'],
+                       newProject=existing_project is None, newRows=rows)
     payloads = {"events.jsonl": "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in events),
                 # JSON is a YAML subset accepted by Copilot's native YAML loader.
                 "workspace.yaml": json.dumps(workspace, ensure_ascii=False, indent=2) + "\n",
@@ -257,11 +289,15 @@ def import_document(document: dict, base: Path | None = None) -> dict:
             connection.execute("PRAGMA foreign_keys=ON")
             connection.execute("BEGIN IMMEDIATE")
             try:
+                if project and (copilot_index.project_schema(connection) != project_columns
+                        or copilot_index.project_at(connection, Path(workspace['cwd'])) != existing_project):
+                    raise ValueError("Copilot 项目在准备期间发生变化，请返回重新核对。")
                 inactive_agent_table = copilot_index.known_agent_trigger_table(connection, "sessions_insert_agent")
+                current_table = ''
                 # Authorize insertion of our one new conversation; no trigger may
                 # change an existing row or write account/settings tables.
                 def authorize(action, table, column, database, trigger):
-                    if action == sqlite3.SQLITE_INSERT and (table != "sessions" or trigger is not None):
+                    if action == sqlite3.SQLITE_INSERT and (table != current_table or trigger is not None):
                         # SQLite authorizes trigger bytecode even when its WHEN
                         # branch cannot run for our fixed general_chat type.
                         if table == inactive_agent_table and trigger == "sessions_insert_agent":
@@ -271,9 +307,13 @@ def import_document(document: dict, base: Path | None = None) -> dict:
                         return sqlite3.SQLITE_DENY
                     return sqlite3.SQLITE_OK
                 connection.set_authorizer(authorize)
-                names = list(row)
-                connection.execute('INSERT INTO sessions (' + ','.join('"' + name + '"' for name in names) +
-                                   ') VALUES (' + ','.join('?' for _ in names) + ')', [row[name] for name in names])
+                for table in ('projects', 'sessions', 'workspaces'):
+                    if table not in rows: continue
+                    current_table = table
+                    values = rows[table]
+                    names = list(values)
+                    connection.execute('INSERT INTO "' + table + '" (' + ','.join('"' + name + '"' for name in names) +
+                                       ') VALUES (' + ','.join('?' for _ in names) + ')', [values[name] for name in names])
                 destination.mkdir()  # Atomic reservation; never overwrite an existing UUID directory.
                 reserved = True
                 for name in payloads:
@@ -283,15 +323,23 @@ def import_document(document: dict, base: Path | None = None) -> dict:
                     raise ValueError("Copilot 完整正文回读不一致，已撤销本次新记录。")
                 if json.loads((destination / ".ai-first-source.json").read_text(encoding="utf-8")) != document:
                     raise ValueError("Copilot 来源记录存档回读不一致，已撤销本次新记录。")
-                if connection.execute("SELECT title,session_type FROM sessions WHERE id=?", (sid,)).fetchone() != (workspace["name"], "general_chat"):
+                if connection.execute("SELECT title,session_type FROM sessions WHERE id=?", (sid,)).fetchone() != (workspace["name"], row['session_type']):
                     raise ValueError("Copilot Desktop 新聊天登记回读失败。")
+                for table, values in rows.items():
+                    actual = connection.execute('SELECT '+','.join('"'+key+'"' for key in values)+' FROM "'+table+'" WHERE id=?',(values['id'],)).fetchone()
+                    if actual != tuple(values.values()):
+                        raise ValueError("Copilot 中的新项目对话登记不完整，已撤销本次写入。")
                 connection.commit()
                 committed = True
             except BaseException:
                 connection.rollback()
                 raise
-        return {"id": sid, "location": str(destination / "events.jsonl"), "format": HISTORY_FORMAT,
+        result = {"id": sid, "location": str(destination / "events.jsonl"), "format": history_format,
                 "messageCount": len(expected), "historicalToolNotes": sum(len(event["data"].get("result", {}).get("structuredContent", {}).get("importedHistory", [])) for event in events)}
+        if project:
+            result.update(projectId=project_row['id'], projectName=project_row['name'],
+                          workspaceId=rows['workspaces']['id'], openUrl='ghapp://sessions/'+sid)
+        return result
     except (sqlite3.Error, OSError) as error:
         raise copilot_index.import_error(error) from error
     finally:

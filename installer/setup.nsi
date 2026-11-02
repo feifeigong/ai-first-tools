@@ -165,6 +165,9 @@ Section "安装"
   Pop $2
   Pop $3
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "${APP}"
+  nsExec::ExecToStack '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\assets\set-shell-identity.ps1" -InstallRoot "$INSTDIR"'
+  Pop $2
+  Pop $3
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "AI一手"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\${EXECUTABLE},0"

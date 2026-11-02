@@ -7,6 +7,51 @@ modifying existing data. Unknown triggers must still be denied by each writer.
 from __future__ import annotations
 
 import sqlite3
+import os
+
+PROJECT_REQUIRED = {
+    "projects": {"id", "name", "main_repo_path", "container_kind"},
+    "sessions": {"id", "title", "session_type", "created_at", "updated_at", "is_running", "auto_approve", "permission_mode"},
+    "workspaces": {"id", "project_id", "workspace_type", "branch", "name", "session_id", "source_path"},
+}
+PROJECT_WRITABLE = {
+    "projects": PROJECT_REQUIRED["projects"] | {"created_at", "last_opened_at", "auto_approve", "show_in_sidebar"},
+    "sessions": PROJECT_REQUIRED["sessions"] | {"mode", "was_interrupted", "remote_control_enabled", "remote_session_mode", "execution_location", "title_source", "provisional"},
+    "workspaces": PROJECT_REQUIRED["workspaces"] | {"created_at", "updated_at", "tab_order", "port", "name_source", "explicitly_opened", "provisional", "host_id", "is_initialized"},
+}
+
+
+def project_schema(connection):
+    result = {}
+    for table, required in PROJECT_REQUIRED.items():
+        kind = connection.execute("SELECT type FROM sqlite_master WHERE name=?", (table,)).fetchone()
+        columns = {r[1]: r for r in connection.execute(f'PRAGMA table_info("{table}")')}
+        if kind != ("table",) or not required <= columns.keys() or columns["id"][5] != 1:
+            raise ValueError("当前 Copilot 版本的项目格式暂不支持，未添加对话。")
+        if any(columns[name][2].upper() != "TEXT" for name in required - {"is_running", "auto_approve"}):
+            raise ValueError("Copilot 的项目保存方式发生了变化，已停止写入。")
+        if any(r[3] and r[4] is None and name not in PROJECT_WRITABLE[table] for name, r in columns.items()):
+            raise ValueError("当前 Copilot 项目有无法识别的必填信息，已停止写入。")
+        result[table] = set(columns)
+    return result
+
+
+def project_at(connection, workspace):
+    # Read only this folder's identity, never app settings, accounts or chat bodies.
+    columns = {r[1] for r in connection.execute('PRAGMA table_info("projects")')}
+    selected = ["id", "name", "main_repo_path", "container_kind"]
+    selected += [name for name in ("show_in_sidebar", "archived_at") if name in columns]
+    match = "replace(main_repo_path,char(92),'/') COLLATE NOCASE=replace(?,char(92),'/')" if os.name == "nt" else "main_repo_path=?"
+    rows = connection.execute("SELECT " + ",".join(selected) + " FROM projects WHERE " + match, (str(workspace),)).fetchall()
+    if len(rows) > 1:
+        raise ValueError("Copilot 中有多个同路径项目，请先在桌面端核对。")
+    if not rows: return None
+    row = dict(zip(selected, rows[0]))
+    if row["container_kind"] not in {"folder", "repository"}:
+        raise ValueError("这个路径属于其他类型的 Copilot 项目，未写入。")
+    if row.get("show_in_sidebar", 1) != 1 or row.get("archived_at"):
+        raise ValueError("这个 Copilot 项目已隐藏或归档，请先在桌面端恢复后重试。")
+    return row
 
 
 def known_trigger(connection, name, expected):

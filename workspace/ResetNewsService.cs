@@ -488,12 +488,14 @@ internal sealed partial class ResetNewsService : IDisposable
             if (Regex.IsMatch(label, @"^(?:https?://|pic\.twitter\.com/)", RegexOptions.IgnoreCase)) anchor.Remove();
         }
         var body = Regex.Replace(paragraph.Value, @"\s+", " ").Trim();
-        var complete = !body.EndsWith("…", StringComparison.Ordinal);
+        var complete = !IncompleteOriginal(body);
         if (body.Length is 0 or > 12000 || (!complete && !allowIncomplete)) throw new InvalidDataException();
         return new(id, body, complete);
     }
 
     private static string Normalize(string value) => Regex.Replace(Regex.Replace(WebUtility.HtmlDecode(value), @"https?://\S+", "", RegexOptions.IgnoreCase), @"\s+", " ").Trim();
+    internal static bool IncompleteOriginal(string text) => text.Contains('\uFFFD')
+        || text.TrimEnd().EndsWith("…", StringComparison.Ordinal) || text.TrimEnd().EndsWith("...", StringComparison.Ordinal);
     private static bool TimingReply(string value) => Regex.IsMatch(value, @"\b(?:lands?|landing|coming|tomorrow|tonight|before\s+\d|later\s+today|(?:by|before)\s+(?:midnight|noon))\b", RegexOptions.IgnoreCase);
     private static bool VerificationFailure(Exception exception) => exception is HttpRequestException or IOException or JsonException or InvalidDataException
         or OperationCanceledException or FormatException or OverflowException or XmlException or InvalidOperationException or KeyNotFoundException or ArgumentException;
@@ -501,6 +503,11 @@ internal sealed partial class ResetNewsService : IDisposable
     {
         var value = Normalize(text).ToLowerInvariant().Replace('’', '\'');
         if (Regex.IsMatch(value, @"\b(?:password|factory|device|router|database|server)\s+reset\b|\breset\s+(?:password|router|database|server)\b")) return null;
+        // Tibo's numbered issuance posts are complete past-tense declarations:
+        // "Banked 1/2", "Day 28/ Banked 2/2". Do not require a noun he omitted.
+        var bankedPart = Regex.Match(value, @"^(?:day\s+\d{1,3}\s*/\s*)?banked\s+(?<part>\d{1,2})\s*/\s*(?<total>\d{1,2})[.!]?$", RegexOptions.CultureInvariant);
+        if (bankedPart.Success && int.TryParse(bankedPart.Groups["part"].Value, out var part)
+            && int.TryParse(bankedPart.Groups["total"].Value, out var total) && part >= 1 && part <= total && total <= 10) return "banked";
         // Banked credits are a separate event, even when the post says "see you tomorrow".
         if (Regex.IsMatch(value, @"\bbanked\s+reset\b"))
             return Regex.IsMatch(value, @"\b(?:loading|loaded|granting|granted|adding|added|giving|give|issuing|issued)\b.{0,100}\bbanked\s+reset\b")
