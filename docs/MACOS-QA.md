@@ -1,8 +1,10 @@
 # Mac 移植验证记录
 
-## preview.28 候选验证
+## preview.28 原生与发布验证通过
 
-Copilot完整搬家规则与智能搬家共用，修复新版persistent_projects条件分支在SQLite编译授权时被误拦。源码新增三项失败反例和两种索引的官方组件严格恢复；冻结包memory报告必须包含普通聊天不建worktree、未知触发器拒绝两项。两芯片原生与发布结果待通过后补记，不套用preview.27报告。细节见[COPILOT-INDEX-QA.md](COPILOT-INDEX-QA.md)。
+已发布 Windows0.3.24 / Mac preview.28，固定源码 `6ca210491b41da675fbc3f1eafeeb2a04c3b625b`。Windows完整构建[41373764674](https://github.com/feifeigong/ai-first-tools/actions/runs/41373764674)与Mac完整构建[41373744331](https://github.com/feifeigong/ai-first-tools/actions/runs/41373744331)均成功；Apple/Intel分别156/156项原生检查通过。新旧索引完整搬家及未知触发器拒绝均在冻结包内通过；版本、不可变标签、原始CI报告和远端资产摘要核对后公开。
+
+Copilot完整搬家规则与智能搬家共用，修复新版persistent_projects条件分支在SQLite编译授权时被误拦。源码新增三项失败反例和两种索引的官方组件严格恢复；冻结包memory报告必须包含普通聊天不建worktree、未知触发器拒绝两项。两芯片原生及发布验证已通过，不套用preview.27报告。细节见[COPILOT-INDEX-QA.md](COPILOT-INDEX-QA.md)。
 
 ## preview.27 原生与发布验证通过
 

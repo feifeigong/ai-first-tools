@@ -1,8 +1,12 @@
 # 完整开发背景、产品决策与架构
 
-## 2026-11-02：Copilot 完整搬家兼容修复候选
+## 2026-11-02：Copilot 完整搬家兼容修复已发布
 
-用户已由其他工具恢复项目会话，随后完整搬家出现笼统的占用/格式提示。只读公开 Copilot 1.1.33 程序静态 SQL，并用隔离夹具复现 SQLITE_AUTH：智能搬家支持 persistent_projects 的官方条件触发器，完整搬家仅支持 agents。现共用精确规则，不放宽未知写入；完整迁移仍只创建普通聊天、不创建 worktree 或修改已有项目。失败提示按原因区分。候选 Windows0.3.24 / Mac preview.28，共用更新摘要两条；发布门槛加入实际冻结兼容与拒绝未知触发器检查。详见[COPILOT-INDEX-QA.md](COPILOT-INDEX-QA.md)，未通过包不发布，真实用户记录/认证/DB不读不改，无模型测试请求。
+已发布 Windows0.3.24 / Mac preview.28，固定源码 `6ca210491b41da675fbc3f1eafeeb2a04c3b625b`。Windows完整构建[41373764674](https://github.com/feifeigong/ai-first-tools/actions/runs/41373764674)与Mac完整构建[41373744331](https://github.com/feifeigong/ai-first-tools/actions/runs/41373744331)均成功；Apple/Intel分别156/156项原生检查通过。新旧索引完整搬家及未知触发器拒绝均在冻结包内通过；版本、不可变标签、原始CI报告和远端资产摘要核对后公开。
+
+本机通过GitHub匿名公开下载的正式0.3.24安装包原位升级，1295个清单文件摘要核对；既有资料绑定和自动化设置保持，新版主窗口和内嵌搬家就绪。未读取或改写真实Copilot/来源聊天、DB或认证，不发模型请求作验证。
+
+用户已由其他工具恢复项目会话，随后完整搬家出现笼统的占用/格式提示。只读公开 Copilot 1.1.33 程序静态 SQL，并用隔离夹具复现 SQLITE_AUTH：智能搬家支持 persistent_projects 的官方条件触发器，完整搬家仅支持 agents。现共用精确规则，不放宽未知写入；完整迁移仍只创建普通聊天、不创建 worktree 或修改已有项目。失败提示按原因区分。已发布 Windows0.3.24 / Mac preview.28，共用更新摘要两条；发布门槛加入实际冻结兼容与拒绝未知触发器检查。详见[COPILOT-INDEX-QA.md](COPILOT-INDEX-QA.md)，未通过包不发布，真实用户记录/认证/DB不读不改，无模型测试请求。
 
 ## 2026-10-29：preview.27 更新恢复已发布
 

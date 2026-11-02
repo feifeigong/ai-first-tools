@@ -1,6 +1,6 @@
 # 支持范围与验证边界
 
-当前公开版本为 [Windows v0.3.22](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.22) 与 [Mac preview.25](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.25)。下面列出已实现的范围，不表示所有软件版本与账号场景都已完成原生验收。
+当前公开版本为 [Windows v0.3.24](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.24) 与 [Mac preview.28](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.28)。下面列出已实现的范围，不表示所有软件版本与账号场景都已完成原生验收。
 
 ## 两种搬家方式
 
@@ -11,7 +11,7 @@
 
 [智能搬家使用说明](SMART-MIGRATION.md)包含操作步骤、重复搬家与已有项目保护范围。智能功能不支持把 VS Code、Copilot CLI、Cursor、ChatGPT 或 Claude 作为目的地。
 
-Copilot完整搬家兼容修复候选为Windows0.3.24 / Mac preview.28：已核实新版官方条件触发器，不接受任意修改后的索引；仍不改已有项目、工作区或表结构，不自动重建缺失worktree。验证与发布状态见[COPILOT-INDEX-QA.md](COPILOT-INDEX-QA.md)。
+Copilot完整搬家兼容修复已发布于Windows0.3.24 / Mac preview.28：已核实新版官方条件触发器，不接受任意修改后的索引；仍不改已有项目、工作区或表结构，不自动重建缺失worktree。验证与发布状态见[COPILOT-INDEX-QA.md](COPILOT-INDEX-QA.md)。
 
 ## 完整对话迁移的支持范围
 

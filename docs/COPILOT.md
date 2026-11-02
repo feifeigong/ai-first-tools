@@ -1,8 +1,8 @@
 # Copilot Desktop 对话搬家
 
-## 当前使用说明（2026-10-28）
+## 当前使用说明（2026-11-02）
 
-Windows v0.3.22 与 Mac preview.25 已包含两种搬家方式：
+Windows v0.3.24 与 Mac preview.28 已包含两种搬家方式：
 
 | 方式 | 在 Copilot 中的结果 |
 | --- | --- |
@@ -15,7 +15,7 @@ Windows 已有受保护的列表刷新；任务或未发送内容存在时先保
 
 来源只读取桌面端已登记的正式记录，终端独有目录和 VS Code 自身聊天不混入。这两种搬家都适配已知本机格式，**不是 GitHub 官方的跨软件历史导入 API**；不改表结构、不迁移登录或模型权限，未知格式停止操作。下载与实际运行包验收见[首页](../README.md)、[Windows QA](UPDATER-QA.md)与[Mac QA](MACOS-QA.md)。
 
-新版索引兼容修复正在验证 Windows0.3.24 / Mac preview.28：完整搬家和智能搬家共用精确规则。完整搬家新增普通 Chats，不会重建或修改原来的项目、worktree；`Worktree missing` 与新聊天登记失败属于不同问题，不能仅凭提示推断聊天正文损坏或其他工具改坏格式。已核实范围和运行包结果见[索引兼容QA](COPILOT-INDEX-QA.md)。
+Windows0.3.24 / Mac preview.28 已修复新版索引兼容问题：完整搬家和智能搬家共用精确规则。完整搬家新增普通 Chats，不会重建或修改原来的项目、worktree；`Worktree missing` 与新聊天登记失败属于不同问题，不能仅凭提示推断聊天正文损坏或其他工具改坏格式。已核实范围和运行包结果见[索引兼容QA](COPILOT-INDEX-QA.md)。
 
 ## 历史适配与验证记录
 

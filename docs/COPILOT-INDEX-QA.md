@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-2026-11-02：候选 Windows 0.3.24 / Mac preview.28。运行包需通过两端构建和冻结检查后发布；源码通过不代表用户真实客户端已经验收。
+2026-11-02：Windows 0.3.24 / Mac preview.28 已发布。冻结包与原生报告通过；用户真实客户端显示和模型续聊仍与源码、原生读取验收分别记录。
 
 ## 问题与依据
 
@@ -25,4 +25,12 @@
 
 固定摘要的官方测试组件对旧/新两种索引均通过完整分页读取和禁止修复的严格恢复，包含 125 轮、图片、思考和长工具历史；没有向模型发送消息。此结果不等于已登录 Desktop 全量显示、MCP 启用或付费续聊通过。
 
-冻结包新增 `current_full_chat_registration_without_worktree` 与 `unknown_full_chat_trigger_still_denied` 两项检查；Windows 0.3.24、Mac preview.28 的发布校验都必须包含它们。运行包与发布核验结果待通过后补记。
+冻结包新增 `current_full_chat_registration_without_worktree` 与 `unknown_full_chat_trigger_still_denied` 两项检查；Windows 0.3.24、Mac preview.28 的发布校验都必须包含它们。运行包与发布核验已通过，结果如下。
+
+## 发布结果
+
+已发布 Windows0.3.24 / Mac preview.28，固定源码 `6ca210491b41da675fbc3f1eafeeb2a04c3b625b`。Windows完整构建[41373764674](https://github.com/feifeigong/ai-first-tools/actions/runs/41373764674)与Mac完整构建[41373744331](https://github.com/feifeigong/ai-first-tools/actions/runs/41373744331)均成功；Apple/Intel分别156/156项原生检查通过。新旧索引完整搬家及未知触发器拒绝均在冻结包内通过；版本、不可变标签、原始CI报告和远端资产摘要核对后公开。
+
+本机476项源码/界面检查无跳过、两种索引官方组件读取/严格恢复2项、Windows发布校验单元测试5项通过。对公开Copilot程序的GitHub签名核对有效。无真实聊天/DB/认证读取，无模型请求；不修改已有项目或用户开关。
+
+独立下载原始构建和草稿资产并逐文件比对：[Windows 41374819599](https://github.com/feifeigong/ai-first-tools/actions/runs/41374819599)、[Mac 41375353750](https://github.com/feifeigong/ai-first-tools/actions/runs/41375353750)均通过。公开后额外下载并核对Mac20份原生报告的摘要、版本、芯片与检查结果；本机Windows从公开安装包升级，1295个发布文件摘要一致，原有资料绑定与自动化配置保持。
