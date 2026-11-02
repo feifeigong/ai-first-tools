@@ -11,6 +11,8 @@
 
 [智能搬家使用说明](SMART-MIGRATION.md)包含操作步骤、重复搬家与已有项目保护范围。智能功能不支持把 VS Code、Copilot CLI、Cursor、ChatGPT 或 Claude 作为目的地。
 
+Copilot完整搬家兼容修复候选为Windows0.3.24 / Mac preview.28：已核实新版官方条件触发器，不接受任意修改后的索引；仍不改已有项目、工作区或表结构，不自动重建缺失worktree。验证与发布状态见[COPILOT-INDEX-QA.md](COPILOT-INDEX-QA.md)。
+
 ## 完整对话迁移的支持范围
 
 | 软件或模式 | 状态与限制 |

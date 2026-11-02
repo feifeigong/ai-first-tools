@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import copilot_import, copilot_local, memory_workspace
+from .copilot_index import known_trigger, known_agent_trigger_table
 
 FORMAT = "ai-first-memory-desktop-v1"
 REQUIRED = {
@@ -31,25 +32,6 @@ def root():
 
 def sha(raw):
     return hashlib.sha256(raw).hexdigest()
-
-
-def known_trigger(connection, name, expected):
-    row = connection.execute("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?", (name,)).fetchone()
-    return bool(row and " ".join(row[0].split()).rstrip(";") == expected)
-
-
-def known_agent_trigger_table(connection, name):
-    # Exact shipped 1.1.30/1.1.31 rules. These branches cannot create an Agent
-    # for our fixed project session; SQLite still authorizes their bytecode.
-    for table, identifier in (("agents", "agents"), ("persistent_projects", '"persistent_projects"')):
-        if name == "sessions_insert_agent":
-            expected = f"CREATE TRIGGER sessions_insert_agent AFTER INSERT ON sessions WHEN NEW.session_type = 'agent' BEGIN INSERT INTO {identifier} (session_id) VALUES (NEW.id); END"
-        elif name == "sessions_update_agent":
-            expected = f"CREATE TRIGGER sessions_update_agent AFTER UPDATE OF session_type ON sessions WHEN OLD.session_type != NEW.session_type BEGIN DELETE FROM {identifier} WHERE session_id = NEW.id AND NEW.session_type != 'agent'; INSERT INTO {identifier} (session_id) SELECT NEW.id WHERE NEW.session_type = 'agent'; END"
-        else:
-            return None
-        if known_trigger(connection, name, expected): return table
-    return None
 
 
 def safe_path(base: Path, relative: str):

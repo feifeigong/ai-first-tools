@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from unittest.mock import call, patch
 
 from core import copilot_import, copilot_local, common, mover
+from core.memory_audit import desktop_fixture, persistent_projects_fixture, isolated_connections
 from main import Api
 
 
@@ -74,6 +75,62 @@ class CopilotDestinationTests(unittest.TestCase):
         self.directory.mkdir()
         desktop_index(self.root)
         self.enterContext(patch.object(copilot_local, "root", return_value=self.root))
+        self.enterContext(isolated_connections(self.base))
+
+    def test_current_native_trigger_allows_chat_without_creating_worktree_or_changing_old_project(self):
+        current = self.base / "current-desktop"
+        desktop_fixture(current)
+        persistent_projects_fixture(current)
+        with closing(sqlite3.connect(current / "data.db")) as db, db:
+            db.execute("INSERT INTO projects(id,name,main_repo_path,container_kind) VALUES('existing-project','Existing project','synthetic-missing-worktree','folder')")
+            db.execute("INSERT INTO sessions(id,title,session_type,created_at,updated_at) VALUES('existing-session','Existing session','project','now','now')")
+            db.execute("INSERT INTO workspaces(id,project_id,workspace_type,branch,name,session_id,source_path) VALUES('existing-workspace','existing-project','folder','','Existing session','existing-session','synthetic-missing-worktree')")
+            before = {table: db.execute('SELECT * FROM "' + table + '"').fetchall()
+                      for table in ('projects', 'workspaces', 'persistent_projects', 'app_state')}
+            schema = db.execute("SELECT type,name,sql FROM sqlite_master ORDER BY type,name").fetchall()
+            old = db.execute("SELECT * FROM sessions WHERE id='existing-session'").fetchone()
+        source = visual_conversation(self.directory)
+        result = copilot_import.import_document(source, current)
+        with closing(sqlite3.connect(current / "data.db")) as db:
+            self.assertEqual(db.execute("SELECT session_type FROM sessions WHERE id=?", (result['id'],)).fetchone(), ('general_chat',))
+            self.assertEqual(db.execute("SELECT * FROM sessions WHERE id='existing-session'").fetchone(), old)
+            self.assertEqual(db.execute("SELECT count(*) FROM sessions").fetchone()[0], 2)
+            self.assertEqual(db.execute("SELECT type,name,sql FROM sqlite_master ORDER BY type,name").fetchall(), schema)
+            for table, rows in before.items():
+                self.assertEqual(db.execute('SELECT * FROM "' + table + '"').fetchall(), rows)
+        self.assertEqual(copilot_local._read(Path(result['location']), result['id'])['title'], source['title'])
+        self.assertEqual(json.loads(Path(result['location']).with_name('.ai-first-source.json').read_text(encoding='utf8')), source)
+
+    def test_changed_current_trigger_is_denied_without_partial_rows_or_files(self):
+        for mutation in ("WHEN NEW.session_type = 'general_chat'", "WHEN NEW.session_type = 'agent' OR 1=1"):
+            with self.subTest(condition=mutation):
+                current = self.base / ('changed-' + str(len(list(self.base.glob('changed-*')))))
+                desktop_fixture(current)
+                persistent_projects_fixture(current)
+                with closing(sqlite3.connect(current / "data.db")) as db, db:
+                    db.execute('DROP TRIGGER sessions_insert_agent')
+                    db.execute('CREATE TRIGGER sessions_insert_agent AFTER INSERT ON sessions ' + mutation +
+                               ' BEGIN INSERT INTO "persistent_projects" (session_id) VALUES (NEW.id); END;')
+                with self.assertRaisesRegex(ValueError, '索引.*规则'):
+                    copilot_import.import_document(conversation(self.directory), current)
+                with closing(sqlite3.connect(current / "data.db")) as db:
+                    self.assertEqual(db.execute('SELECT count(*) FROM sessions').fetchone()[0], 0)
+                    self.assertEqual(db.execute('SELECT count(*) FROM persistent_projects').fetchone()[0], 0)
+                    self.assertEqual(db.execute('SELECT value FROM app_state').fetchone()[0], 'never-copy-this-synthetic-value')
+                self.assertEqual(list((current / 'session-state').iterdir()), [])
+
+    def test_database_busy_is_not_reported_as_format_change(self):
+        with closing(sqlite3.connect(self.root / 'data.db', timeout=0)) as lock:
+            lock.execute('BEGIN IMMEDIATE')
+            original = sqlite3.connect
+            def fast_connect(*args, **kwargs):
+                kwargs['timeout'] = 0
+                return original(*args, **kwargs)
+            with patch.object(sqlite3, 'connect', side_effect=fast_connect):
+                with self.assertRaisesRegex(ValueError, '正在保存记录'):
+                    copilot_import.import_document(conversation(self.directory))
+            lock.rollback()
+        self.assertEqual(list((self.root / 'session-state').iterdir()), [])
 
     def test_complete_long_body_and_desktop_chat_registration_without_permissions_or_credentials(self):
         document = conversation(self.directory, 125)

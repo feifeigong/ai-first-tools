@@ -74,6 +74,8 @@ def validated_assets(directory: Path, release: str, *, local_preview: bool = Fal
                 raise ValueError('Finder/launchd locale identity checks are required')
             if kind == 'memory' and not {'database_scope_guard','original_archive','bundled_stdio_mcp_handshake','discarded_legacy_entry_no_longer_blocks_move','source_badge_uses_current_entry','current_schema_rollback_preserves_legacy_orphan'} <= set(result['checks']):
                 raise ValueError('Native complete archive, read-only memory and repeat-move checks are required')
+            if number >= 28 and kind == 'memory' and not {'current_full_chat_registration_without_worktree','unknown_full_chat_trigger_still_denied'} <= set(result['checks']):
+                raise ValueError('Packaged Copilot full migration index compatibility checks are required')
             if kind == 'reset' and not {'frozenSharedRuleBridgeAndSwitch','independentAfterLauncherExit','singleOwnedNotifier','nativeWindowClosePreservesNotifier','nativeChinesePopupHasNoAutomaticResumeAction','anotherPackageCannotStopNotifier','cooperativeUpdateRestoresNotifier','stopPreservesPreferences'} <= set(result['checks']):
                 raise ValueError('Native reset notification lifecycle checks are required')
             if kind == 'reset-rules' and (len(result['checks']) < 20 or set(result.get('sharedWindowsSources',{})) != {'ResetNewsService.cs','ResetNewsDiscovery.cs','ResetNewsPresentation.cs','ResetCalendarModel.cs'}):

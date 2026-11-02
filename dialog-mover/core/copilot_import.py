@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import sqlite3
 import tempfile
 import uuid
@@ -16,7 +15,7 @@ from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import copilot_local, copilot_media
+from . import copilot_index, copilot_local, copilot_media
 
 HISTORY_FORMAT = "copilot-desktop-chat-v2"
 HISTORY_TOOL = "imported_history"
@@ -258,17 +257,14 @@ def import_document(document: dict, base: Path | None = None) -> dict:
             connection.execute("PRAGMA foreign_keys=ON")
             connection.execute("BEGIN IMMEDIATE")
             try:
-                agent_trigger = connection.execute("SELECT sql FROM sqlite_master WHERE type='trigger' AND name='sessions_insert_agent'").fetchone()
-                known_agent_trigger = bool(agent_trigger and re.fullmatch(
-                    r"CREATE TRIGGER sessions_insert_agent AFTER INSERT ON sessions WHEN NEW\.session_type = 'agent' BEGIN INSERT INTO agents \(session_id\) VALUES \(NEW\.id\); END",
-                    " ".join(agent_trigger[0].split())))
+                inactive_agent_table = copilot_index.known_agent_trigger_table(connection, "sessions_insert_agent")
                 # Authorize insertion of our one new conversation; no trigger may
                 # change an existing row or write account/settings tables.
                 def authorize(action, table, column, database, trigger):
                     if action == sqlite3.SQLITE_INSERT and (table != "sessions" or trigger is not None):
                         # SQLite authorizes trigger bytecode even when its WHEN
                         # branch cannot run for our fixed general_chat type.
-                        if table == "agents" and trigger == "sessions_insert_agent" and known_agent_trigger:
+                        if table == inactive_agent_table and trigger == "sessions_insert_agent":
                             return sqlite3.SQLITE_OK
                         return sqlite3.SQLITE_DENY
                     if action in (sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE):
@@ -297,7 +293,7 @@ def import_document(document: dict, base: Path | None = None) -> dict:
         return {"id": sid, "location": str(destination / "events.jsonl"), "format": HISTORY_FORMAT,
                 "messageCount": len(expected), "historicalToolNotes": sum(len(event["data"].get("result", {}).get("structuredContent", {}).get("importedHistory", [])) for event in events)}
     except (sqlite3.Error, OSError) as error:
-        raise ValueError("Copilot Desktop 正在占用索引或数据格式已变化，本次未登记成功，请结束任务后重试。") from error
+        raise copilot_index.import_error(error) from error
     finally:
         if not committed and reserved:
             _remove_new(destination, written)

@@ -44,6 +44,12 @@ def validated_assets(root: Path, version: str) -> list[Path]:
             raise ValueError('Bundled auto-resume reports did not pass')
     assets = [root / "release" / f"AI-First-Tools-Setup-{version}.exe",
               root / "release" / f"AI-First-Tools-Portable-{version}-win-x64.zip"]
+    if tuple(map(int, version.split('.'))) >= (0,3,24):
+        memory = json.loads((root/'windows/memory-package-test.json').read_text(encoding='utf-8-sig'))
+        results = {item['name']: item.get('passed') for item in memory.get('checks', [])}
+        required = {'current_full_chat_registration_without_worktree','unknown_full_chat_trigger_still_denied'}
+        if memory.get('passed') is not True or memory.get('synthetic_only') is not True or memory.get('model_requests') != 0 or not required <= results.keys() or not all(results.values()):
+            raise ValueError('Packaged Copilot full migration index compatibility did not pass')
     if tuple(map(int, version.split('.'))) >= (0,3,16):
         for filename, fields in (
                 ('staged-install-test.json', ('stageOnly', 'incrementalApply', 'stableFilesUntouched', 'extraFilePreserved', 'allHashesVerified', 'uninstallerUpdated')),

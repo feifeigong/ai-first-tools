@@ -58,15 +58,18 @@ class WindowsVerificationTests(unittest.TestCase):
             validated_assets(self.root,'0.3.12')
 
     def test_new_release_requires_full_payload_reopen_and_frozen_draft_evidence(self):
-        self.report['version'] = '0.3.16'
+        self._full_payload_evidence('0.3.16')
+
+    def _full_payload_evidence(self, version):
+        self.report['version'] = version
         self.report['checks'].update(dict.fromkeys(('bundledRuntime', 'bundledControls', 'backgroundUpgrade', 'backgroundUninstall'), True))
         self.report_path.write_text(json.dumps(self.report))
-        self.assets = [path.rename(path.with_name(path.name.replace('0.3.10', '0.3.16'))) for path in self.assets]
+        self.assets = [path.rename(path.with_name(path.name.replace('0.3.10', version))) for path in self.assets]
         (self.root / 'release/SHA256SUMS.txt').write_text('\n'.join(f'{digest(path)}  {path.name}' for path in self.assets) + '\n')
         (self.root / 'windows/resume-runtime-test.json').write_text(json.dumps({'passed': 4, 'failed': 0}))
         (self.root / 'windows/resume-control-test.json').write_text(json.dumps({'passed': True, 'checks': dict.fromkeys(('a','b','c','d','e'), True)}))
         with self.assertRaisesRegex(ValueError, 'Full update'):
-            validated_assets(self.root, '0.3.16')
+            validated_assets(self.root, version)
         for filename, fields in (
                 ('staged-install-test.json', ('stageOnly', 'incrementalApply', 'stableFilesUntouched', 'extraFilePreserved', 'allHashesVerified', 'uninstallerUpdated')),
                 ('update-pipeline-test.json', ('realHelper', 'newToolAttached', 'extraFilePreserved'))):
@@ -75,11 +78,32 @@ class WindowsVerificationTests(unittest.TestCase):
             (self.root / 'windows' / filename).write_text(json.dumps(data))
         guard = self.root / 'windows/copilot-refresh-test.json'
         guard.write_text(json.dumps({'passed': True, 'draftDetected': True, 'emptyAccepted': True}))
-        self.assertEqual(len(validated_assets(self.root, '0.3.16')), 3)
+        self.assertEqual(len(validated_assets(self.root, version)), 3)
         data['newToolAttached'] = False
         (self.root / 'windows/update-pipeline-test.json').write_text(json.dumps(data))
         with self.assertRaisesRegex(ValueError, 'Full update'):
-            validated_assets(self.root, '0.3.16')
+            validated_assets(self.root, version)
+
+    def test_current_copilot_frozen_checks_are_required_for_new_release(self):
+        path = self.root / 'windows/memory-package-test.json'
+        names = ('current_full_chat_registration_without_worktree','unknown_full_chat_trigger_still_denied')
+        value = {'passed': True, 'synthetic_only': True, 'model_requests': 0,
+                 'checks': [{'name': name, 'passed': True} for name in names]}
+        path.write_text(json.dumps(value))
+        self._full_payload_evidence('0.3.24')
+        for filename, fields in (('update-pipeline-test.json', ('newToolAttached',)),):
+            audit_path = self.root / 'windows' / filename
+            data = json.loads(audit_path.read_text())
+            data.update(dict.fromkeys(fields, True))
+            audit_path.write_text(json.dumps(data))
+        for name in names:
+            changed = {**value, 'checks': [item for item in value['checks'] if item['name'] != name]}
+            path.write_text(json.dumps(changed))
+            with self.assertRaisesRegex(ValueError, 'Copilot'):
+                validated_assets(self.root, '0.3.24')
+        path.write_text(json.dumps({**value, 'model_requests': 1}))
+        with self.assertRaisesRegex(ValueError, 'Copilot'):
+            validated_assets(self.root, '0.3.24')
 
 
 

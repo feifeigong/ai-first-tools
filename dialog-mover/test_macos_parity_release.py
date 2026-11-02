@@ -66,7 +66,7 @@ class MacParityReleaseTests(unittest.TestCase):
             path.write_bytes(original)
 
     def test_new_automation_requires_both_architectures_and_native_controls(self):
-        previous=self.release;self.release='0.4.0-macos-preview.27'
+        previous=self.release;self.release='0.4.0-macos-preview.28'
         required=('weeklyCreditRequiresExhaustion','independentAutomationPolicy','ephemeralTimerWriteAhead','ephemeralRequestSafety','nativeEphemeralSupport')
         for arch in ('arm64','x86_64'):
             directory=self.root/('macos-'+arch);name=f'AI-First-Tools-{self.release}-macos-{arch}.dmg'
@@ -80,10 +80,11 @@ class MacParityReleaseTests(unittest.TestCase):
                 if path.name=='resume-test.json': value['checks']['finderLocaleWatcherIdentity']=True
                 if path.name=='reset-test.json': value['checks'].update(dict.fromkeys(('finderLocaleNotifierIdentity','bundledHistoryImmediatelyAvailable'),True))
                 if path.name=='update-test.json':value['checks'].update(dict.fromkeys(('preflightBeforeParentExit','incomingUpdaterHelper','published25FailureReproduced','published25BackgroundRecovered','normalUpdatedWindowStaysReady'),True))
+                if path.name=='memory-test.json':value['checks'].update(dict.fromkeys(('current_full_chat_registration_without_worktree','unknown_full_chat_trigger_still_denied'),True))
                 path.write_text(json.dumps(value))
         self.assertEqual(len(validated_assets(self.root,self.release)),23)
         for arch in ('arm64','x86_64'):
-            for kind, names in (('self',required),('smoke',('independentAutomationBridge',)),('resume',('finderLocaleWatcherIdentity',)),('reset',('finderLocaleNotifierIdentity','bundledHistoryImmediatelyAvailable')),('update',('preflightBeforeParentExit','incomingUpdaterHelper','published25FailureReproduced','published25BackgroundRecovered','normalUpdatedWindowStaysReady'))):
+            for kind, names in (('self',required),('smoke',('independentAutomationBridge',)),('resume',('finderLocaleWatcherIdentity',)),('reset',('finderLocaleNotifierIdentity','bundledHistoryImmediatelyAvailable')),('update',('preflightBeforeParentExit','incomingUpdaterHelper','published25FailureReproduced','published25BackgroundRecovered','normalUpdatedWindowStaysReady')),('memory',('current_full_chat_registration_without_worktree','unknown_full_chat_trigger_still_denied'))):
                 path=self.root/('macos-'+arch)/(kind+'-test.json');original=path.read_bytes()
                 for key in names:
                     value=json.loads(original);value['checks'].pop(key);path.write_text(json.dumps(value))

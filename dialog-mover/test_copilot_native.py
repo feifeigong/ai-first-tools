@@ -92,6 +92,12 @@ class NativeReader:
 
 class NativeCopilotTests(unittest.TestCase):
     def test_long_import_survives_complete_native_read_and_strict_resume(self):
+        self._complete_native_round_trip(current_index=False)
+
+    def test_current_index_import_survives_complete_native_read_and_strict_resume(self):
+        self._complete_native_round_trip(current_index=True)
+
+    def _complete_native_round_trip(self, *, current_index):
         configured = os.environ.get("DIALOG_MOVER_NATIVE_COPILOT")
         if not configured:
             self.skipTest("Pinned official Copilot test runtime not prepared")
@@ -100,7 +106,12 @@ class NativeCopilotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="copilot-native-") as scratch:
             base = Path(scratch)
             (base / "project").mkdir()
-            desktop_index(base / "profile")
+            if current_index:
+                from core.memory_audit import desktop_fixture, persistent_projects_fixture
+                desktop_fixture(base / 'profile')
+                persistent_projects_fixture(base / 'profile')
+            else:
+                desktop_index(base / "profile")
             source = conversation(base / "project", 125)
             source["messages"][1]["content"].append({"type": "tool_result", "tool_use_id": "foreign-id", "content": "Historical result\n" * 1000})
             source["messages"].extend(visual_conversation(base / "project")["messages"])

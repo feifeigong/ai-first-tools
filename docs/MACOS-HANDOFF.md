@@ -1,5 +1,9 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+## preview.28 候选：Copilot 完整搬家
+
+与Windows0.3.24共用官方新旧索引触发器精确识别，修复完整搬家被新版规则拦截；不创建worktree、不改旧项目。两端共用冻结兼容及拒绝未知触发器检查，Mac须两芯片通过后发布，详见[专项QA](COPILOT-INDEX-QA.md)。不读用户真实DB或聊天，不请求模型；已登录Copilot菜单/侧栏与真实续聊边界保持。
+
 ## 当前发布：preview.27 更新恢复
 
 完整构建[40812145598](https://github.com/feifeigong/ai-first-tools/actions/runs/40812145598)固定源码 `02534f8c78f1fce93abd5772865e3f0ef20c50a2` 成功，Apple/Intel分别154/154项原生检查通过。两架构均实际复现固定摘要的已发布preview.25助手在旧后台运行、C语言环境下的ControlError交接失败，并验证新助手接管、实际新版普通窗口就绪及保持运行。23份资产、不可变标签、版本、芯片、报告和摘要独立核对后公开。

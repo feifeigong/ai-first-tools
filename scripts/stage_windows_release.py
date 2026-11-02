@@ -41,6 +41,12 @@ def main() -> None:
                 and check.get('passed') is True for check in resume.get('results', [])):
             raise ValueError('Native ephemeral request capability did not pass')
     release = root / "artifacts/release"
+    if tuple(map(int, version.split('.'))) >= (0,3,24):
+        memory = json.loads((root/'artifacts/windows/memory-package-test.json').read_text(encoding='utf-8-sig'))
+        results = {item['name']: item.get('passed') for item in memory.get('checks', [])}
+        required = {'current_full_chat_registration_without_worktree','unknown_full_chat_trigger_still_denied'}
+        if memory.get('passed') is not True or memory.get('synthetic_only') is not True or memory.get('model_requests') != 0 or not required <= results.keys() or not all(results.values()):
+            raise ValueError('Packaged Copilot full migration index compatibility did not pass')
     assets = [release / f"AI-First-Tools-Setup-{version}.exe", release / f"AI-First-Tools-Portable-{version}-win-x64.zip"]
     sums = release / "SHA256SUMS.txt"
     expected = []

@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from urllib.request import url2pathname
 from unittest.mock import patch
 
-from . import memory_deploy as deploy, memory_store as store, memory_workspace
+from . import copilot_import, memory_deploy as deploy, memory_store as store, memory_workspace
 
 
 @contextmanager
@@ -181,6 +181,34 @@ def run(report: Path) -> int:
             deploy.rollback(library, restored["id"])
             with closing(sqlite3.connect(base / "desktop/data.db")) as db:
                 checks.append({"name": "current_schema_rollback_preserves_legacy_orphan", "passed": db.execute("SELECT count(*) FROM persistent_projects").fetchone()[0] == 0 and db.execute("SELECT id FROM sessions").fetchall() == [(native["session_id"],)]})
+            # Full migration must support the same shipped index rules as smart
+            # migration. Existing project/worktree data remain byte-for-byte rows.
+            full = base / 'full-desktop'
+            desktop_fixture(full)
+            persistent_projects_fixture(full)
+            with closing(sqlite3.connect(full / 'data.db')) as db:
+                schema = db.execute('SELECT type,name,sql FROM sqlite_master ORDER BY type,name').fetchall()
+            copied = copilot_import.import_document({**original, 'cwd': str(project)}, full)
+            with closing(sqlite3.connect(full / 'data.db')) as db:
+                valid = db.execute('SELECT id,session_type,auto_approve FROM sessions').fetchall() == [(copied['id'], 'general_chat', 0)]
+                valid = valid and db.execute('SELECT count(*) FROM workspaces').fetchone()[0] == 0
+                valid = valid and db.execute('SELECT count(*) FROM projects').fetchone()[0] == 0
+                valid = valid and db.execute('SELECT count(*) FROM persistent_projects').fetchone()[0] == 0
+                valid = valid and db.execute('SELECT type,name,sql FROM sqlite_master ORDER BY type,name').fetchall() == schema
+            checks.append({'name': 'current_full_chat_registration_without_worktree', 'passed': valid})
+            with closing(sqlite3.connect(full / 'data.db')) as db, db:
+                db.execute('DROP TRIGGER sessions_insert_agent')
+                db.execute('''CREATE TRIGGER sessions_insert_agent AFTER INSERT ON sessions
+                    WHEN NEW.session_type = 'general_chat' BEGIN INSERT INTO "persistent_projects" (session_id) VALUES (NEW.id); END;''')
+            files_before = {p.relative_to(full): p.read_bytes() for p in (full / 'session-state').rglob('*') if p.is_file()}
+            refused = False
+            try:
+                copilot_import.import_document({**original, 'cwd': str(project)}, full)
+            except ValueError:
+                refused = True
+            with closing(sqlite3.connect(full / 'data.db')) as db:
+                preserved = db.execute('SELECT id FROM sessions').fetchall() == [(copied['id'],)] and db.execute('SELECT count(*) FROM persistent_projects').fetchone()[0] == 0
+            checks.append({'name': 'unknown_full_chat_trigger_still_denied', 'passed': refused and preserved and files_before == {p.relative_to(full): p.read_bytes() for p in (full / 'session-state').rglob('*') if p.is_file()}})
     except Exception as error:
         checks.append({"name": "package_check", "passed": False, "error_type": type(error).__name__, "message": str(error),
                        "methods": [{"name": frame.name, "line": frame.lineno} for frame in traceback.extract_tb(error.__traceback__)]})
