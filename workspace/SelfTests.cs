@@ -233,39 +233,25 @@ internal static class SelfTests
             Require(before.SequenceEqual(File.ReadAllBytes(preferencesConfig)));
             Require(!Directory.GetFiles(Path.GetDirectoryName(preferencesConfig)!, "*.tmp").Any());
         });
-        var sidebarWindow = new MainWindow(Path.Combine(root, "sidebar-layout", "tools.json"), executable);
+        var shellWindow = new MainWindow(Path.Combine(root, "shell-layout", "tools.json"), executable);
         try
         {
-            var sidebar = (System.Windows.Controls.Border)sidebarWindow.FindName("ToolSidebar");
-            var column = (System.Windows.Controls.ColumnDefinition)sidebarWindow.FindName("SidebarColumn");
-            var toggle = (System.Windows.Controls.Button)sidebarWindow.FindName("SidebarToggle");
-            Check("Collapsing sidebar removes the entire pane rather than leaving an icon rail", () =>
+            var nav = (System.Windows.Controls.ListBox)shellWindow.FindName("ToolsList");
+            Check("Navigation is a single horizontal tab row instead of a sidebar", () =>
             {
-                sidebarWindow.IsSidebarCollapsed = true;
-                Require(column.Width.Value == 0 && sidebar.Visibility == System.Windows.Visibility.Collapsed);
-                Require(toggle.Visibility == System.Windows.Visibility.Visible && (string)toggle.ToolTip == "展开工具侧栏");
+                var panel = nav.ItemsPanel?.LoadContent() as System.Windows.Controls.StackPanel;
+                Require(panel is not null && panel.Orientation == System.Windows.Controls.Orientation.Horizontal);
+                Require(shellWindow.FindName("ToolSidebar") is null && shellWindow.FindName("SidebarToggle") is null);
             });
-            Check("Expanding sidebar restores the original pane and action name", () =>
+            Check("Theme toggle sits in the title bar and announces its action", () =>
             {
-                sidebarWindow.IsSidebarCollapsed = false;
-                Require(column.Width.Value == 184 && sidebar.Visibility == System.Windows.Visibility.Visible);
-                Require(System.Windows.Automation.AutomationProperties.GetName(toggle) == "收起工具侧栏");
-            });
-            Check("Sidebar toggle uses keyboard-only focus feedback without persistent focus triggers", () =>
-            {
-                Require(toggle.FocusVisualStyle == sidebarWindow.FindResource("KeyboardFocus"));
-                Require(toggle.Template.Triggers.Count == 0);
-            });
-            Check("Sidebar icon changes with the actual expanded or hidden pane", () =>
-            {
-                var pane = (System.Windows.Shapes.Path)sidebarWindow.FindName("SidebarPane");
-                sidebarWindow.IsSidebarCollapsed = true;
-                Require(pane.Visibility == System.Windows.Visibility.Collapsed);
-                sidebarWindow.IsSidebarCollapsed = false;
-                Require(pane.Visibility == System.Windows.Visibility.Visible);
+                var toggle = (System.Windows.Controls.Button)shellWindow.FindName("ThemeButton");
+                Require(toggle is not null);
+                Require(toggle!.ToolTip is string action && (action == "切换到浅色" || action == "切换到深色"));
+                Require(!string.IsNullOrWhiteSpace(System.Windows.Automation.AutomationProperties.GetName(toggle)));
             });
         }
-        finally { sidebarWindow.ReleaseTools(); }
+        finally { shellWindow.ReleaseTools(); }
         Check("Cooperative startup is explicit in the suite catalog and defaults off for legacy tools", () =>
         {
             Catalog(new ToolCatalog.Entry { Id = "prepared", Name = "本机测试", Executable = "tools/prepared.exe", EmbeddedStartup = true });

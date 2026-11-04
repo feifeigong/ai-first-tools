@@ -55,7 +55,15 @@ public partial class ResetCalendarView : UserControl
         Paint();
     }
 
-    private static Brush Ink(string hex) => (Brush)new BrushConverter().ConvertFromString(hex)!;
+    private static Brush Ink(string hex) => ThemePalette.Ink(hex);
+
+    /// <summary>主题切换后日历格是代码生成的，需要整块重画。</summary>
+    internal void RepaintForTheme()
+    {
+        if (!initialized) return;
+        lastSignature = "";
+        Paint();
+    }
     private static Brush Color(ResetCalendarEvent item) => Ink(item.Completed ? "#207A58" : item.State == "banked" ? "#7252A3" : item.State is "upcoming" or "undated" ? "#0068D9" : "#5B6B7E");
     private static TextBlock Text(string value, double size = 13, string color = "#202D3A") => new()
     { Text = value, FontSize = size, Foreground = Ink(color), TextWrapping = TextWrapping.Wrap, LineHeight = size + 8 };

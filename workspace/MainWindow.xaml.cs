@@ -19,13 +19,10 @@ namespace AIFirst.Workspace;
 
 public partial class MainWindow : Window
 {
-    public static readonly DependencyProperty IsSidebarCollapsedProperty = DependencyProperty.Register(nameof(IsSidebarCollapsed), typeof(bool), typeof(MainWindow), new PropertyMetadata(false, (owner, _) => ((MainWindow)owner).UpdateSidebar()));
-    public bool IsSidebarCollapsed { get => (bool)GetValue(IsSidebarCollapsedProperty); set => SetValue(IsSidebarCollapsedProperty, value); }
     private readonly ObservableCollection<ToolDefinition> tools = new();
     private readonly Dictionary<string, ToolSession> sessions = new();
     private readonly HashSet<string> opening = new();
     private readonly CancellationTokenSource lifetime = new();
-    private readonly WorkspacePreferences preferences;
     private readonly DispatcherTimer monitor = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly string? healthReport;
     private ToolWindowHost? host;
@@ -91,10 +88,9 @@ public partial class MainWindow : Window
         healthReport = report;
         Width = Math.Min(Width, SystemParameters.WorkArea.Width - 30);
         Height = Math.Min(Height, SystemParameters.WorkArea.Height - 30);
-        preferences = new WorkspacePreferences(configuration);
         ShowLogo(new BrandAssets(configuration).Load());
-        IsSidebarCollapsed = preferences.LoadCollapsed();
-        UpdateSidebar();
+        UpdateThemeGlyph();
+        ThemeManager.Changed += ThemeChanged;
         var packageVersion = typeof(App).Assembly.GetName().Version!.ToString(2);
         var bundled = toolOverride ?? Path.Combine(AppContext.BaseDirectory, "tools", "dialog-mover-v" + packageVersion, "对话搬家.exe");
         try
@@ -187,27 +183,28 @@ public partial class MainWindow : Window
         finally { startingResetMonitor = false; }
     }
 
-    private void UpdateSidebar()
+    private void ThemeClick(object sender, RoutedEventArgs args)
     {
-        if (SidebarColumn is null || SidebarToggle is null || ToolSidebar is null) return;
-        SidebarColumn.Width = new GridLength(IsSidebarCollapsed ? 0 : 184);
-        ToolSidebar.Visibility = IsSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        var action = IsSidebarCollapsed ? "展开工具侧栏" : "收起工具侧栏";
-        SidebarToggle.ToolTip = action;
-        SidebarPane.Visibility = IsSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        System.Windows.Automation.AutomationProperties.SetName(SidebarToggle, action);
-    }
-
-    private void ToggleSidebarClick(object sender, RoutedEventArgs args)
-    {
-        IsSidebarCollapsed = !IsSidebarCollapsed;
-        if (selected is not null && sessions.TryGetValue(selected.Id, out var session)) ScheduleHealth(selected, session);
-        try { preferences.SaveCollapsed(IsSidebarCollapsed); }
+        try { ThemeManager.Toggle(); }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             App.Log(exception);
-            ShowStatus("侧栏设置暂未保存，本次仍可正常使用。");
+            ShowStatus("外观设置暂未保存，本次仍可正常切换。");
         }
+    }
+
+    private void ThemeChanged(bool dark) => UpdateThemeGlyph();
+
+    private void UpdateThemeGlyph()
+    {
+        if (ThemeMoonPath is null || ThemeSunPath is null) return;
+        // 深色时露出太阳（点一下回到浅色），浅色时露出月亮
+        ThemeSunPath.Visibility = ThemeManager.IsDark ? Visibility.Visible : Visibility.Collapsed;
+        ThemeMoonPath.Visibility = ThemeManager.IsDark ? Visibility.Collapsed : Visibility.Visible;
+        if (ThemeButton is null) return;
+        var action = ThemeManager.IsDark ? "切换到浅色" : "切换到深色";
+        ThemeButton.ToolTip = action;
+        System.Windows.Automation.AutomationProperties.SetName(ThemeButton, action);
     }
 
     internal void ShowStatus(string text)
@@ -367,7 +364,6 @@ public partial class MainWindow : Window
         HostSlot.Visibility = Visibility.Collapsed;
         BlankState.Visibility = retry ? Visibility.Visible : Visibility.Collapsed;
         LoadingView.Visibility = retry ? Visibility.Collapsed : Visibility.Visible;
-        LoadingTitle.Text = selected?.Name ?? "对话搬家";
         BlankTitle.Text = title;
         BlankDescription.Text = description;
         RetryButton.Content = "再试一次";
@@ -427,7 +423,7 @@ public partial class MainWindow : Window
         args.Cancel = true;
         if (closing) return;
         closing = true;
-        ToolsList.IsEnabled = SidebarToggle.IsEnabled = false;
+        ToolsList.IsEnabled = false;
         ShowStatus(restartingForUpdate ? "正在保存并关闭工具，随后自动更新…" : "正在关闭，请稍等…");
         try
         {
@@ -465,7 +461,7 @@ public partial class MainWindow : Window
         {
             closing = false;
             restartingForUpdate = false;
-            if (!released) ToolsList.IsEnabled = SidebarToggle.IsEnabled = true;
+            if (!released) ToolsList.IsEnabled = true;
         }
     }
 

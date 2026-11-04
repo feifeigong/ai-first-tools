@@ -41,6 +41,9 @@ internal sealed class ToolSession : IDisposable
         };
         start.Environment.Remove("AI_FIRST_WORKSPACE_READY_FILE");
         start.Environment.Remove("AI_FIRST_WORKSPACE_HOST_PID");
+        // 工具页跟着工具箱的深浅色走：启动时给初值，运行中通过同一份设置文件轮询
+        start.Environment["AI_FIRST_UI_THEME"] = ThemeManager.IsDark ? "dark" : "light";
+        if (ThemeManager.PreferencesPath is { Length: > 0 } preferencesFile) start.Environment["AI_FIRST_THEME_FILE"] = preferencesFile;
         if (definition.EmbeddedStartup)
         {
             startupDirectory = Path.Combine(Path.GetTempPath(), "ai-first-startup-" + Guid.NewGuid().ToString("N"));

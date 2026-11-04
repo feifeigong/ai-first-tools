@@ -1,0 +1,41 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- 深色主题：近黑底 + 深灰卡片，避免纯黑带来的硬边，强调色收敛为单一紫 -->
+  <SolidColorBrush x:Key="AppBackground" Color="#0B0B0C" />
+  <SolidColorBrush x:Key="SurfaceCard" Color="#151618" />
+  <SolidColorBrush x:Key="SurfaceRaised" Color="#1B1C1F" />
+  <SolidColorBrush x:Key="SurfaceHover" Color="#1A1B1E" />
+  <SolidColorBrush x:Key="SurfaceSunken" Color="#101113" />
+
+  <SolidColorBrush x:Key="Line" Color="#232427" />
+  <SolidColorBrush x:Key="LineStrong" Color="#2E3034" />
+
+  <SolidColorBrush x:Key="InkPrimary" Color="#EDEDEE" />
+  <SolidColorBrush x:Key="InkSecondary" Color="#A6A7AA" />
+  <SolidColorBrush x:Key="InkMuted" Color="#7C7D82" />
+  <SolidColorBrush x:Key="InkFaint" Color="#5C5D62" />
+
+  <SolidColorBrush x:Key="Accent" Color="#8B5CF6" />
+  <SolidColorBrush x:Key="AccentHover" Color="#9D74F8" />
+  <SolidColorBrush x:Key="AccentSoft" Color="#241E38" />
+  <SolidColorBrush x:Key="AccentInk" Color="#FFFFFF" />
+
+  <SolidColorBrush x:Key="CaptionInk" Color="#A6A7AA" />
+  <SolidColorBrush x:Key="CaptionHover" Color="#1B1C1F" />
+  <SolidColorBrush x:Key="DangerInk" Color="#F87171" />
+  <SolidColorBrush x:Key="WarnSoft" Color="#241E12" />
+  <SolidColorBrush x:Key="WarnLine" Color="#3D3220" />
+  <SolidColorBrush x:Key="WarnInk" Color="#E0C08A" />
+  <SolidColorBrush x:Key="InfoSoft" Color="#241E38" />
+  <SolidColorBrush x:Key="InfoLine" Color="#3A2F58" />
+  <SolidColorBrush x:Key="InfoInk" Color="#C4B5FD" />
+  <SolidColorBrush x:Key="SuccessInk" Color="#4ADE80" />
+  <SolidColorBrush x:Key="Skeleton" Color="#1E1F23" />
+
+  <!-- 状态徽章：中性 / 已开启 / 处理中 -->
+  <SolidColorBrush x:Key="BadgeNeutralBg" Color="#24262A" />
+  <SolidColorBrush x:Key="BadgeNeutralInk" Color="#A0A3A9" />
+  <SolidColorBrush x:Key="BadgeOnBg" Color="#17251F" />
+  <SolidColorBrush x:Key="BadgeOnInk" Color="#6EE7A8" />
+  <SolidColorBrush x:Key="BadgeBusyBg" Color="#241E38" />
+  <SolidColorBrush x:Key="BadgeBusyInk" Color="#C4B5FD" />
+</ResourceDictionary>

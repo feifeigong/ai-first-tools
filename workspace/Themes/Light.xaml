@@ -1,0 +1,41 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- 浅色主题：留白多、对比柔和，强调色只出现在主操作与激活态 -->
+  <SolidColorBrush x:Key="AppBackground" Color="#F4F5F7" />
+  <SolidColorBrush x:Key="SurfaceCard" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="SurfaceRaised" Color="#F4F5F7" />
+  <SolidColorBrush x:Key="SurfaceHover" Color="#EFF1F4" />
+  <SolidColorBrush x:Key="SurfaceSunken" Color="#FAFBFC" />
+
+  <SolidColorBrush x:Key="Line" Color="#E7E8EB" />
+  <SolidColorBrush x:Key="LineStrong" Color="#D8DADE" />
+
+  <SolidColorBrush x:Key="InkPrimary" Color="#17181A" />
+  <SolidColorBrush x:Key="InkSecondary" Color="#55575C" />
+  <SolidColorBrush x:Key="InkMuted" Color="#83858A" />
+  <SolidColorBrush x:Key="InkFaint" Color="#A0A2A7" />
+
+  <SolidColorBrush x:Key="Accent" Color="#7C3AED" />
+  <SolidColorBrush x:Key="AccentHover" Color="#6D28D9" />
+  <SolidColorBrush x:Key="AccentSoft" Color="#F1EBFE" />
+  <SolidColorBrush x:Key="AccentInk" Color="#FFFFFF" />
+
+  <SolidColorBrush x:Key="CaptionInk" Color="#5A5C60" />
+  <SolidColorBrush x:Key="CaptionHover" Color="#ECEEF1" />
+  <SolidColorBrush x:Key="DangerInk" Color="#C42B1C" />
+  <SolidColorBrush x:Key="WarnSoft" Color="#FFF7E8" />
+  <SolidColorBrush x:Key="WarnLine" Color="#F0DFC0" />
+  <SolidColorBrush x:Key="WarnInk" Color="#7A5A28" />
+  <SolidColorBrush x:Key="InfoSoft" Color="#F1EBFE" />
+  <SolidColorBrush x:Key="InfoLine" Color="#DDD1FB" />
+  <SolidColorBrush x:Key="InfoInk" Color="#5B21B6" />
+  <SolidColorBrush x:Key="SuccessInk" Color="#1A7F37" />
+  <SolidColorBrush x:Key="Skeleton" Color="#E8EAEE" />
+
+  <!-- 状态徽章：中性 / 已开启 / 处理中 -->
+  <SolidColorBrush x:Key="BadgeNeutralBg" Color="#EEF2F7" />
+  <SolidColorBrush x:Key="BadgeNeutralInk" Color="#5B6B7E" />
+  <SolidColorBrush x:Key="BadgeOnBg" Color="#E8F5EE" />
+  <SolidColorBrush x:Key="BadgeOnInk" Color="#166A4B" />
+  <SolidColorBrush x:Key="BadgeBusyBg" Color="#EDE7FD" />
+  <SolidColorBrush x:Key="BadgeBusyInk" Color="#6D28D9" />
+</ResourceDictionary>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import subprocess
@@ -60,6 +61,22 @@ class Api:
     def bind(self, window) -> None:
         self._window = window
         window.events.closing += self.can_close
+
+    # ---- appearance
+
+    def ui_theme(self) -> str:
+        """工具箱把主题写在设置文件里，这里轮询同一份，切换时立刻跟随。"""
+        theme = os.environ.get("AI_FIRST_UI_THEME", "light")
+        path = os.environ.get("AI_FIRST_THEME_FILE", "")
+        if path:
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    value = str(json.load(handle).get("theme", "")).lower()
+                if value in ("dark", "light"):
+                    theme = value
+            except (OSError, ValueError, AttributeError):
+                pass
+        return "dark" if theme == "dark" else "light"
 
     def can_close(self) -> bool:
         if not self._lock.acquire(blocking=False):
@@ -438,7 +455,7 @@ def main() -> None:
         width=1180,
         height=780,
         min_size=(940, 640),
-        background_color="#F6F8FB",
+        background_color="#0B0B0C" if os.environ.get("AI_FIRST_UI_THEME") == "dark" else "#F6F8FB",
         text_select=False,
         hidden=startup is not None,
         focus=startup is None,

@@ -248,7 +248,7 @@
     if (button.hidden) return;
     const fold = foldSet();
     const allFolded = groups.every((group) => fold.has(groupKey(group)));
-    button.innerHTML = allFolded ? `${ICON.foldOut}<span>全部展开</span>` : `${ICON.foldIn}<span>全部收起</span>`;
+    button.innerHTML = allFolded ? "<span>全部展开</span>" : "<span>全部收起</span>";
   }
 
   function renderChips() {

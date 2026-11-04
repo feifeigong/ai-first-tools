@@ -40,6 +40,13 @@ public partial class App : Application
             Shutdown(output is null ? 2 : ResetVisualTests.Render(output));
             return;
         }
+        if (args.Args.Contains("--render-shell"))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var shellOutput = Option(args.Args, "--render-shell");
+            Shutdown(shellOutput is null ? 2 : ShellVisualTests.Render(shellOutput));
+            return;
+        }
         if (args.Args.Contains("--render-whats-new"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -103,6 +110,8 @@ public partial class App : Application
             Shutdown(1); return;
         }
         var configuration = Option(args.Args, "--config") ?? Path.Combine(dataRoot, "tools.json");
+        try { ThemeManager.Initialize(configuration); }
+        catch (Exception themeError) when (themeError is IOException or UnauthorizedAccessException or InvalidOperationException) { Log(themeError); }
         if (UsesPreviewData)
             Environment.SetEnvironmentVariable("AI_FIRST_MOVER_PREVIEW_DATA", Path.Combine(dataRoot,"mover"));
         var key = ToolRepository.ConfigurationKey(configuration);
