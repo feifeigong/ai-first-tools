@@ -465,6 +465,7 @@ public partial class MainWindow : Window
                 ForgetSession(entry.Key, session);
             }
             if (restartingForUpdate && preparedUpdate is not null) await UpdateRunner.StartAsync(preparedUpdate);
+            if (resetNews is not null) await ResetMonitorHost.StopAsync(resetNews.DataDirectory);
             allowClose = true;
             Close();
         }

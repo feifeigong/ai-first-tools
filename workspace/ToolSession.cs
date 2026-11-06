@@ -245,6 +245,18 @@ internal sealed class ToolSession : IDisposable
             if (Window == IntPtr.Zero && Definition.EmbeddedStartup && !Process.HasExited) Window = NativeMethods.FindMainWindow(Process.Id, true);
             Detach();
         }
-        finally { CleanStartup(); Process.Dispose(); lifetime.Dispose(); }
+        finally
+        {
+            // 工具没在合理时间内退出就收掉，避免关掉工具箱后留下孤儿进程
+            try
+            {
+                if (!Process.HasExited && !Process.WaitForExit(800)) Process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException) { }
+            catch (Win32Exception) { }
+            CleanStartup();
+            Process.Dispose();
+            lifetime.Dispose();
+        }
     }
 }

@@ -40,6 +40,36 @@ internal static class ResetMonitorHost
         if (!IsRunning(service.DataDirectory)) throw new IOException("重置提醒暂时没有开启，请稍后重试。");
     }
 
+    /// <summary>
+    /// 工具箱退出时把监控子进程一起收掉：先写停止请求，等它自己收尾，超时就结束进程。
+    /// 否则关掉窗口后任务管理器里会留一个同名进程。
+    /// </summary>
+    internal static async Task StopAsync(string directory)
+    {
+        try
+        {
+            var ownerPath = Path.Combine(directory, "monitor-owner.json");
+            if (!File.Exists(ownerPath)) return;
+            var owner = JsonSerializer.Deserialize<Owner>(File.ReadAllText(ownerPath), Json);
+            if (owner is null) return;
+            var stopPath = Path.Combine(directory, "monitor-stop.json");
+            File.WriteAllText(stopPath, JsonSerializer.Serialize(new Stop(owner.Token, owner.Executable, "exit"), Json));
+            for (var attempt = 0; attempt < 30; attempt++)
+            {
+                if (!IsRunning(directory)) return;
+                await Task.Delay(100);
+            }
+            try
+            {
+                using var process = Process.GetProcessById(owner.Pid);
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
+            }
+            catch (ArgumentException) { }
+            catch (InvalidOperationException) { }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException) { App.Log(exception); }
+    }
+
     internal static async Task<int> RunAsync(ResetNewsService service, IAutoResumeControl control,
         Action<ResetNewsItem, Func<Task<bool>>>? show = null, CancellationToken cancellation = default)
     {
@@ -122,7 +152,7 @@ internal static class ResetMonitorHost
             var stop = JsonSerializer.Deserialize<Stop>(File.ReadAllText(path), Json);
             return stop is not null && stop.Token == token &&
                 string.Equals(stop.Executable, executable, StringComparison.OrdinalIgnoreCase) &&
-                stop.Reason is "update" or "uninstall";
+                stop.Reason is "exit" or "update" or "uninstall";
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException) { return false; }
     }
