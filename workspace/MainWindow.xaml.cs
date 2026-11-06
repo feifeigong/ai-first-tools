@@ -583,9 +583,8 @@ public partial class MainWindow : Window
             {
                 CheckUpdateButton.IsEnabled = true;
                 UpdatePillButton.IsEnabled = true;
-                CheckUpdateButton.Content = "检查更新";
-                // 有更新时只露出紫色胶囊，没更新时只留一个低调的检查入口
-                CheckUpdateButton.Visibility = availableUpdate is null ? Visibility.Visible : Visibility.Collapsed;
+                // 平时完全不占位，只有真的检测到新版本才露出胶囊
+                CheckUpdateButton.Visibility = Visibility.Collapsed;
                 UpdatePillButton.Visibility = availableUpdate is null ? Visibility.Collapsed : Visibility.Visible;
             }
         }

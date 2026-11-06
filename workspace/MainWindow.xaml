@@ -99,7 +99,7 @@
           </Button>
 
           <Button x:Name="ReleaseNotesButton" Style="{StaticResource InlineButton}" Click="ReleaseNotesClick" Visibility="Collapsed" ToolTip="查看本次更新" AutomationProperties.Name="查看本次更新"><TextBlock x:Name="VersionText" FontSize="12" VerticalAlignment="Center" /></Button>
-          <Button x:Name="CheckUpdateButton" Content="检查更新" Click="CheckUpdateClick" FontSize="11.5" Padding="10,4" Margin="4,0,6,0" FocusVisualStyle="{StaticResource KeyboardFocus}" ToolTip="从 AI一手的 GitHub 发布页检查新版本" AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" />
+          <Button x:Name="CheckUpdateButton" Content="检查更新" Click="CheckUpdateClick" Visibility="Collapsed" FontSize="11.5" Padding="10,4" Margin="4,0,6,0" FocusVisualStyle="{StaticResource KeyboardFocus}" ToolTip="从 AI一手的 GitHub 发布页检查新版本" AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" />
           <Button x:Name="UpdatePillButton" Click="CheckUpdateClick" Visibility="Collapsed" Margin="4,0,6,0" Padding="12,5" FontSize="11.5" Foreground="White" BorderThickness="0" ToolTip="下载并安装新版本" AutomationProperties.Name="更新">
             <Button.Style>
               <Style TargetType="Button">
