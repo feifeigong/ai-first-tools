@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
@@ -44,8 +45,13 @@ internal static class ThemeManager
         if (app is null) return;
         var source = new Uri(dark ? "pack://application:,,,/Themes/Dark.xaml" : "pack://application:,,,/Themes/Light.xaml", UriKind.Absolute);
         var theme = new ResourceDictionary { Source = source };
-        // 逐键写入应用资源：直接键会盖过合并字典，且替换时 WPF 一定会重解析 DynamicResource。
-        foreach (var key in theme.Keys) app.Resources[key] = theme[key];
+        // 早期版本把颜色写成了应用级直接键，它们会盖住合并字典，导致切主题时顶栏不跟。
+        // 先把这些直接键摘掉，再整体换掉合并字典，DynamicResource 才会全量重解析。
+        foreach (var key in theme.Keys) app.Resources.Remove(key);
+        var merged = app.Resources.MergedDictionaries;
+        var previous = merged.FirstOrDefault(item => item.Source is not null && item.Source.OriginalString.Contains("Themes/", StringComparison.OrdinalIgnoreCase));
+        merged.Add(theme);
+        if (previous is not null) merged.Remove(previous);
     }
 
     private static bool Read()

@@ -93,7 +93,7 @@
           if (api && api.ui_theme) paint(await api.ui_theme());
         } catch (error) { /* 浏览器预览没有 API，忽略即可 */ }
       }
-      function start() { sync(); setInterval(sync, 2000); }
+      function start() { sync(); setInterval(sync, 300); }
       if (window.pywebview && window.pywebview.api) start();
       else window.addEventListener("pywebviewready", start);
       document.addEventListener("visibilitychange", function () { if (!document.hidden) sync(); });
