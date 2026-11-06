@@ -37,9 +37,13 @@ public partial class AutoResumePage : UserControl, IDisposable
             resetNews.Changed += ResetNewsChanged;
             PaintResetNews(resetNews.Snapshot);
         }
-        timer.Tick += async (_, _) => { if (IsVisible) { await ExecuteFromUiAsync("status"); ResetCalendar.RefreshTime(); } };
+        timer.Tick += async (_, _) => { CheckScheduled(); if (IsVisible) { await ExecuteFromUiAsync("status"); ResetCalendar.RefreshTime(); } };
         IsVisibleChanged += async (_, _) => { if (IsVisible) await ExecuteFromUiAsync("status"); };
         ThemeManager.Changed += ThemeChanged;
+        ScheduledDateText.Text = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy-MM-dd");
+        scheduledAt = ReadScheduledFile();
+        scheduledLoaded = true;
+        UpdateScheduledUi();
         timer.Start();
     }
 
@@ -255,6 +259,156 @@ public partial class AutoResumePage : UserControl, IDisposable
             "error" => "计时记录暂时无法读取，已暂停请求，原记录保留。",
             _ => "已开启，正在检查本轮额度。"
         };
+    }
+
+    // ---------- 定时用卡 ----------
+    private static string ScheduledFile
+    {
+        get
+        {
+            var directory = Path.GetDirectoryName(ThemeManager.PreferencesPath ?? Path.Combine(AppContext.BaseDirectory, "preferences.json")) ?? AppContext.BaseDirectory;
+            return Path.Combine(directory, "scheduled-redeem.json");
+        }
+    }
+
+    private DateTimeOffset? scheduledAt;
+    private bool scheduledLoaded;
+
+    private DateTimeOffset? ReadScheduledFile()
+    {
+        try
+        {
+            if (!File.Exists(ScheduledFile)) return null;
+            using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(ScheduledFile));
+            if (document.RootElement.TryGetProperty("at", out var value) && DateTimeOffset.TryParse(value.GetString(), out var parsed)) return parsed;
+        }
+        catch (Exception exception) when (exception is IOException or System.Text.Json.JsonException or UnauthorizedAccessException) { App.Log(exception); }
+        return null;
+    }
+
+    private void SaveScheduledFile(DateTimeOffset? when)
+    {
+        try
+        {
+            if (when is null) { if (File.Exists(ScheduledFile)) File.Delete(ScheduledFile); return; }
+            Directory.CreateDirectory(Path.GetDirectoryName(ScheduledFile)!);
+            File.WriteAllText(ScheduledFile, System.Text.Json.JsonSerializer.Serialize(new { at = when.Value.ToString("O") }));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { App.Log(exception); }
+    }
+
+    private void UpdateScheduledUi()
+    {
+        if (scheduledAt is null)
+        {
+            ScheduledStatus.Visibility = Visibility.Collapsed;
+            ScheduledCancelButton.Visibility = Visibility.Collapsed;
+            ScheduledSetButton.Visibility = Visibility.Visible;
+            return;
+        }
+        ScheduledStatus.Text = "将在 " + scheduledAt.Value.ToString("M月d日 HH:mm") + " 用掉一张重置卡（只执行一次，软件需保持运行）";
+        ScheduledStatus.Visibility = Visibility.Visible;
+        ScheduledCancelButton.Visibility = Visibility.Visible;
+        ScheduledSetButton.Visibility = Visibility.Collapsed;
+    }
+
+    private void ScheduledSetClick(object sender, RoutedEventArgs args)
+    {
+        var text = (ScheduledDateText.Text ?? "").Trim();
+        if (!DateTime.TryParse(text, out var date) || !TimeSpan.TryParse(ScheduledTime.Text, out var time))
+        {
+            ScheduledStatus.Text = "日期按 2026-11-07 填写，时间按 05:00 填写。";
+            ScheduledStatus.Visibility = Visibility.Visible;
+            return;
+        }
+        var when = new DateTimeOffset(date.Date + time, TimeSpan.FromHours(8));
+        if (when <= DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)))
+        {
+            ScheduledStatus.Text = "这个时间已经过去了，请选一个将来的时间。";
+            ScheduledStatus.Visibility = Visibility.Visible;
+            return;
+        }
+        scheduledAt = when;
+        scheduledLoaded = true;
+        SaveScheduledFile(when);
+        UpdateScheduledUi();
+    }
+
+    private void ScheduledCancelClick(object sender, RoutedEventArgs args)
+    {
+        scheduledAt = null;
+        scheduledLoaded = true;
+        SaveScheduledFile(null);
+        UpdateScheduledUi();
+    }
+
+    private void CheckScheduled()
+    {
+        if (!scheduledLoaded)
+        {
+            scheduledLoaded = true;
+            scheduledAt = ReadScheduledFile();
+            UpdateScheduledUi();
+        }
+        if (scheduledAt is null) return;
+        if (DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)) < scheduledAt) return;
+        var when = scheduledAt.Value;
+        scheduledAt = null;
+        SaveScheduledFile(null);
+        UpdateScheduledUi();
+        // 错过太久就不补执行，避免第二天开机时莫名其妙用掉一张卡
+        if (DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)) - when > TimeSpan.FromMinutes(30))
+        {
+            ScheduledStatus.Text = "已错过设定时间超过 30 分钟，这次没有执行用卡。";
+            ScheduledStatus.Visibility = Visibility.Visible;
+            return;
+        }
+        RunRedeem(when);
+    }
+
+    private void RunRedeem(DateTimeOffset when)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(ThemeManager.PreferencesPath ?? Path.Combine(AppContext.BaseDirectory, "preferences.json")) ?? AppContext.BaseDirectory;
+            var connectionFile = Path.Combine(directory, "auto-resume-connection.json");
+            if (!File.Exists(connectionFile))
+            {
+                ScheduledStatus.Text = "没有找到续跑程序配置，定时用卡没有执行。";
+                ScheduledStatus.Visibility = Visibility.Visible;
+                return;
+            }
+            using var connection = System.Text.Json.JsonDocument.Parse(File.ReadAllText(connectionFile));
+            var python = connection.RootElement.TryGetProperty("Python", out var pythonValue) ? pythonValue.GetString() : null;
+            var runner = connection.RootElement.TryGetProperty("Runner", out var runnerValue) ? runnerValue.GetString() : null;
+            if (string.IsNullOrEmpty(python) || string.IsNullOrEmpty(runner))
+            {
+                ScheduledStatus.Text = "续跑程序配置不完整，定时用卡没有执行。";
+                ScheduledStatus.Visibility = Visibility.Visible;
+                return;
+            }
+            var script = Path.Combine(Path.GetDirectoryName(runner)!, "redeem_now.py");
+            if (!File.Exists(script))
+            {
+                ScheduledStatus.Text = "找不到 redeem_now.py，定时用卡没有执行。";
+                ScheduledStatus.Visibility = Visibility.Visible;
+                return;
+            }
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(python, "\"" + script + "\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+            });
+            ScheduledStatus.Text = when.ToString("M月d日 HH:mm") + " 已触发用卡，结果写在 redeem-scheduled.log。";
+            ScheduledStatus.Visibility = Visibility.Visible;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception)
+        {
+            App.Log(exception);
+            ScheduledStatus.Text = "定时用卡没能启动：" + exception.Message;
+            ScheduledStatus.Visibility = Visibility.Visible;
+        }
     }
 
     public void Dispose()
