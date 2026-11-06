@@ -98,8 +98,28 @@
             </Grid>
           </Button>
 
-          <Button x:Name="ReleaseNotesButton" Style="{StaticResource InlineButton}" Click="ReleaseNotesClick" ToolTip="查看本次更新" AutomationProperties.Name="查看本次更新"><TextBlock x:Name="VersionText" FontSize="12" VerticalAlignment="Center" /></Button>
+          <Button x:Name="ReleaseNotesButton" Style="{StaticResource InlineButton}" Click="ReleaseNotesClick" Visibility="Collapsed" ToolTip="查看本次更新" AutomationProperties.Name="查看本次更新"><TextBlock x:Name="VersionText" FontSize="12" VerticalAlignment="Center" /></Button>
           <Button x:Name="CheckUpdateButton" Content="检查更新" Click="CheckUpdateClick" FontSize="11.5" Padding="10,4" Margin="4,0,6,0" FocusVisualStyle="{StaticResource KeyboardFocus}" ToolTip="从 AI一手的 GitHub 发布页检查新版本" AutomationProperties.Name="{Binding Content, RelativeSource={RelativeSource Self}}" />
+          <Button x:Name="UpdatePillButton" Click="CheckUpdateClick" Visibility="Collapsed" Margin="4,0,6,0" Padding="12,5" FontSize="11.5" Foreground="White" BorderThickness="0" ToolTip="下载并安装新版本" AutomationProperties.Name="更新">
+            <Button.Style>
+              <Style TargetType="Button">
+                <Setter Property="Background" Value="{DynamicResource Accent}" />
+                <Setter Property="Template">
+                  <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                      <Border x:Name="Pill" Background="{TemplateBinding Background}" CornerRadius="11" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Pill" Property="Background" Value="{DynamicResource AccentHover}" /></Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Setter.Value>
+                </Setter>
+              </Style>
+            </Button.Style>
+            <TextBlock Text="↑ 更新" />
+          </Button>
 
           <Button Style="{StaticResource CaptionButton}" ToolTip="最小化" AutomationProperties.Name="最小化" Click="MinimizeClick"><Path Data="M1,8 L13,8" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.3" /></Button>
           <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" ToolTip="最大化" AutomationProperties.Name="最大化" Click="MaximizeClick"><Path x:Name="MaximizeGlyph" Data="M1.5,1.5 H12.5 V12.5 H1.5 Z" Width="14" Height="14" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.3" /></Button>

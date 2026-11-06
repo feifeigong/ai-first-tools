@@ -70,7 +70,7 @@
     drawToggle();
     try { localStorage.setItem("ai-first-sidebar-collapsed", String(document.body.classList.contains("workspace-collapsed"))); } catch {}
   });
-  const show = (text, available = false, label = "下载并更新") => {
+  const show = (text, available = false, label = "↑ 更新") => {
     message.textContent = text;
     download.hidden = !available;
     download.textContent = label;

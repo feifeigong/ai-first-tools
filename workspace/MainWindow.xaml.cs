@@ -533,6 +533,7 @@ public partial class MainWindow : Window
         updateSchedule.Started(updateClock());
         checkingUpdates = true;
         CheckUpdateButton.IsEnabled = false;
+        UpdatePillButton.IsEnabled = false;
         CheckUpdateButton.Content = "检查中…";
         try
         {
@@ -581,7 +582,11 @@ public partial class MainWindow : Window
             if (!released)
             {
                 CheckUpdateButton.IsEnabled = true;
-                CheckUpdateButton.Content = availableUpdate is null ? "检查更新" : "有新版本";
+                UpdatePillButton.IsEnabled = true;
+                CheckUpdateButton.Content = "检查更新";
+                // 有更新时只露出紫色胶囊，没更新时只留一个低调的检查入口
+                CheckUpdateButton.Visibility = availableUpdate is null ? Visibility.Visible : Visibility.Collapsed;
+                UpdatePillButton.Visibility = availableUpdate is null ? Visibility.Collapsed : Visibility.Visible;
             }
         }
     }

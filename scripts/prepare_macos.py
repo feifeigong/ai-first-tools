@@ -22,8 +22,8 @@ def prepare(destination: Path) -> Path:
       <img class="workspace-logo" src="assets/ai-first.png" alt="AI一手" width="80" height="44">
       <span class="workspace-name">工具箱</span>
       <button id="workspace-toggle" class="workspace-button workspace-toggle" aria-controls="workspace-nav" aria-expanded="true" aria-label="隐藏工具栏"></button>
-      <span class="workspace-spacer"></span><button id="workspace-version" class="workspace-button workspace-version" title="查看本次更新" aria-label="查看本次更新">Mac 预览版</button>
-      <button id="workspace-download" class="workspace-button workspace-primary" hidden>下载并更新</button>
+      <span class="workspace-spacer"></span><button id="workspace-version" class="workspace-button workspace-version" title="查看本次更新" aria-label="查看本次更新" hidden>Mac 预览版</button>
+      <button id="workspace-download" class="workspace-button workspace-primary" hidden>↑ 更新</button>
       <button id="workspace-update" class="workspace-button" disabled>检查更新</button>
     </header>
     <div class="workspace-body">
