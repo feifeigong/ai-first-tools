@@ -28,15 +28,15 @@
     <Style x:Key="NavItem" TargetType="ListBoxItem">
       <Setter Property="Foreground" Value="{DynamicResource InkMuted}" />
       <Setter Property="Cursor" Value="Hand" />
-      <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
       <Setter Property="Padding" Value="13,5" />
       <Setter Property="Margin" Value="1,0" />
       <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
       <Setter Property="ToolTip" Value="{Binding Name}" />
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
-        <Border x:Name="NavBg" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="8" Padding="{TemplateBinding Padding}"><ContentPresenter VerticalAlignment="Center" /></Border>
+        <Border x:Name="NavBg" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}"><ContentPresenter VerticalAlignment="Center" /></Border>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsSelected" Value="True"><Setter TargetName="NavBg" Property="Background" Value="{DynamicResource SurfaceCard}" /><Setter TargetName="NavBg" Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="Foreground" Value="{DynamicResource InkPrimary}" /></Trigger>
+          <Trigger Property="IsSelected" Value="True"><Setter TargetName="NavBg" Property="Background" Value="{DynamicResource SurfaceRaised}" /><Setter Property="Foreground" Value="{DynamicResource InkPrimary}" /></Trigger>
           <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsMouseOver" Value="True" /><Condition Property="IsSelected" Value="False" /></MultiTrigger.Conditions><Setter TargetName="NavBg" Property="Background" Value="{DynamicResource SurfaceHover}" /><Setter Property="Foreground" Value="{DynamicResource InkSecondary}" /></MultiTrigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
@@ -108,10 +108,10 @@
       </Grid>
     </Border>
 
-    <Grid Grid.Row="1" Margin="14,12,14,12">
+    <Grid Grid.Row="1">
       <Grid.RowDefinitions><RowDefinition /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
 
-      <Border Background="{DynamicResource SurfaceCard}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
+      <Border Background="{DynamicResource SurfaceCard}" BorderThickness="0">
         <Grid>
           <Grid x:Name="HostSlot" Visibility="Collapsed" />
           <Grid x:Name="NativeSlot" Visibility="Collapsed" />
@@ -158,11 +158,11 @@
         </Grid>
       </Border>
 
-      <Border x:Name="StatusBanner" Grid.Row="1" Background="{DynamicResource WarnSoft}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,8,0,0" Visibility="Collapsed">
+      <Border x:Name="StatusBanner" Grid.Row="1" Background="{DynamicResource WarnSoft}" BorderBrush="{DynamicResource WarnLine}" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="16,10,16,0" Visibility="Collapsed">
         <TextBlock x:Name="FooterStatus" Foreground="{DynamicResource WarnInk}" FontSize="12" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
       </Border>
 
-      <Border x:Name="UpdateBanner" Grid.Row="2" Background="{DynamicResource InfoSoft}" BorderBrush="{DynamicResource InfoLine}" BorderThickness="1" CornerRadius="10" Padding="14,11" Margin="0,8,0,0" Visibility="Collapsed">
+      <Border x:Name="UpdateBanner" Grid.Row="2" Background="{DynamicResource InfoSoft}" BorderBrush="{DynamicResource InfoLine}" BorderThickness="1" CornerRadius="10" Padding="14,11" Margin="16,10,16,14" Visibility="Collapsed">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
           <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">

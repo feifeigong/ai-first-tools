@@ -90,7 +90,9 @@
         { title: "没有目录", kind: "none", path: "", sessions: [
           s(3, "Codex WeChat article search", "28 天前", "", true), s(2, "云端对话示例", "30 天前", "", false, "这条对话只保存在云端，不能搬运") ] },
       ];
-      return { groups, total: 8, movable: 7 };
+      const totals = { cursor_desktop: 95, workbuddy: 5, workbuddy_ai: 9, qwen_work: 3, doubao_work: 23, antigravity: 12, chatgpt: 959, codex_cli: 14 };
+      const total = totals[id] ?? 8;
+      return { groups, total, movable: total - 1 };
     },
     async folders() {
       return [
@@ -314,7 +316,6 @@
             ${movable.length ? `<button class="group-check" data-group="${gi}" aria-label="选择这一组"><span class="check ${klass}">${mark}</span></button>` : '<span class="group-check-gap"></span>'}
             <button class="group-fold" data-fold="${esc(key)}" aria-expanded="${expanded}" title="${expanded ? "收起" : "展开"}">
               <span class="chevron">${ICON.chevron}</span>
-              <span class="group-icon">${GROUP_ICON[group.kind] || ICON.folder}</span>
               <span class="group-title" title="${esc(group.title)}">${esc(group.title)}</span>
               <span class="group-path" title="${esc(group.path || kind)}">${esc(group.path || kind)}</span>
               <span class="group-count">${group.sessions.length}</span>

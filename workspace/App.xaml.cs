@@ -22,6 +22,9 @@ public partial class App : Application
         try { ShellIdentity.Initialize(); }
         catch (System.Runtime.InteropServices.COMException exception) { Log(exception); }
         base.OnStartup(args);
+        // 视觉核对与截图可以指定主题：--theme dark / light
+        var forcedTheme = Option(args.Args, "--theme");
+        if (forcedTheme is not null) ThemeManager.Apply(string.Equals(forcedTheme, "dark", StringComparison.OrdinalIgnoreCase), persist: false);
         if (args.Args.Contains("--reset-monitor"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;

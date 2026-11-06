@@ -30,6 +30,8 @@
   <SolidColorBrush x:Key="InfoInk" Color="#5B21B6" />
   <SolidColorBrush x:Key="SuccessInk" Color="#1A7F37" />
   <SolidColorBrush x:Key="Skeleton" Color="#E8EAEE" />
+  <SolidColorBrush x:Key="ScrollThumb" Color="#C6C9CF" />
+  <SolidColorBrush x:Key="ScrollThumbHover" Color="#A9ADB5" />
 
   <!-- 状态徽章：中性 / 已开启 / 处理中 -->
   <SolidColorBrush x:Key="BadgeNeutralBg" Color="#EEF2F7" />

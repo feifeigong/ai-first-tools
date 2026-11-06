@@ -33,11 +33,28 @@ internal sealed class BrandAssets
 
     internal static BitmapFrame LoadWindowIcon()
     {
+        // 优先读预渲染的白底圆角 PNG：alpha 干净，转 HICON 不会退化成透明旧图标
+        foreach (var size in new[] { 64, 48, 32, 24, 16, 256 })
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "assets", "window-icon-" + size + ".png");
+            if (!File.Exists(path)) continue;
+            try
+            {
+                var image = new BitmapImage();
+                image.BeginInit();
+                image.CacheOption = BitmapCacheOption.OnLoad;
+                image.UriSource = new Uri(path, UriKind.Absolute);
+                image.EndInit();
+                image.Freeze();
+                return BitmapFrame.Create(image);
+            }
+            catch (Exception exception) when (exception is IOException or NotSupportedException or FileFormatException or UnauthorizedAccessException) { App.Log(exception); }
+        }
         using var stream = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "assets", "ai-first-logo.ico"));
         var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-        var image = decoder.Frames[decoder.Frames.Count - 1];
-        image.Freeze();
-        return image;
+        var frame = decoder.Frames[decoder.Frames.Count - 1];
+        frame.Freeze();
+        return frame;
     }
 
     private static ImageSource Read(string path, bool wordmark = false)

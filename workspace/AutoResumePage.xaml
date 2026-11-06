@@ -1,4 +1,4 @@
-<UserControl x:Class="AIFirst.Workspace.AutoResumePage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:AIFirst.Workspace" Background="Transparent" FontFamily="Microsoft YaHei UI" Foreground="{DynamicResource InkPrimary}" UseLayoutRounding="True">
+<UserControl x:Class="AIFirst.Workspace.AutoResumePage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:AIFirst.Workspace" Background="Transparent" FontFamily="Microsoft YaHei UI" Foreground="{DynamicResource InkPrimary}" UseLayoutRounding="True" FocusVisualStyle="{x:Null}">
   <UserControl.Resources>
     <Style x:Key="Switch" TargetType="ToggleButton">
       <Setter Property="Width" Value="46" /><Setter Property="Height" Value="30" /><Setter Property="Cursor" Value="Hand" /><Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}" />
@@ -25,13 +25,13 @@
     </Style>
   </UserControl.Resources>
 
-  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False" FocusVisualStyle="{x:Null}">
     <StackPanel x:Name="PageContent" MaxWidth="840" Margin="26,24,26,30" HorizontalAlignment="Stretch">
 
       <Grid Margin="0,0,0,22">
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition /></Grid.ColumnDefinitions>
-        <Border Width="38" Height="38" CornerRadius="9" Background="{DynamicResource SurfaceRaised}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Top">
-          <Image x:Name="CodexLogo" Width="24" Height="24" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Codex" />
+        <Border Width="38" Height="38" CornerRadius="9" Background="White" VerticalAlignment="Top" Padding="3">
+          <Image x:Name="CodexLogo" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Codex" />
         </Border>
         <StackPanel Grid.Column="1" Margin="12,0,0,0">
           <TextBlock Text="续跑与重置" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource InkPrimary}" />
@@ -54,7 +54,7 @@
         <TextBlock x:Name="StateDescription" Text="请稍等。" FontSize="12.5" Foreground="{DynamicResource InkSecondary}" TextWrapping="Wrap" LineHeight="21" Margin="0,9,0,0" />
         <TextBlock Text="关掉窗口也有效，关闭开关才会停止续跑。" FontSize="11.5" Foreground="{DynamicResource InkFaint}" TextWrapping="Wrap" Margin="0,5,0,0" />
 
-        <Border Background="{DynamicResource SurfaceRaised}" CornerRadius="9" Padding="14,11" Margin="0,16,0,0">
+        <Border Background="Transparent" Padding="0" Margin="0,14,0,0">
           <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
             <StackPanel Margin="0,0,16,0">
@@ -109,7 +109,7 @@
           </StackPanel>
         </Grid>
 
-        <Border x:Name="ResetStatusCard" Background="{DynamicResource SurfaceRaised}" CornerRadius="9" Padding="12,9" Margin="0,16,0,0">
+        <Border x:Name="ResetStatusCard" Background="Transparent" Padding="0" Margin="0,14,0,0">
           <StackPanel>
             <TextBlock x:Name="ResetStatusText" Text="重置提醒尚未开启" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource InkSecondary}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
             <TextBlock x:Name="ResetDetailText" Text="开启后，有重置相关消息时会提醒你。" FontSize="11.5" Foreground="{DynamicResource InkMuted}" TextWrapping="Wrap" LineHeight="18" Margin="0,2,0,0" />

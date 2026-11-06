@@ -28,6 +28,8 @@ public partial class ResetCalendarView : UserControl
         InitializeComponent();
         month = new DateTime(Clock().ToOffset(TimeSpan.FromHours(8)).Year, Clock().ToOffset(TimeSpan.FromHours(8)).Month, 1);
         selected = ResetCalendarModel.BeijingDate(Clock());
+        // 先把当月网格画出来，消息到达前日历也是完整的
+        Paint();
     }
 
     internal void SetItems(IReadOnlyList<ResetNewsItem> value)

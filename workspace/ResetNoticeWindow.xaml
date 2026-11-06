@@ -8,8 +8,8 @@
     <StackPanel Margin="24,20,24,22">
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition /></Grid.ColumnDefinitions>
-        <Border Width="38" Height="38" CornerRadius="9" Background="{DynamicResource SurfaceRaised}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Top">
-          <Image x:Name="NoticeLogo" Width="22" Height="22" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Codex" />
+        <Border Width="38" Height="38" CornerRadius="9" Background="White" VerticalAlignment="Top" Padding="3">
+          <Image x:Name="NoticeLogo" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Codex" />
         </Border>
         <StackPanel Grid.Column="1" Margin="11,0,0,0">
           <TextBlock x:Name="NoticeHeading" Text="Codex 有重置消息" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{DynamicResource InkPrimary}" />

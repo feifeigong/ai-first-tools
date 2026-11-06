@@ -74,7 +74,7 @@ public partial class MainWindow : Window
         ReleaseNotesButton.IsEnabled = releaseHighlights is not null;
         PreviewMouseDown += (_, _) => releaseNotesInterrupted = true;
         PreviewKeyDown += (_, _) => releaseNotesInterrupted = true;
-        if (!developmentTools && toolOverride is null)
+        if (toolOverride is null)
         {
             resetNews = new ResetNewsService();
             resetWasEnabled = resetNews.Snapshot.Enabled;
@@ -95,7 +95,7 @@ public partial class MainWindow : Window
         var bundled = toolOverride ?? Path.Combine(AppContext.BaseDirectory, "tools", "dialog-mover-v" + packageVersion, "对话搬家.exe");
         try
         {
-            var available = developmentTools || toolOverride is not null ? new ToolRepository(configuration).Load(bundled) : ToolCatalog.Load(AppContext.BaseDirectory, packageVersion);
+            var available = LoadTools(configuration, developmentTools, toolOverride, bundled, packageVersion);
             foreach (var tool in available) tools.Add(tool);
         }
         catch (Exception exception) when (exception is IOException or System.Text.Json.JsonException or UnauthorizedAccessException or FileFormatException or NotSupportedException or ArgumentException)
@@ -129,6 +129,23 @@ public partial class MainWindow : Window
         };
         NetworkChange.NetworkAvailabilityChanged += NetworkUpdateCheck;
         Microsoft.Win32.SystemEvents.PowerModeChanged += PowerUpdateCheck;
+    }
+
+    /// <summary>
+    /// 正式包用工具清单，开发预览允许在清单之外追加自定义工具，
+    /// 但不能因此丢掉内置页面（续跑与重置）。
+    /// </summary>
+    private static List<ToolDefinition> LoadTools(string configuration, bool developmentTools, string? toolOverride, string bundled, string packageVersion)
+    {
+        if (toolOverride is not null) return new ToolRepository(configuration).Load(toolOverride);
+        var available = ToolCatalog.Load(AppContext.BaseDirectory, packageVersion);
+        if (!developmentTools || !File.Exists(configuration)) return available;
+        foreach (var extra in new ToolRepository(configuration).Load(bundled))
+        {
+            if (available.Any(existing => existing.Id.Equals(extra.Id, StringComparison.OrdinalIgnoreCase))) continue;
+            available.Add(extra);
+        }
+        return available;
     }
 
     private void ShowLogo(ImageSource? image)
