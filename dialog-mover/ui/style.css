@@ -489,10 +489,3 @@ input::placeholder { color: var(--faint); opacity: 1; }
   border-left: 2px solid var(--accent); padding: 10px 14px; background: var(--surface-2);
   max-height: 360px; overflow: auto; user-select: text;
 }
-
-/* 主题切换时让颜色渐变，而不是整页瞬间跳变（否则重绘不同步会有撕裂感） */
-html { transition: background-color .18s ease; }
-body, .rail, .stage, .stage-head, .list, .card, .row, .search, .chip, .agent,
-.group-head, .fold-all, .icon-btn, .sheet, .sheet-body, .bar, .notice, .empty {
-  transition: background-color .18s ease, color .18s ease, border-color .18s ease;
-}
