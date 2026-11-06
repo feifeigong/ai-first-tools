@@ -51,7 +51,8 @@ def check(package: Path):
             if highlights['schema']!=1 or highlights['versions']['windows']!=manifest['version'] or not 1<=len(highlights['items'])<=3:
                 raise ValueError('Release mismatch')
         except (OSError,ValueError,KeyError,TypeError): errors.append('Matching bundled release highlights are required')
-    engine = package / "tools" / "dialog-mover-v0.3" / "_internal" / "bin"
+    mover_dirs = sorted((package / "tools").glob("dialog-mover-v*"))
+    engine = (mover_dirs[0] if mover_dirs else package / "tools" / "dialog-mover-v0.3") / "_internal" / "bin"
     if not (engine / "AI一手记忆服务.exe").is_file():
         errors.append("Missing bundled memory retrieval service")
     for relative in ("tools/auto-resume/AI一手续跑后台.exe", "tools/auto-resume/_internal/python313.dll", "tools/auto-resume/_internal/bin/vendor/x86_64-pc-windows-msvc/bin/codex.exe", "assets/auto-resume-bundled.ps1", "THIRD-PARTY-LICENSES/Codex-LICENSE.txt", "THIRD-PARTY-LICENSES/Codex-NOTICE.txt", "THIRD-PARTY-LICENSES/Codex-runtime.json"):

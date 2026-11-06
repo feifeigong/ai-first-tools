@@ -28,7 +28,8 @@ if (!$SkipPublish) {
     if ($LASTEXITCODE) { throw 'Workspace publishing failed.' }
 }
 if (!(Test-Path -LiteralPath (Join-Path $package 'AI一手工具工作台.exe'))) { throw 'Workspace package is missing.' }
-$targetMover = Join-Path $package 'tools\dialog-mover-v0.3'
+$shortVersion = ($Version -split '\.')[0..1] -join '.'
+$targetMover = Join-Path $package "tools\dialog-mover-v$shortVersion"
 New-Item -ItemType Directory -Force -Path $targetMover | Out-Null
 Copy-Item -LiteralPath (Join-Path $MoverPackage '对话搬家.exe') -Destination $targetMover -Force
 Copy-Item -LiteralPath (Join-Path $MoverPackage '_internal') -Destination $targetMover -Recurse -Force
@@ -41,6 +42,7 @@ $engineDirectory = Join-Path $runtime 'bin'
 foreach ($filename in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
     Copy-Item -LiteralPath (Join-Path $runtime $filename) -Destination $engineDirectory -Force
 }
+Copy-Item -LiteralPath (Join-Path $root 'dialog-mover\bin\AI一手记忆服务.exe') -Destination $engineDirectory -Force
 foreach ($filename in @('LICENSE', 'NOTICE', 'README.md')) { Copy-Item -LiteralPath (Join-Path $root $filename) -Destination $package -Force }
 Copy-Item -LiteralPath (Join-Path $root 'docs') -Destination $package -Recurse -Force
 & $Python (Join-Path $PSScriptRoot 'collect_licenses.py') --toc $AnalysisToc --package $package --nsis $NsisDirectory
