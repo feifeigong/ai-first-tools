@@ -95,8 +95,8 @@ internal static class SelfTests
         });
         Check("Bundled brand image and multi-size Windows icon load", () => { Require(new BrandAssets(path).Load() is not null); Require(File.Exists(Path.Combine(AppContext.BaseDirectory, "assets", "ai-first-logo.ico"))); });
         Check("Brand wordmark has a compact horizontal layout", () => { var image = (System.Windows.Media.Imaging.BitmapSource)new BrandAssets(path).Load()!; Require(image.PixelWidth > image.PixelHeight * 1.8 && image.PixelWidth < image.PixelHeight * 2.2); });
-        Check("Window icon retains multiple size frames including a high resolution frame", () => { var frame = BrandAssets.LoadWindowIcon(); Require(frame.PixelWidth == 256 && frame.Decoder!.Frames.Count >= 7); Require(frame.Decoder.Frames.Any(image => image.PixelWidth == 32)); });
-        Check("Running toolbox uses a stable explicit taskbar identity", () => Require(ShellIdentity.Read() == ShellIdentity.AppId));
+        Check("Window icon is a square high-resolution frame", () => { var frame = BrandAssets.LoadWindowIcon(); Require(frame.PixelWidth == frame.PixelHeight && frame.PixelWidth >= 32); });
+        Check("Running toolbox uses a stable explicit taskbar identity", () => Require(ShellIdentity.Read() == (App.IsDevelopmentPreview ? ShellIdentity.AppId + ".Preview" : ShellIdentity.AppId)));
         Check("Native shortcut branding persists the matching taskbar identity and preserves foreign links", () =>
         {
             var own = Path.Combine(root, "native-owned-toolbox.lnk");
@@ -114,21 +114,18 @@ internal static class SelfTests
             Require(!AIFirst.Toolbox.ShellLinkTarget.ApplyBranding(foreign, target, ShellIdentity.AppId, icon));
             Require(before.SequenceEqual(File.ReadAllBytes(foreign)));
         });
-        Check("Windows icon frames have transparent edges and no enclosing tile", () =>
+        Check("Window icon has rounded transparent corners and a filled tile", () =>
         {
-            foreach (var frame in BrandAssets.LoadWindowIcon().Decoder!.Frames)
-            {
-                var image = new System.Windows.Media.Imaging.FormatConvertedBitmap(frame, System.Windows.Media.PixelFormats.Bgra32, null, 0);
-                var stride = image.PixelWidth * 4;
-                var pixels = new byte[stride * image.PixelHeight];
-                image.CopyPixels(pixels, stride, 0);
-                for (var column = 0; column < image.PixelWidth; column++)
-                {
-                    Require(pixels[column * 4 + 3] == 0);
-                    Require(pixels[(image.PixelHeight - 1) * stride + column * 4 + 3] == 0);
-                }
-                Require(pixels.Where((_, index) => index % 4 == 3).Any(alpha => alpha > 0));
-            }
+            var frame = BrandAssets.LoadWindowIcon();
+            var image = new System.Windows.Media.Imaging.FormatConvertedBitmap(frame, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+            var stride = image.PixelWidth * 4;
+            var pixels = new byte[stride * image.PixelHeight];
+            image.CopyPixels(pixels, stride, 0);
+            int Alpha(int x, int y) => pixels[y * stride + x * 4 + 3];
+            // 四个角是透明的（圆角），中心是不透明的底板
+            Require(Alpha(0, 0) == 0 && Alpha(image.PixelWidth - 1, 0) == 0);
+            Require(Alpha(0, image.PixelHeight - 1) == 0 && Alpha(image.PixelWidth - 1, image.PixelHeight - 1) == 0);
+            Require(Alpha(image.PixelWidth / 2, image.PixelHeight / 2) == 255);
         });
         Check("Maximized caption uses the restore action and a different glyph", () => { Require(WindowCaption.MaximizeAction(System.Windows.WindowState.Normal) == "最大化"); Require(WindowCaption.MaximizeAction(System.Windows.WindowState.Maximized) == "还原窗口"); Require(WindowCaption.MaximizeGeometry(System.Windows.WindowState.Normal) != WindowCaption.MaximizeGeometry(System.Windows.WindowState.Maximized)); });
         Check("Restore and minimized state keep a frozen maximize glyph", () => { Require(WindowCaption.MaximizeGeometry(System.Windows.WindowState.Normal).IsFrozen && WindowCaption.MaximizeGeometry(System.Windows.WindowState.Maximized).IsFrozen); Require(WindowCaption.MaximizeGeometry(System.Windows.WindowState.Normal) == WindowCaption.MaximizeGeometry(System.Windows.WindowState.Minimized)); });
