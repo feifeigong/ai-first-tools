@@ -12,7 +12,9 @@ internal sealed class ToolWindowHost : HwndHost
 
     protected override HandleRef BuildWindowCore(HandleRef parent)
     {
-        container = NativeMethods.CreateWindowEx(0, "static", "AI First tool container", NativeMethods.Child | NativeMethods.ClipChildren | NativeMethods.ClipSiblings | 0x10000000, 0, 0, 1, 1, parent.Handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        // 不设 WS_VISIBLE，也不写占位文字：没有工具挂上来时这块容器保持隐藏，
+        // 否则会露出一块系统灰底和 "AI First tool container" 字样。
+        container = NativeMethods.CreateWindowEx(0, "static", "", NativeMethods.Child | NativeMethods.ClipChildren | NativeMethods.ClipSiblings, 0, 0, 1, 1, parent.Handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
         if (container == IntPtr.Zero) throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError());
         return new HandleRef(this, container);
     }
@@ -22,11 +24,14 @@ internal sealed class ToolWindowHost : HwndHost
         if (Session == session) { session?.Resize(container); return; }
         Session?.SetVisible(false);
         Session = session;
-        if (session is not null)
+        if (session is null)
         {
-            session.Attach(container);
-            session.Resize(container);
+            NativeMethods.ShowWindow(container, 0);
+            return;
         }
+        session.Attach(container);
+        session.Resize(container);
+        NativeMethods.ShowWindow(container, 5);
     }
 
     protected override void OnWindowPositionChanged(Rect bounds)

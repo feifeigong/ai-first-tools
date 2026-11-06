@@ -72,7 +72,7 @@
     <Grid.RowDefinitions><RowDefinition Height="46" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 
     <!-- 顶栏：品牌在左、导航居中、动作区在右 -->
-    <Border Background="{DynamicResource AppBackground}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+    <Border Background="{DynamicResource SurfaceCard}" BorderThickness="0">
       <Grid Margin="14,0,0,0">
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
 
