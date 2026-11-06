@@ -441,6 +441,8 @@ public partial class MainWindow : Window
         if (closing) return;
         closing = true;
         ToolsList.IsEnabled = false;
+        // 先让窗口消失，收尾在后台完成；否则用户会盯着一个正在重绘的空窗口看几秒
+        Hide();
         ShowStatus(restartingForUpdate ? "正在保存并关闭工具，随后自动更新…" : "正在关闭，请稍等…");
         try
         {
@@ -457,6 +459,8 @@ public partial class MainWindow : Window
                 if (session.Window != IntPtr.Zero) Present(selected, session);
                 if (!await session.TryCloseAsync())
                 {
+                    // 工具还有活没干完，把窗口还原并说明原因
+                    Show();
                     Present(selected, session);
                     ShowStatus(selected.Name + "还有事情没结束，完成后再点 × 关闭。");
                     if (restartingForUpdate) ShowUpdateOffer("请先完成工具里的任务，再点下载并更新。不会强制停止搬运。");
@@ -472,6 +476,7 @@ public partial class MainWindow : Window
         catch (Exception exception) when (exception is Win32Exception or InvalidOperationException or IOException or TimeoutException)
         {
             App.Log(exception);
+            Show();
             ShowStatus("暂时没关好。先处理工具里的提示，再点 ×。");
             if (restartingForUpdate) ShowUpdateOffer("没有启动更新，当前版本可以继续使用。稍后再试一次。");
         }
@@ -480,6 +485,8 @@ public partial class MainWindow : Window
             closing = false;
             restartingForUpdate = false;
             if (!released) ToolsList.IsEnabled = true;
+            // 万一走了没覆盖到的异常分支，别把窗口留在隐藏状态
+            if (!allowClose && !IsVisible && !restartingForUpdate) Show();
         }
     }
 

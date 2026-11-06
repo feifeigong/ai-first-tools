@@ -113,7 +113,7 @@
 
       <Border Background="{DynamicResource SurfaceCard}" BorderThickness="0">
         <Grid>
-          <Grid x:Name="HostSlot" Visibility="Collapsed" />
+          <Grid x:Name="HostSlot" Background="{DynamicResource SurfaceCard}" Visibility="Collapsed" />
           <Grid x:Name="NativeSlot" Visibility="Collapsed" />
 
           <!-- 启动骨架屏：与真实布局同构，减少跳变 -->
