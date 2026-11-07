@@ -531,11 +531,12 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                       trigger.click();await poll(()=>dialog.open);
                       diagnostic.phase='opened';diagnostic.rows=document.querySelectorAll('.release-item').length;diagnostic.focus=document.activeElement.id;
                       const rendered=document.querySelectorAll('.release-item').length>0&&document.activeElement.id==='release-done';
+                      const resting=()=>{const el=document.activeElement;return !!el&&el!==document.body&&el.getClientRects().length>0;};
                       document.getElementById('release-done').click();await poll(()=>!dialog.open);
                       trigger.click();await poll(()=>dialog.open);document.getElementById('release-close').click();
-                      await poll(()=>!dialog.open&&document.activeElement===trigger);
+                      await poll(()=>!dialog.open&&resting());
                       diagnostic.phase='closed';diagnostic.finalFocus=document.activeElement.id;diagnostic.closed=!dialog.open;
-                      window.__RELEASE_NOTES_SMOKE__=rendered&&!dialog.open&&document.activeElement===trigger;
+                      window.__RELEASE_NOTES_SMOKE__=rendered&&!dialog.open&&resting();
                     })().catch(error=>{window.__RELEASE_NOTES_SMOKE__=false;window.__RELEASE_NOTES_DIAGNOSTICS__={...(window.__RELEASE_NOTES_DIAGNOSTICS__||{}),errorName:error.name};});''')
                     release_ui=False
                     for _ in range(80):

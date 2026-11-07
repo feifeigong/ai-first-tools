@@ -27,10 +27,18 @@
   const target = event.shiftKey ? buttons.at(-1) : buttons[0];
   if (document.activeElement === (event.shiftKey ? buttons[0] : buttons.at(-1))) { event.preventDefault(); target.focus(); }
  });
+ const focusable = element => element instanceof HTMLElement && element !== document.body && element.isConnected
+  && !element.hasAttribute("hidden") && element.getClientRects().length > 0;
+ // 版本号按钮按设计是隐藏的，关闭更新说明后不能把焦点交给看不见的元素。
+ const restingTarget = () => {
+  const candidates = [origin, document.querySelector('.workspace-tool[aria-current="page"]'),
+   document.querySelector(".workspace-tool"), document.getElementById("workspace-update"), trigger];
+  return candidates.find(focusable) || document.body;
+ };
  dialog.addEventListener("close", () => {
   if (data) { data.automatic = false; Promise.resolve(window.pywebview?.api?.acknowledge_release_notes?.(data.release)).catch(() => {}); }
-  if (origin instanceof HTMLElement && origin !== document.body && origin.isConnected && origin.getClientRects().length) origin.focus();
-  if (document.activeElement !== origin || origin === document.body) trigger.focus();
+  const target = restingTarget();
+  if (target !== document.activeElement) target.focus();
  });
  document.getElementById("release-close").addEventListener("click", dismiss);
  document.getElementById("release-done").addEventListener("click", dismiss);

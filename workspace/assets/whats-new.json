@@ -2,7 +2,7 @@
   "schema": 1,
   "versions": {
     "windows": "0.4.1",
-    "macos": "0.4.0-macos-preview.29"
+    "macos": "0.4.1-macos-preview.30"
   },
   "title": "续跑状态与定时用卡",
   "description": "状态不再误报已关闭，定时用卡到点自动执行；关闭、主题切换与更新入口一并修正。",
