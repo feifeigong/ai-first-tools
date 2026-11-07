@@ -465,7 +465,9 @@ class MacResourceTests(unittest.TestCase):
             self.assertEqual((prepared / "ui/assets/dialog-mover.png").read_bytes(), (ROOT / "workspace/assets/dialog-mover.png").read_bytes())
             self.assertEqual((prepared / "ui/assets/ai-first.png").read_bytes(), (ROOT / "workspace/assets/ai-first-app-icon.png").read_bytes())
             self.assertEqual((prepared / "ui/app.js").read_bytes(), (ROOT / "dialog-mover/ui/app.js").read_bytes())
-            self.assertEqual(json.loads((prepared / "version.json").read_text())["version"], "0.4.0")
+            # 预览版与正式版共用同一份版本文件；这里只核对打包时原样带上了源版本。
+            self.assertEqual(json.loads((prepared / "version.json").read_text()),
+                             json.loads((ROOT / "macos/version.json").read_text()))
 
 
 if __name__ == "__main__":
