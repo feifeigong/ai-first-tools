@@ -41,8 +41,7 @@ public partial class AutoResumePage : UserControl, IDisposable
         IsVisibleChanged += async (_, _) => { if (IsVisible) await ExecuteFromUiAsync("status"); };
         ThemeManager.Changed += ThemeChanged;
         ScheduledDateText.Text = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy-MM-dd");
-        scheduledAt = ReadScheduledFile();
-        scheduledLoaded = true;
+        scheduledAt = ScheduledRedeem.Read();
         UpdateScheduledUi();
         timer.Start();
     }
@@ -262,40 +261,7 @@ public partial class AutoResumePage : UserControl, IDisposable
     }
 
     // ---------- 定时用卡 ----------
-    private static string ScheduledFile
-    {
-        get
-        {
-            var directory = Path.GetDirectoryName(ThemeManager.PreferencesPath ?? Path.Combine(AppContext.BaseDirectory, "preferences.json")) ?? AppContext.BaseDirectory;
-            return Path.Combine(directory, "scheduled-redeem.json");
-        }
-    }
-
     private DateTimeOffset? scheduledAt;
-    private bool scheduledLoaded;
-
-    private DateTimeOffset? ReadScheduledFile()
-    {
-        try
-        {
-            if (!File.Exists(ScheduledFile)) return null;
-            using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(ScheduledFile));
-            if (document.RootElement.TryGetProperty("at", out var value) && DateTimeOffset.TryParse(value.GetString(), out var parsed)) return parsed;
-        }
-        catch (Exception exception) when (exception is IOException or System.Text.Json.JsonException or UnauthorizedAccessException) { App.Log(exception); }
-        return null;
-    }
-
-    private void SaveScheduledFile(DateTimeOffset? when)
-    {
-        try
-        {
-            if (when is null) { if (File.Exists(ScheduledFile)) File.Delete(ScheduledFile); return; }
-            Directory.CreateDirectory(Path.GetDirectoryName(ScheduledFile)!);
-            File.WriteAllText(ScheduledFile, System.Text.Json.JsonSerializer.Serialize(new { at = when.Value.ToString("O") }));
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { App.Log(exception); }
-    }
 
     private void UpdateScheduledUi()
     {
@@ -329,86 +295,30 @@ public partial class AutoResumePage : UserControl, IDisposable
             return;
         }
         scheduledAt = when;
-        scheduledLoaded = true;
-        SaveScheduledFile(when);
+        ScheduledRedeem.Write(when);
         UpdateScheduledUi();
     }
 
     private void ScheduledCancelClick(object sender, RoutedEventArgs args)
     {
         scheduledAt = null;
-        scheduledLoaded = true;
-        SaveScheduledFile(null);
+        ScheduledRedeem.Write(null);
         UpdateScheduledUi();
     }
 
     private void CheckScheduled()
     {
-        if (!scheduledLoaded)
+        // 执行在 ScheduledRedeem 里，页面只负责显示；两边同时看到到点也只会用掉一张卡。
+        var message = ScheduledRedeem.Check();
+        var current = ScheduledRedeem.Read();
+        if (current != scheduledAt)
         {
-            scheduledLoaded = true;
-            scheduledAt = ReadScheduledFile();
+            scheduledAt = current;
             UpdateScheduledUi();
         }
-        if (scheduledAt is null) return;
-        if (DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)) < scheduledAt) return;
-        var when = scheduledAt.Value;
-        scheduledAt = null;
-        SaveScheduledFile(null);
-        UpdateScheduledUi();
-        // 错过太久就不补执行，避免第二天开机时莫名其妙用掉一张卡
-        if (DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)) - when > TimeSpan.FromMinutes(30))
-        {
-            ScheduledStatus.Text = "已错过设定时间超过 30 分钟，这次没有执行用卡。";
-            ScheduledStatus.Visibility = Visibility.Visible;
-            return;
-        }
-        RunRedeem(when);
-    }
-
-    private void RunRedeem(DateTimeOffset when)
-    {
-        try
-        {
-            var directory = Path.GetDirectoryName(ThemeManager.PreferencesPath ?? Path.Combine(AppContext.BaseDirectory, "preferences.json")) ?? AppContext.BaseDirectory;
-            var connectionFile = Path.Combine(directory, "auto-resume-connection.json");
-            if (!File.Exists(connectionFile))
-            {
-                ScheduledStatus.Text = "没有找到续跑程序配置，定时用卡没有执行。";
-                ScheduledStatus.Visibility = Visibility.Visible;
-                return;
-            }
-            using var connection = System.Text.Json.JsonDocument.Parse(File.ReadAllText(connectionFile));
-            var python = connection.RootElement.TryGetProperty("Python", out var pythonValue) ? pythonValue.GetString() : null;
-            var runner = connection.RootElement.TryGetProperty("Runner", out var runnerValue) ? runnerValue.GetString() : null;
-            if (string.IsNullOrEmpty(python) || string.IsNullOrEmpty(runner))
-            {
-                ScheduledStatus.Text = "续跑程序配置不完整，定时用卡没有执行。";
-                ScheduledStatus.Visibility = Visibility.Visible;
-                return;
-            }
-            var script = Path.Combine(Path.GetDirectoryName(runner)!, "redeem_now.py");
-            if (!File.Exists(script))
-            {
-                ScheduledStatus.Text = "找不到 redeem_now.py，定时用卡没有执行。";
-                ScheduledStatus.Visibility = Visibility.Visible;
-                return;
-            }
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(python, "\"" + script + "\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
-            });
-            ScheduledStatus.Text = when.ToString("M月d日 HH:mm") + " 已触发用卡，结果写在 redeem-scheduled.log。";
-            ScheduledStatus.Visibility = Visibility.Visible;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception)
-        {
-            App.Log(exception);
-            ScheduledStatus.Text = "定时用卡没能启动：" + exception.Message;
-            ScheduledStatus.Visibility = Visibility.Visible;
-        }
+        if (message.Length == 0) return;
+        ScheduledStatus.Text = message;
+        ScheduledStatus.Visibility = Visibility.Visible;
     }
 
     public void Dispose()

@@ -153,6 +153,8 @@ public partial class App : Application
             Shutdown(1);
         };
         window.Show();
+        // 定时用卡不依赖页面：只要工具箱在运行，到点就会执行一次。
+        if (!IsDevelopmentPreview) ScheduledRedeem.Start();
         try { if (!IsDevelopmentPreview) await AutoResumeRuntime.RestoreAsync(AppContext.BaseDirectory); }
         catch (Exception exception) { Log(exception); window.ShowStatus("后台续跑暂未恢复，请打开“Codex 自动续跑”后重新开启。"); }
     }
