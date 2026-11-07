@@ -202,7 +202,10 @@ function Get-BundledAutomation([string]$Operation='status') {
 function Get-BundleStatus {
     # 捆绑版自己的进程探测偶尔会超时或仍在准备；这些都不能影响对外部 runner 的判断，
     # 否则界面会一直卡在「状态暂时无法确认」。探测失败就当作没检测到。
-    $watchers = try { @(Get-BundledWatchers) } catch { @() }
+    # 注意：不能用 $x = try { ... } catch { ... } 的写法，那样会把数组压成单个对象，
+    # .Count 取不到值，状态就会被误报成「已关闭」。
+    $watchers = @()
+    try { $watchers = @(Get-BundledWatchers) } catch { $watchers = @() }
     $legacyWatchers = @()
     $legacyStartup = $false
     if ($script:hasLegacy) {
