@@ -66,8 +66,10 @@ def main() -> None:
         if flag == "--network-test":
             environment["SSL_CERT_FILE"] = str(output / "no-host-python-ca.pem")
             environment["SSL_CERT_DIR"] = str(output / "no-host-python-ca")
+        # Intel 构建机比 Apple 芯片慢，界面冒烟用例偶尔会撞到两分钟上限。
+        limit = {"--update-test": 540, "--resume-test": 360, "--smoke-test": 300}.get(flag, 120)
         subprocess.run([str(launcher), flag, "--report", str(output / (flag.removeprefix("--") + ".json"))],
-                       check=True, timeout=540 if flag=='--update-test' else 360 if flag=='--resume-test' else 120, env=environment)
+                       check=True, timeout=limit, env=environment)
     version = json.loads((ROOT / "macos" / "version.json").read_text(encoding="utf-8"))["release"]
     if args.local_preview: version += '-local-parity'
     staging = output / "dmg-content"
