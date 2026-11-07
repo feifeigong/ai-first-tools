@@ -200,8 +200,9 @@ function Get-BundledAutomation([string]$Operation='status') {
     } finally { if (Test-Path -LiteralPath $report) { Remove-Item -LiteralPath $report -Force } }
 }
 function Get-BundleStatus {
-    $watchers = @(Get-BundledWatchers)
-    if (@($watchers | Where-Object { $_.Ready -eq $false }).Count -gt 0) { throw '自动续跑仍在准备，请稍后刷新确认。' }
+    # 捆绑版自己的进程探测偶尔会超时或仍在准备；这些都不能影响对外部 runner 的判断，
+    # 否则界面会一直卡在「状态暂时无法确认」。探测失败就当作没检测到。
+    $watchers = try { @(Get-BundledWatchers) } catch { @() }
     $legacyWatchers = @()
     $legacyStartup = $false
     if ($script:hasLegacy) {
@@ -212,8 +213,19 @@ function Get-BundleStatus {
     $startup = (Test-BundledRunValue ([string](Get-BundledRunValue))) -and ((Get-BundledPreference) -ne $false)
     $count = $watchers.Count + $legacyWatchers.Count
     $result = @{installed=(Test-Path -LiteralPath $script:bundledExecutable -PathType Leaf); running=$count -gt 0; autostart=($startup -or $legacyStartup); watcherCount=$count; error=''}
-    $policy = Get-BundledAutomation
-    foreach ($key in @('resumeEnabled','autoRedeem','autoStartWindow','timerStatus','nextResetAt')) { $result[$key] = $policy.$key }
+    # 捆绑版自己的状态查询偶尔会超时；不能因为它失败就把前面算好的 running 一起丢掉，
+    # 否则界面会一直显示「状态暂时无法确认」。
+    $policy = $null
+    try { $policy = Get-BundledAutomation } catch { $policy = $null }
+    if ($policy) {
+        foreach ($key in @('resumeEnabled','autoRedeem','autoStartWindow','timerStatus','nextResetAt')) { $result[$key] = $policy.$key }
+    } else {
+        $result['resumeEnabled'] = $result.running
+        $result['autoRedeem'] = $false
+        $result['autoStartWindow'] = $false
+        $result['timerStatus'] = 'unavailable'
+        $result['nextResetAt'] = 0
+    }
     return $result
 }
 function Disable-LegacyStartup {
