@@ -64,6 +64,21 @@ public partial class App : Application
             Shutdown(output is null ? 2 : await ResetPublicCheck.RunAsync(output));
             return;
         }
+        if (args.Args.Contains("--redeem-check"))
+        {
+            // 给自检用：按存储里的时间判断一次，走的就是软件运行时的同一条路径。
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var report = Option(args.Args, "--report");
+            var config = Option(args.Args, "--config") ?? Path.Combine(UserDataRoot, "tools.json");
+            try { ThemeManager.Initialize(config); }
+            catch (Exception themeError) when (themeError is IOException or UnauthorizedAccessException or InvalidOperationException) { Log(themeError); }
+            var message = ScheduledRedeem.Check();
+            var remaining = ScheduledRedeem.Read();
+            if (report is not null)
+                File.WriteAllText(report, System.Text.Json.JsonSerializer.Serialize(new { message, remaining = remaining?.ToString("O") ?? "" }));
+            Shutdown(message.Length == 0 ? 0 : 1);
+            return;
+        }
         if (args.Args.Contains("--update-handoff-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;

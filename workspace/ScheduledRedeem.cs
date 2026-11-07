@@ -78,6 +78,16 @@ internal static class ScheduledRedeem
         try
         {
             var connectionFile = Path.Combine(Directory, "auto-resume-connection.json");
+            if (!File.Exists(connectionFile))
+            {
+                // 资料位置可以切到 memory-preview，续跑配置始终写在工具箱设置目录里。
+                var parent = Path.GetDirectoryName(Directory);
+                if (!string.IsNullOrEmpty(parent))
+                {
+                    var shared = Path.Combine(parent, "auto-resume-connection.json");
+                    if (File.Exists(shared)) connectionFile = shared;
+                }
+            }
             if (!File.Exists(connectionFile)) return "没有找到续跑程序配置，定时用卡没有执行。";
             using var connection = JsonDocument.Parse(File.ReadAllText(connectionFile));
             var python = connection.RootElement.TryGetProperty("Python", out var pythonValue) ? pythonValue.GetString() : null;
