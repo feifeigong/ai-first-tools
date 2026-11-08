@@ -183,7 +183,7 @@ internal static class UpdateSelfTests
             }
             task.GetAwaiter().GetResult();
         }
-        check("New release published while open shows a download prompt without any check click or stale cache", () =>
+        check("New release published while open only lights up the top pill, and one click starts the download", () =>
         {
             var area = Path.Combine(root, "automatic-release");
             Directory.CreateDirectory(Path.Combine(area, "updates"));
@@ -192,7 +192,7 @@ internal static class UpdateSelfTests
             File.WriteAllText(Path.Combine(area, "updates", "latest-release.json"), "null");
             var requests = 0;
             var window = new MainWindow(Path.Combine(area, "tools.json"), null, null, true,
-                new UpdateClient(new FakeHttp(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(++requests == 1 ? "[]" : JsonSerializer.Serialize(new[] { Release("0.3.99") })) })), () => now, allowSyntheticUpdates: true);
+                new UpdateClient(new FakeHttp(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(++requests == 1 ? "[]" : JsonSerializer.Serialize(new[] { Release("9.9.9") })) })), () => now, allowSyntheticUpdates: true);
             try
             {
                 Wait(window.CheckUpdatesAsync(false));
@@ -200,30 +200,38 @@ internal static class UpdateSelfTests
                 now = now.AddMinutes(10);
                 Wait(window.CheckUpdatesAsync(false));
                 require(requests == 2);
-                require(((System.Windows.FrameworkElement)window.FindName("UpdateBanner")).Visibility == System.Windows.Visibility.Visible);
-                require(((System.Windows.Controls.TextBlock)window.FindName("UpdateTitle")).Text == "发现新版本 v0.3.99");
-                require(((System.Windows.Controls.Button)window.FindName("InstallUpdateButton")).Content.ToString() == "下载并更新");
-                ((System.Windows.FrameworkElement)window.FindName("UpdateBanner")).Visibility = System.Windows.Visibility.Collapsed;
-                now = now.AddMinutes(10);
-                Wait(window.CheckUpdatesAsync(false));
-                require(requests == 3 && ((System.Windows.FrameworkElement)window.FindName("UpdateBanner")).Visibility == System.Windows.Visibility.Collapsed);
+                System.Windows.FrameworkElement Named(string name) => (System.Windows.FrameworkElement)window.FindName(name);
+                System.Windows.Controls.TextBlock Text(string name) => (System.Windows.Controls.TextBlock)window.FindName(name);
+                // 自动检查只露出顶栏胶囊，不再同时弹一个底部横条
+                if (Named("UpdatePillButton").Visibility != System.Windows.Visibility.Visible || Named("UpdateBanner").Visibility != System.Windows.Visibility.Collapsed)
+                    throw new InvalidOperationException($"requests={requests} pill={Named("UpdatePillButton").Visibility} banner={Named("UpdateBanner").Visibility} title={Text("UpdateTitle").Text} desc={Text("UpdateDescription").Text}");
+                // 底部横条里不再有第二个「下载并更新」入口
+                require(window.FindName("InstallUpdateButton") is null);
+                require(window.FindName("DismissUpdateButton") is null);
+                // 点胶囊就是开始下载：不需要再确认一次，失败也只在同一条横条里说明
+                Wait(window.StartUpdateAsync());
+                require(Text("UpdateTitle").Text == "更新没有开始");
+                require(((System.Windows.Controls.Button)window.FindName("UpdateActionButton")).Content.ToString() == "知道了");
+                require(Named("UpdateBanner").Visibility == System.Windows.Visibility.Visible);
+                require(Named("UpdatePillButton").Visibility == System.Windows.Visibility.Visible);
             }
             finally { window.ReleaseTools(); }
         });
-        check("Automatic network failure recovers and displays the new version without a click", () =>
+        check("Automatic network failure recovers and shows the update entry without a click", () =>
         {
             var now = DateTimeOffset.UtcNow;
             var requests = 0;
             var window = new MainWindow(Path.Combine(root, "automatic-retry", "tools.json"), null, null, true,
-                new UpdateClient(new FakeHttp(_ => ++requests == 1 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new[] { Release("0.3.99") })) })), () => now, allowSyntheticUpdates: true);
+                new UpdateClient(new FakeHttp(_ => ++requests == 1 ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(new[] { Release("9.9.9") })) })), () => now, allowSyntheticUpdates: true);
             try
             {
                 Wait(window.CheckUpdatesAsync(false));
                 require(((System.Windows.Controls.TextBlock)window.FindName("UpdateDescription")).Text.Contains("将自动重试"));
                 now = now.AddSeconds(59); Wait(window.CheckUpdatesAsync(false, true)); require(requests == 1);
                 now = now.AddSeconds(2); Wait(window.CheckUpdatesAsync(false));
-                require(requests == 2 && ((System.Windows.Controls.TextBlock)window.FindName("UpdateTitle")).Text == "发现新版本 v0.3.99");
-                require(((System.Windows.Controls.Button)window.FindName("InstallUpdateButton")).IsEnabled);
+                require(requests == 2);
+                require(((System.Windows.FrameworkElement)window.FindName("UpdatePillButton")).Visibility == System.Windows.Visibility.Visible);
+                require(((System.Windows.FrameworkElement)window.FindName("UpdateBanner")).Visibility == System.Windows.Visibility.Collapsed);
             }
             finally { window.ReleaseTools(); }
         });

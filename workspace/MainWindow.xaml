@@ -191,8 +191,7 @@
             <ProgressBar x:Name="UpdateProgress" Visibility="Collapsed" Height="3" Margin="0,9,0,0" AutomationProperties.Name="更新下载进度" />
           </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button x:Name="DismissUpdateButton" Content="稍后" Click="DismissUpdateClick" Style="{StaticResource InlineButton}" Margin="0,0,6,0" />
-            <Button x:Name="InstallUpdateButton" Content="下载并更新" Click="InstallUpdateClick" Style="{StaticResource PrimaryButton}" />
+            <Button x:Name="UpdateActionButton" Content="知道了" Click="UpdateActionClick" Style="{StaticResource InlineButton}" />
           </StackPanel>
         </Grid>
       </Border>

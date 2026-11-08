@@ -74,6 +74,8 @@
     message.textContent = text;
     download.hidden = !available;
     download.textContent = label;
+    if (!available) { delete download.dataset.version; download.removeAttribute("title"); }
+    else if (label === "打开下载页") download.title = "打开 AI一手的 GitHub 发布页获取完整安装包";
     notice.hidden = false;
   };
   dismiss.addEventListener("click", async () => {
@@ -99,7 +101,7 @@
       failure = result;
       checker.title = result.error;
       if (result.retainedUpdate && hasUpdate) {
-        if (manual) show(result.error, true, installing ? "下载并更新" : "打开下载页");
+        if (manual) show(result.error, true, installing ? "↑ 更新" : "打开下载页");
         return;
       }
       hasUpdate = false;
@@ -121,10 +123,13 @@
         if (result.available) {
           hasUpdate = true; installing = result.canInstall === true;
           download.hidden = false;
-          download.textContent = installing ? "下载并更新" : "打开下载页";
-          if (manual || announcedVersion !== result.version) {
-            show(`发现新版本 ${result.version}，${installing ? "点一下即可更新并重新打开。" : "可以打开下载页获取完整安装包。"}`, true, download.textContent);
-          }
+          download.textContent = installing ? "↑ 更新" : "打开下载页";
+          download.dataset.version = result.version;
+          download.title = installing ? `新版本 ${result.version} 可用 · 点一下自动下载并重新打开`
+            : `新版本 ${result.version} 可用 · 点一下打开下载页`;
+          // 和 Windows 一致：自动检查只在顶栏露出「↑ 更新」，不再同时弹底部提示条，
+          // 免得同一个更新出现两个入口。只有用户主动点「检查更新」才用文字说明。
+          if (manual) show(`发现新版本 ${result.version}，${installing ? "点一下顶栏的「↑ 更新」即可自动更新并重新打开。" : "可以打开下载页获取完整安装包。"}`, true, download.textContent);
           announcedVersion = result.version;
         }
         else {
@@ -157,7 +162,7 @@
     progress.hidden = true;
     dismiss.textContent = "×";
     dismiss.setAttribute("aria-label", "关闭提示");
-    show(text, hasUpdate, installing ? "下载并更新" : "打开下载页");
+    show(text, hasUpdate, installing ? "↑ 更新" : "打开下载页");
   };
   const showHandoff = () => {
     if (handoffSince === null) handoffSince = Date.now();
@@ -225,7 +230,8 @@
       updating = true;
       closingUpdate = false;
       checker.disabled = true;
-      download.textContent = "正在更新…";
+      // 胶囊让位给底部进度条：同一时刻只留一个更新相关的界面
+      download.hidden = true;
       dismiss.textContent = "取消";
       dismiss.setAttribute("aria-label", "取消更新");
       notice.hidden = false;

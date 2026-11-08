@@ -38,7 +38,6 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer updateTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     private readonly UpdateCheckSchedule updateSchedule = new();
     private readonly Func<DateTimeOffset> updateClock;
-    private string? announcedUpdate;
     private bool updateFailureShown;
     private CancellationTokenSource? downloading;
     private UpdateRelease? availableUpdate;
@@ -463,7 +462,11 @@ public partial class MainWindow : Window
                     Show();
                     Present(selected, session);
                     ShowStatus(selected.Name + "还有事情没结束，完成后再点 × 关闭。");
-                    if (restartingForUpdate) ShowUpdateOffer("请先完成工具里的任务，再点下载并更新。不会强制停止搬运。");
+                    if (restartingForUpdate)
+                    {
+                        restartingForUpdate = false;
+                        RestoreUpdateEntry("暂不更新", "请先完成工具里的任务，再点顶栏的「↑ 更新」。不会强制停止搬运。");
+                    }
                     return;
                 }
                 ForgetSession(entry.Key, session);
@@ -478,7 +481,11 @@ public partial class MainWindow : Window
             App.Log(exception);
             Show();
             ShowStatus("暂时没关好。先处理工具里的提示，再点 ×。");
-            if (restartingForUpdate) ShowUpdateOffer("没有启动更新，当前版本可以继续使用。稍后再试一次。");
+            if (restartingForUpdate)
+            {
+                restartingForUpdate = false;
+                RestoreUpdateEntry("更新没有启动", "当前版本可以继续使用，稍后再点一次顶栏的「↑ 更新」。");
+            }
         }
         finally
         {
@@ -516,8 +523,10 @@ public partial class MainWindow : Window
 
     private async void CheckUpdateClick(object sender, RoutedEventArgs args)
     {
-        if (availableUpdate is not null) ShowUpdateOffer();
-        else await CheckUpdatesAsync(true);
+        if (downloading is not null) return;
+        // 顶栏胶囊是唯一的更新入口：点一下直接开始下载，不再要求二次确认
+        if (availableUpdate is not null) { await StartUpdateAsync(); return; }
+        await CheckUpdatesAsync(true);
     }
 
     internal async Task CheckUpdatesAsync(bool manual, bool wake = false)
@@ -546,15 +555,16 @@ public partial class MainWindow : Window
             updateFailureShown = false;
             if (availableUpdate is null)
             {
-                announcedUpdate = null;
                 if (UpdateTitle.Text.StartsWith("发现新版本", StringComparison.Ordinal)) UpdateBanner.Visibility = Visibility.Collapsed;
+                // 悄悄检查到「已经是最新」时不打扰；只有用户主动检查才回一句话
+                if (manual) ShowUpdateMessage("已是最新版本 · v" + UpdateClient.CurrentVersion, "以后发布新工具或新版本，顶栏会露出「↑ 更新」按钮。", "知道了");
             }
-            if (availableUpdate is not null && (manual || announcedUpdate != availableUpdate.Version))
+            else
             {
-                ShowUpdateOffer();
-                announcedUpdate = availableUpdate.Version;
+                // 和 Magpie 一致：自动检查只在顶栏露出「↑ 更新」，不弹出底部横条，
+                // 避免同一个更新出现两个入口、让用户不知道点哪个。
+                if (manual) ShowUpdateMessage("发现新版本 v" + availableUpdate.Version, "点顶栏的「↑ 更新」自动下载并重新打开，原来的对话与设置保留。", "知道了");
             }
-            else if (manual) ShowUpdateMessage("已是最新版本 · v" + UpdateClient.CurrentVersion, "以后发布新工具或新版本，这里会提醒您。", "知道了");
             try
             {
                 Directory.CreateDirectory(updateSettings);
@@ -583,85 +593,92 @@ public partial class MainWindow : Window
             {
                 CheckUpdateButton.IsEnabled = true;
                 UpdatePillButton.IsEnabled = true;
-                // 平时完全不占位，只有真的检测到新版本才露出胶囊
+                // 平时完全不占位，只有真的检测到新版本才露出胶囊；下载中让位给进度条
                 CheckUpdateButton.Visibility = Visibility.Collapsed;
-                UpdatePillButton.Visibility = availableUpdate is null ? Visibility.Collapsed : Visibility.Visible;
+                if (availableUpdate is not null)
+                    UpdatePillButton.ToolTip = "v" + availableUpdate.Version + " 可用 · 点一下自动下载并重新打开";
+                UpdatePillButton.Visibility = availableUpdate is null || downloading is not null ? Visibility.Collapsed : Visibility.Visible;
             }
         }
-    }
-
-    internal void ShowUpdateOffer(string? explanation = null)
-    {
-        if (availableUpdate is null) return;
-        UpdateTitle.Text = "发现新版本 v" + availableUpdate.Version;
-        UpdateDescription.Text = explanation ?? "点一下自动下载、更新并重新打开，不用重新安装。原来的对话与设置保留。";
-        InstallUpdateButton.Content = "下载并更新";
-        InstallUpdateButton.Visibility = Visibility.Visible;
-        InstallUpdateButton.IsEnabled = true;
-        DismissUpdateButton.Content = "稍后";
-        DismissUpdateButton.IsEnabled = true;
-        UpdateProgress.Visibility = Visibility.Collapsed;
-        UpdateBanner.Visibility = Visibility.Visible;
     }
 
     private void ShowUpdateMessage(string title, string description, string dismiss)
     {
         UpdateTitle.Text = title;
         UpdateDescription.Text = description;
-        InstallUpdateButton.Visibility = Visibility.Collapsed;
         UpdateProgress.Visibility = Visibility.Collapsed;
-        DismissUpdateButton.Content = dismiss;
+        UpdateActionButton.Content = dismiss;
+        UpdateActionButton.IsEnabled = true;
         UpdateBanner.Visibility = Visibility.Visible;
     }
 
-    private void DismissUpdateClick(object sender, RoutedEventArgs args)
+    private void UpdateActionClick(object sender, RoutedEventArgs args)
     {
         if (downloading is not null) { downloading.Cancel(); return; }
         UpdateBanner.Visibility = Visibility.Collapsed;
     }
 
-    private async void InstallUpdateClick(object sender, RoutedEventArgs args)
+    // 顶栏胶囊点下来后直接走这里：没有中间的「要不要更新」确认页，只有一个进度条。
+    internal async Task StartUpdateAsync()
     {
-        if (availableUpdate is null || downloading is not null || closing || released) return;
+        var target = availableUpdate;
+        if (target is null || downloading is not null || closing || released) return;
         if (preparedUpdate is not null) { restartingForUpdate = true; Close(); return; }
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         downloading = cancellation;
-        CheckUpdateButton.IsEnabled = InstallUpdateButton.IsEnabled = false;
-        UpdateTitle.Text = "正在下载 v" + availableUpdate.Version;
-        UpdateDescription.Text = "下载时可以继续使用。更新前会等待工具安全关闭。";
-        DismissUpdateButton.Content = "取消下载";
+        CheckUpdateButton.IsEnabled = false;
+        UpdatePillButton.IsEnabled = false;
+        // 胶囊让位给进度条：同一时刻只留一个更新相关的界面，避免两个入口同时出现
+        UpdatePillButton.Visibility = Visibility.Collapsed;
+        UpdateTitle.Text = "正在下载 v" + target.Version;
+        UpdateDescription.Text = "下载时可以继续使用。装好会自动重新打开，原来的对话与设置保留。";
+        UpdateActionButton.Content = "取消";
+        UpdateActionButton.IsEnabled = true;
         UpdateProgress.Visibility = Visibility.Visible;
         UpdateProgress.IsIndeterminate = false;
         UpdateProgress.Value = 0;
+        UpdateBanner.Visibility = Visibility.Visible;
         try
         {
             var progress = new Progress<double>(value =>
             {
                 if (released || cancellation.IsCancellationRequested || downloading != cancellation) return;
                 UpdateProgress.IsIndeterminate = value < 0;
-                if (value < 0) { UpdateTitle.Text = "正在校验并准备更新…"; DismissUpdateButton.Content = "取消"; }
-                else { UpdateProgress.Value = value; UpdateTitle.Text = "正在下载 · " + Math.Floor(value) + "%"; }
+                if (value < 0) UpdateTitle.Text = "正在校验并准备更新…";
+                else { UpdateProgress.Value = value; UpdateTitle.Text = "正在下载 v" + target.Version + " · " + Math.Floor(value) + "%"; }
             });
-            preparedUpdate = await UpdateRunner.PrepareAsync(updates, availableUpdate, progress, cancellation.Token, updateConfiguration, updateTool);
-            preparedVersion = availableUpdate.Version;
+            preparedUpdate = await UpdateRunner.PrepareAsync(updates, target, progress, cancellation.Token, updateConfiguration, updateTool);
+            preparedVersion = target.Version;
             if (released) return;
-            if (closing) { ShowUpdateOffer(); return; }
+            if (closing) return;
             cancellation.Token.ThrowIfCancellationRequested();
-            DismissUpdateButton.IsEnabled = false;
+            UpdateActionButton.IsEnabled = false;
             restartingForUpdate = true;
             Close();
         }
-        catch (OperationCanceledException) { if (!released) ShowUpdateOffer("已取消下载，当前版本可以继续使用。"); }
+        catch (OperationCanceledException) { if (!released) RestoreUpdateEntry("已取消下载", "当前版本可以继续使用。随时点顶栏的「↑ 更新」重新开始。"); }
         catch (Exception exception)
         {
             App.Log(exception);
-            if (!released) ShowUpdateOffer(exception is InvalidDataException ? exception.Message + " 当前版本可以继续使用。" : "更新准备没有完成，请检查网络、磁盘空间和文件权限后重试。当前版本仍可使用。");
+            if (!released) RestoreUpdateEntry("更新没有开始", exception is InvalidDataException ? exception.Message + " 当前版本可以继续使用。" : "请检查网络、磁盘空间和文件权限后，再点一次顶栏的「↑ 更新」。当前版本仍可使用。");
         }
         finally
         {
             downloading = null;
-            if (!released) CheckUpdateButton.IsEnabled = true;
+            if (!released)
+            {
+                CheckUpdateButton.IsEnabled = true;
+                UpdatePillButton.IsEnabled = true;
+                UpdatePillButton.Visibility = availableUpdate is null ? Visibility.Collapsed : Visibility.Visible;
+            }
         }
+    }
+
+    // 下载没走完就把入口还给顶栏：底部只留一句说明，不再出现第二个「下载并更新」按钮
+    private void RestoreUpdateEntry(string title, string description)
+    {
+        ShowUpdateMessage(title, description, "知道了");
+        if (availableUpdate is not null) UpdatePillButton.Visibility = Visibility.Visible;
     }
 
     private void ReadUpdateReceipt()

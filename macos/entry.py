@@ -479,7 +479,7 @@ def smoke_check(window, api: MacApi, report: Path) -> None:
                 result = json.loads(value)
                 result["checks"]["nativeContentAttached"] = getattr(window, "_ai_first_content_attached", False) is True
                 result["checks"]["bundledFileNavigation"] = getattr(window, "_ai_first_bundled_file_load", False) is True
-                reminder = window.evaluate_js("!document.getElementById('workspace-download').hidden && document.getElementById('workspace-message').textContent.includes('synthetic-reminder-only')")
+                reminder = window.evaluate_js("!document.getElementById('workspace-download').hidden && document.getElementById('workspace-download').dataset.version === 'synthetic-reminder-only' && !document.getElementById('workspace-message').textContent.includes('发现新版本')")
                 if reminder:
                     result["checks"]["automaticUpdateReminder"] = api._smoke_check_calls == 1
                     result["checks"]["noUnrequestedDownload"] = api.update_status()["phase"] == "idle"
