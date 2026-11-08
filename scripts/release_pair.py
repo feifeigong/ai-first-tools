@@ -2,19 +2,25 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "feifeigong/ai-first-tools"
 REQUEST_PATH = ".github/release-pair.json"
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
+NATIVE_ARTIFACTS = ("windows-release", "macos-arm64", "macos-x86_64")
 
 
 def command(args: list[str], **kwargs) -> str:
@@ -66,6 +72,123 @@ def validate_context(commit: str) -> str:
     if api("git/ref/heads/master").get("object", {}).get("sha") != commit:
         raise ValueError("Master advanced; this release request is no longer the source head")
     return run_id
+
+
+def artifact_time(value) -> datetime:
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z", value):
+        raise ValueError("Artifact timestamps must be valid UTC timestamps")
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def select_artifacts(commit: str, run_id: str) -> dict:
+    """Select by creation time; artifact IDs are not ordered across reruns."""
+    if not SHA.fullmatch(commit) or not re.fullmatch(r"[1-9][0-9]*", run_id):
+        raise ValueError("Artifact selection requires an exact source and positive run ID")
+    run = api(f"actions/runs/{run_id}")
+    if (run.get("id") != int(run_id) or run.get("head_sha") != commit
+            or run.get("repository", {}).get("full_name") != REPOSITORY
+            or run.get("head_branch") != "master"):
+        raise ValueError("Artifacts must belong to this repository's exact source run")
+    started, now = artifact_time(run.get("created_at")), datetime.now(timezone.utc)
+    inventory, total, page = [], None, 1
+    while total is None or len(inventory) < total:
+        data = api(f"actions/runs/{run_id}/artifacts?per_page=100&page={page}")
+        rows, count = data.get("artifacts"), data.get("total_count")
+        if (not isinstance(rows, list) or type(count) is not int or count < 0
+                or total is not None and total != count or len(rows) > 100
+                or len(inventory) + len(rows) > count or not rows and len(inventory) < count):
+            raise ValueError("Artifact inventory is incomplete or changed while listing")
+        total = count
+        inventory.extend(rows)
+        page += 1
+    selected, identifiers, ambiguous = {}, set(), set()
+    for item in inventory:
+        if not isinstance(item, dict):
+            raise ValueError("Invalid artifact metadata")
+        name = item.get("name")
+        if name not in NATIVE_ARTIFACTS:
+            continue
+        owner, ident = item.get("workflow_run", {}), item.get("id")
+        created = artifact_time(item.get("created_at"))
+        if (type(ident) is not int or ident <= 0 or ident in identifiers
+                or not isinstance(owner, dict) or owner.get("id") != int(run_id)
+                or owner.get("head_sha") != commit or not started <= created <= now):
+            raise ValueError("Artifact identity, source or creation time is invalid")
+        identifiers.add(ident)
+        previous = selected.get(name)
+        if previous is None or created > artifact_time(previous["created_at"]):
+            selected[name] = item
+            ambiguous.discard(name)
+        elif created == artifact_time(previous["created_at"]):
+            ambiguous.add(name)
+    if ambiguous:
+        raise ValueError("Newest artifact creation time is ambiguous: " + ", ".join(sorted(ambiguous)))
+    if set(selected) != set(NATIVE_ARTIFACTS):
+        raise ValueError("All three native artifacts are required")
+    result = {}
+    for name in NATIVE_ARTIFACTS:
+        item = selected[name]
+        digest, size = item.get("digest"), item.get("size_in_bytes")
+        # Validate the newest entry. Never fall back to an older successful upload.
+        if (item.get("expired") is not False or artifact_time(item.get("expires_at")) <= now
+                or not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
+                or type(size) is not int or size <= 0):
+            raise ValueError(f"Newest artifact is expired or lacks verifiable bytes: {name}")
+        result[name] = {"id": item["id"], "name": name, "created_at": item["created_at"],
+                        "digest": digest, "bytes": size, "run_id": run_id, "source": commit}
+    return result
+
+
+def artifact_members(archive: zipfile.ZipFile, destination: Path) -> list[zipfile.ZipInfo]:
+    members, seen = archive.infolist(), set()
+    if not members:
+        raise ValueError("Empty native artifact ZIP")
+    for member in members:
+        name = member.filename
+        parts = name.rstrip("/").split("/")
+        mode = stat.S_IFMT(member.external_attr >> 16)
+        target = destination.joinpath(*parts)
+        if (not name or member.orig_filename != name or "\\" in name or name.startswith("/") or ":" in parts[0]
+                or any(part in ("", ".", "..") for part in parts) or name.rstrip("/") in seen
+                or mode not in (0, stat.S_IFREG, stat.S_IFDIR)
+                or not target.resolve().is_relative_to(destination.resolve())
+                or any(path.is_symlink() for path in (target, *target.parents))
+                or target.exists() and not (member.is_dir() and target.is_dir())):
+            raise ValueError(f"Unsafe or conflicting native artifact ZIP entry: {name}")
+        seen.add(name.rstrip("/"))
+    files = {member.filename.rstrip("/") for member in members if not member.is_dir()}
+    if any("/".join(member.filename.split("/")[:index]) in files
+           for member in members for index in range(1, len(member.filename.rstrip("/").split("/")))):
+        raise ValueError("Native artifact ZIP has a file/directory collision")
+    return members
+
+
+def download_artifacts(commit: str, run_id: str, output: Path) -> None:
+    selected = select_artifacts(commit, run_id)
+    with tempfile.TemporaryDirectory(prefix="release-pair-artifacts-") as temporary:
+        archives = []
+        for name, item in selected.items():
+            path = Path(temporary) / f"{item['id']}.zip"
+            with path.open("wb") as stream:
+                subprocess.run(["gh", "api", f"repos/{REPOSITORY}/actions/artifacts/{item['id']}/zip",
+                                "--method", "GET"], stdout=stream, stderr=subprocess.PIPE, check=True, timeout=600)
+            with path.open("rb") as stream:
+                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            if path.stat().st_size != item["bytes"] or "sha256:" + digest != item["digest"]:
+                raise ValueError(f"Downloaded artifact size or SHA-256 differs: {name}")
+            destination = ROOT / "artifacts" if name == "windows-release" else ROOT / "artifacts/release-stage" / name
+            with zipfile.ZipFile(path) as archive:
+                artifact_members(archive, destination)
+            archives.append((path, destination))
+        # All three downloads must be verified before extraction or release validation.
+        for path, destination in archives:
+            with zipfile.ZipFile(path) as archive:
+                archive.extractall(destination, members=artifact_members(archive, destination))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps({"schema": 1, "source": commit, "run_id": run_id,
+                                  "artifacts": selected}, indent=2) + "\n", encoding="utf-8")
+    for name, item in selected.items():
+        print(f"Verified {name}: artifact {item['id']}, created {item['created_at']}, {item['bytes']} bytes")
 
 
 def tags(request: dict) -> dict[str, str]:
@@ -238,7 +361,7 @@ def macos_gate() -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", choices=("request", "prepare", "publish", "macos-gate"))
+    parser.add_argument("operation", choices=("request", "download-artifacts", "prepare", "publish", "macos-gate"))
     parser.add_argument("--commit", default=os.environ.get("GITHUB_SHA", ""))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--receipt", type=Path)
@@ -253,6 +376,8 @@ def main() -> None:
         targets(request, args.commit)
         with args.output.open("a", encoding="utf-8") as output:
             output.write(f"source={args.commit}\n")
+    elif args.operation == "download-artifacts":
+        download_artifacts(args.commit, run_id, args.output)
     elif args.operation == "prepare":
         prepare(request, args.commit, run_id, args.output)
     else:
