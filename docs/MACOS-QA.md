@@ -1,10 +1,20 @@
 # Mac 移植验证记录
 
-## 2026-11-08：0.4.4-preview.32 续跑身份筛选（待发布）
+## 2026-11-08：0.4.4-preview.32 续跑身份筛选（已发布）
 
-Mac `0.4.4-macos-preview.32` 与 Windows `0.4.4` 共用 `auto-resume/src` 的主任务识别及提交前复核：明确子代理、审批守护、缺失或未知身份、冲突元数据均不得自动续跑。共享合成回归覆盖多个子代理同时等待、主任务恢复及身份无法确认；本轮验证环境为 Linux，平台差异仅作模拟检查。
+已发布 [Windows v0.4.4](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4) 与 [Mac 0.4.4-preview.32](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4-macos-preview.32)。固定发布源码 `fda7f4e77f18b6d719e17fd1ea7b5ff15b0da937`，[双平台构建与发布 42479501538](https://github.com/feifeigong/ai-first-tools/actions/runs/42479501538) 通过。Windows 3 项、Mac 23 项发布资产已独立下载，与原始构建逐项核对大小和摘要。
 
-未读取用户会话，未运行真实 Codex/app-server 或额度、重置卡请求。尚未构建及验收本次 Apple/Intel 原生冻结包、launchd/Cocoa、旧后台交接或真实续跑；下方已发布版本的原生检查不替代本轮验收。
+Apple 芯片 163/163 项、Intel 芯片 163/163 项原生检查通过，包含冻结运行包、Cocoa/launchd 与隔离更新生命周期。两架构报告的版本和来源分别核对，未套用历史 preview.29 的统计。`self-test` 中 `mainSessionIdentityFiltering`、`unknownSessionIdentityRejected`、`continuedSessionBlockedAtSubmission` 均通过；冻结包内用合成日志确认多个子代理同时等待时仅主任务可入队，未知身份与提交前已继续的会话不会启动。
+
+首轮 [42474540762](https://github.com/feifeigong/ai-first-tools/actions/runs/42474540762) 在发布前因既有 UI 断言与当前图标、布局、隐藏入口不符，以及文字对比度检查失败而停止，失败包未发布。已对齐现有设计并修正浅色/深色主题对比度，保留焦点、一次显示、关闭、溢出、XSS 与 4.5 对比度门槛；本次使用最终源码重新通过完整检查。
+
+第二轮 [42475665203](https://github.com/feifeigong/ai-first-tools/actions/runs/42475665203) 的源码为 `912ef1ce3130cf2c99fc6fbdac806acd4f16337e`。Windows 的旧 ZIP 下载超时与 Intel 的原生更新界面交接 `TimeoutExpired` 在同一 SHA 重试后，三端原生构建均成功；Intel 的超时不是 DMG 创建失败。核验阶段仍因 `latest:true` 按最大 artifact id 误选旧 Intel 失败工件而缺少 DMG：新成功 id `13615999675` 小于旧失败 id `13616080933`。发布门槛在创建 tag 前阻止了该轮，前两轮均未发布。随后工件读取改按 `created_at` 与精确 source/run 核对，用指定 ID 下载并核验 ZIP 摘要、大小与解压路径；历史工件和权限保留，最终报告来自新源码的完整三端构建。
+
+第三轮 [42479501538](https://github.com/feifeigong/ai-first-tools/actions/runs/42479501538) 的 Intel attempt 1 已通过 10 类原生报告中的 163 项检查及 3 项新增安全字段，更新交接 `phase=complete`、`helperReturnCode=0`；之后 `scripts/package_macos.py:81` 的 `hdiutil create` 制作最终发布 DMG 时出现 `Resource busy`，不是上一轮 UI 交接超时。源码保持 `fda7f4e77f18b6d719e17fd1ea7b5ff15b0da937`，仅重试 Intel 与下游，保留 Windows 和 Apple 已成功构建。attempt 2 的 Intel 原生检查及最终 DMG 制作成功，新工件 `13617373240` 通过精确 ID 下载与摘要核验；两架构最终公开的 20 份原生报告已逐份下载、校验摘要，分别为 163/163 项通过。
+
+界面回归 43 项通过。默认隐藏版本入口时，三种关闭方式的焦点回到可见入口；手动回看只在明确显示入口的合成夹具验证，焦点、只显示一次、窄屏溢出与纯文本/XSS 断言保留。原生 smoke 的程序化调用验证弹窗和已读状态，不把隐藏按钮当作默认可用的用户入口。
+
+所有会话、额度及界面回归使用隔离合成夹具，原生生命周期检查使用独立未登录目录；未读取真实用户会话、认证或数据库，未发送模型任务，未消耗订阅额度或重置卡。原生组件版本、参数、未登录历史兼容和 app-server 握手检查不代表真实账号续跑验收；真实用户任务续跑仍未代测。发布验收覆盖隔离环境中的原生组件与生命周期，不扩大为所有真实账户、所有 Mac 或真实模型续聊均通过。
 
 ## 2026-11-02：发卡识别、项目归属与 Windows 图标（已发布）
 

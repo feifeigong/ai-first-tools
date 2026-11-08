@@ -1,6 +1,6 @@
 # AI一手工具箱
 
-**0.4.4 双平台续跑修复待发布：** 只继续能确认的主任务，提交前再次检查，减少无关任务消耗额度。当前公开下载仍为 Windows v0.4.3 / Mac 0.4.2-preview.31；新版需完成两端打包与验证后发布，详见[续跑说明](docs/AUTO-RESUME-CONTROL.md)。
+**0.4.4 双平台续跑修复已发布：** Windows v0.4.4 / Mac 0.4.4-preview.32 只继续能确认的主任务，提交前再次检查，减少无关任务消耗额度。两端完整运行包与隔离验证已完成，详见[续跑说明](docs/AUTO-RESUME-CONTROL.md)。
 
 把好用的 AI 小工具放在一起。打开一个窗口，点一下就能用。
 
@@ -22,7 +22,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ### Mac 版
 
-**[⬇ Mac 预览版下载（0.4.2-preview.31 · 内置续跑与 Copilot 搬入）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.2-macos-preview.31)**
+**[⬇ Mac 预览版下载（0.4.4-preview.32 · 主任务安全续跑修复）](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4-macos-preview.32)**
 
 苹果 M 系列选 `macos-arm64.dmg`，Intel Mac 选 `macos-x86_64.dmg`。打开 DMG，拖到「应用程序」，之后直接打开，不需要源码或开发环境。
 
@@ -36,7 +36,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ### 推荐：Windows 安装版
 
-**[⬇ 下载 Windows 安装包 v0.4.3](https://github.com/feifeigong/ai-first-tools/releases/download/v0.4.3/AI-First-Tools-Setup-0.4.3.exe)**
+**[⬇ 下载 Windows 安装包 v0.4.4](https://github.com/feifeigong/ai-first-tools/releases/download/v0.4.4/AI-First-Tools-Setup-0.4.4.exe)**
 
 1. 下载上面的安装包，双击打开。
 2. 点击「安装」，等它完成。
@@ -48,7 +48,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ### 可选：Windows 免安装版
 
-**[⬇ 下载免安装压缩包 v0.4.3](https://github.com/feifeigong/ai-first-tools/releases/download/v0.4.3/AI-First-Tools-Portable-0.4.3-win-x64.zip)**
+**[⬇ 下载免安装压缩包 v0.4.4](https://github.com/feifeigong/ai-first-tools/releases/download/v0.4.4/AI-First-Tools-Portable-0.4.4-win-x64.zip)**
 
 解压**整个压缩包**，进入文件夹，双击「AI一手工具箱.exe」。不能只拿走一个 EXE，也不要直接在压缩包里面运行。可以给这个 EXE 创建桌面快捷方式，以后不用再找文件夹。
 
@@ -56,7 +56,7 @@ Windows 和 Mac 都内置所需运行组件，不用另装 Python、Node 或独�
 
 ## 自动续跑怎么用
 
-**2026-11-08，0.4.4 待发布：** Windows 与 Mac 共用的续跑核心仅自动继续明确识别的主任务；子代理、审批守护线程及身份缺失、冲突或未知的会话跳过，提交前重新核对。当前验证仅限 Linux 隔离回归与平台模拟，尚未验收本次 Windows/Mac 原生运行包；上方公开版本尚不包含本次修复。
+**2026-11-08，0.4.4 已发布：** Windows 与 Mac 共用的续跑核心仅自动继续明确识别的主任务；子代理、审批守护线程及身份缺失、冲突或未知的会话跳过，提交前重新核对。两端已通过合成回归和隔离原生包验证，未发送真实模型续跑请求或使用重置卡；真实用户任务续跑未代测。
 
 打开工具箱 →「续跑与重置」，开启「自动续跑」。默认等待额度恢复；只有你另外打开「周额度用完时自动使用重置卡」，才会在周额度耗尽时尝试用卡。关闭续跑会同时关闭用卡，重新开启续跑也不会自动恢复用卡。希望下次登录电脑后继续运行已开启的功能，再打开「登录后自动运行」。
 
@@ -132,7 +132,7 @@ Windows0.3.25 / Mac preview.29 已修复新版 Copilot 完整搬家无法保存�
 
 ## 更新、卸载与反馈
 
-**更新后，一眼知道变了什么**：Windows v0.3.19 / Mac preview.22 起，首次正常打开用小窗简短展示本次变化，同版关闭后不反复提示；点右上角版本号可回看。说明离线可读，已开始操作时不延后打断。详见[更新展示说明](docs/WHATS-NEW.md)。
+**更新后，一眼知道变了什么**：Windows v0.3.19 / Mac preview.22 起，首次正常打开用小窗简短展示本次变化，同版关闭后不反复提示。说明离线可读，已开始操作时不延后打断；当前默认隐藏版本号回看入口，完整说明可在[本版发布页](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4)阅读。详见[更新展示说明](docs/WHATS-NEW.md)。
 
 - **Windows 和 Mac 都会自动提醒更新**：有新版时出现「下载并更新」，点一次即可下载、校验、更新并重新打开。也能点击「检查更新」。新工具随工具箱一起更新，无需单独添加。
 - 安装版自动覆盖更新；免安装版更新原来的整个程序目录。不操作各 AI 软件的对话目录，保留工具箱设置。搬运未结束时不会强制停止；下载可取消，网络不通仍能正常使用。

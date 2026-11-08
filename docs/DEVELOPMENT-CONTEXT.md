@@ -1,14 +1,22 @@
 # 完整开发背景、产品决策与架构
 
-## 2026-11-08：0.4.4 续跑身份筛选（待发布）
+## 2026-11-08：0.4.4 续跑身份筛选（已发布）
 
-AI一手工具箱沿用旧续跑引擎的会话扫描逻辑，按线程去重不能排除不同线程的子代理。Windows 冻结后台与 Mac 后台都加载 `auto-resume/src`；本次在共享核心要求明确的主任务身份，拒绝子代理、审批守护、未知或冲突身份，并在提交前重新核对会话与等待状态。审查发现 Windows 兼容入口可能复用旧独立后台，本次交付须接管到新版内置后台并回归验证。
+已发布 [Windows v0.4.4](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4) 与 [Mac 0.4.4-preview.32](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4-macos-preview.32)（Mac build `0.4.32`）。固定发布源码 `fda7f4e77f18b6d719e17fd1ea7b5ff15b0da937`，[双平台构建与发布 42479501538](https://github.com/feifeigong/ai-first-tools/actions/runs/42479501538) 通过。Windows 3 项、Mac 23 项发布资产已独立下载，与原始构建逐项核对大小和摘要。
 
-Windows 候选实现以 `Move-LegacyWatcherToBundle` 集中接管：先禁用已核实的旧启动源，仅停止旧监控进程并复核退出，再启动内置后台，不停止 Codex 子进程。旧适配器拒绝启动与开启自启，保留只读及停止；`finish-update` 独立处理旧后台迁移和本安装的更新收据。原自启选择、停止失败禁止启动、失败重试恢复选择及其他安装归属保护列入验收，当前未运行原生 PowerShell 检查。
+AI一手工具箱沿用旧引擎的会话扫描逻辑，按线程去重不能排除不同线程的子代理。本次在 Windows/Mac 共用的 `auto-resume/src` 要求明确主任务身份，拒绝子代理、审批守护、未知或冲突身份，并在提交前重新核对会话与等待状态。
 
-计划同步发布 Windows `0.4.4` 与 Mac `0.4.4-macos-preview.32`（build `0.4.32`），共用更新摘要。两端均从 GitHub Releases 获取更新；无需独立更新索引。必须完成同一源码的双平台构建、各自资产和报告核验后公开，草稿、标签或源码推送不等于用户已获得更新。
+Windows `Move-LegacyWatcherToBundle` 保存原自启选择，再停用已核实的旧启动源、仅停止旧监控并复核退出，随后启动内置后台；不停止 Codex 子进程。旧适配器拒绝开启，保留只读及停止；更新收据与旧后台分别处理。合成回归覆盖停止失败、延迟退出后重试、自启选择、Codex 子进程保留及其他安装归属边界；另一完整安装的旧内置后台仍需核对来源。
 
-当前验证限 Linux 隔离合成回归与平台模拟，未执行真实 Codex/app-server、额度或重置卡请求，未读取用户记录。未构建或验收本次 Windows/Mac 原生包；保留既有发布状态，不能用下方历史原生报告替代本次验收。
+本次 Windows CI：共享续跑回归 146 项，跳过 0 项、失败 0；界面回归 43 项；两份 PowerShell 控制回归分别 10 / 36 项；冻结续跑后台 8 项；已安装 WPF 自检 170 项通过。Apple 芯片 163/163 项、Intel 芯片 163/163 项原生检查通过，包含冻结运行包、Cocoa/launchd 与隔离更新生命周期。
+
+首轮 [42474540762](https://github.com/feifeigong/ai-first-tools/actions/runs/42474540762) 在发布前因既有 UI 断言与当前图标、布局、隐藏入口不符，以及文字对比度检查失败而停止，失败包未发布。已对齐现有设计并修正浅色/深色主题对比度，保留焦点、一次显示、关闭、溢出、XSS 与 4.5 对比度门槛；本次使用最终源码重新通过完整检查。
+
+第二轮 [42475665203](https://github.com/feifeigong/ai-first-tools/actions/runs/42475665203) 固定源码 `912ef1ce3130cf2c99fc6fbdac806acd4f16337e`：Windows 初次因 GitHub 下载旧版本 ZIP 超时、Intel 初次因原生更新界面交接 `TimeoutExpired` 失败，后者已对照源码确认不是 DMG 创建失败。同一 SHA 重试后，Windows、Apple 与 Intel 原生构建均成功；随后 verify 错取同名的旧 Intel 失败工件。`download-artifact@v4` 的 `latest:true` 按最大 id 选择，而本次成功工件 `13615999675` 的 id 反小于旧失败工件 `13616080933`，因此读到缺少 DMG 的旧集合，核验在创建 tag 前停止。前两轮均未发布。后续仅修正 CI 工件读取：按 `created_at` 选最新并核对 source/run，用精确 ID 下载，校验 ZIP 大小与摘要并安全解压；不删除历史工件、不变更权限。最终发布使用文首 `fda7f4e77f18b6d719e17fd1ea7b5ff15b0da937` 的完整三端新构建及 `42479501538` 的核验结果，不复用该轮失败的核验结论。
+
+第三轮 [42479501538](https://github.com/feifeigong/ai-first-tools/actions/runs/42479501538) 固定源码 `fda7f4e77f18b6d719e17fd1ea7b5ff15b0da937`：Intel attempt 1 的 10 类原生报告共 163 项检查、3 项新增安全字段均通过，更新交接为 `phase=complete`、`helperReturnCode=0`；随后 `scripts/package_macos.py:81` 的最终发布 DMG `hdiutil create` 报 `Resource busy`。这次属于最终 DMG 制作失败，与上一轮 UI 交接超时不同。同一 SHA 的 attempt 2 重试后，Intel 原生检查与最终 DMG 制作通过，成功工件为 `13617373240`；Windows 与 Apple 的成功构建保留。核验步骤按创建时间选中这份成功工件，随后完成两端独立下载校验与公开发布。
+
+所有会话、额度及界面回归使用隔离合成夹具，原生生命周期检查使用独立未登录目录；未读取真实用户会话、认证或数据库，未发送模型任务，未消耗订阅额度或重置卡。原生组件版本、参数、未登录历史兼容和 app-server 握手检查不代表真实账号续跑验收；真实用户任务续跑仍未代测。更新器直接读取 GitHub Releases，无需独立更新索引；只有完成用户机器上的安装更新，新代码才会生效。历史报告不作为本次构建证据。
 
 ## 2026-11-02：发卡识别、项目归属与 Windows 图标（已发布）
 

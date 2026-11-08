@@ -1,10 +1,14 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
-## 2026-11-08：0.4.4-preview.32 续跑身份筛选（待发布）
+## 2026-11-08：0.4.4-preview.32 续跑身份筛选（已发布）
 
-Mac 的 `macos/auto_resume.py` 进入与 Windows 相同的 `codex_auto_resume.cli`；冻结配置包含 `auto-resume/src`。共享补丁只接受身份明确的主任务，跳过子代理、审批守护及缺失、未知或冲突身份，并在提交前复核。目标版本为 `0.4.4-macos-preview.32`、build `0.4.32`，与 Windows `0.4.4` 同步交付；无需另写 Mac 会话筛选器。
+已发布 [Windows v0.4.4](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4) 与 [Mac 0.4.4-preview.32](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4-macos-preview.32)，Mac build `0.4.32`。固定发布源码 `fda7f4e77f18b6d719e17fd1ea7b5ff15b0da937`，[双平台构建与发布 42479501538](https://github.com/feifeigong/ai-first-tools/actions/runs/42479501538) 通过。Windows 3 项、Mac 23 项发布资产已独立下载，与原始构建逐项核对大小和摘要。
 
-本次仅完成 Linux 隔离合成回归与平台模拟，未调用真实 Codex/app-server、额度或重置卡接口。Apple/Intel 冻结包、Cocoa/launchd、旧后台交接及真实续跑尚未验收；下方历史已发布版本和原生结果保持原有范围，不代表本次补丁已发布或通过原生验收。
+Mac 的 `macos/auto_resume.py` 进入与 Windows 相同的 `codex_auto_resume.cli`，冻结配置包含 `auto-resume/src`。只接受身份明确的主任务，跳过子代理、审批守护及缺失、未知或冲突身份，提交前再复核。Apple 芯片 163/163 项、Intel 芯片 163/163 项原生检查通过，包含冻结运行包、Cocoa/launchd 与隔离更新生命周期。三项新冻结门槛为 `mainSessionIdentityFiltering`、`unknownSessionIdentityRejected`、`continuedSessionBlockedAtSubmission`。
+
+首轮 UI 失败及修复保留在 [本次 QA](MACOS-QA.md)，失败包未发布。当前默认隐藏版本号回看入口；显式显示的合成夹具和程序化调用只验证保留的弹窗机制，不代表默认用户界面可点击回看。
+
+所有会话、额度及界面回归使用隔离合成夹具，原生生命周期检查使用独立未登录目录；未读取真实用户会话、认证或数据库，未发送模型任务，未消耗订阅额度或重置卡。原生组件版本、参数、未登录历史兼容和 app-server 握手检查不代表真实账号续跑验收；真实用户任务续跑仍未代测。Mac 仍为未签名、未公证预览版；历史发布记录与真实账号、已登录 Copilot 的原有边界保持。
 
 ## 2026-11-02：发卡识别、项目归属与 Windows 图标（已发布）
 
