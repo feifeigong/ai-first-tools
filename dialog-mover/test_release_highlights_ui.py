@@ -21,36 +21,55 @@ def bootstrap():
     window.pywebview.api.open_release_notes=async()=>{window.fullNotesOpened++;return {ok:true};};
     '''.replace('PAYLOAD',json.dumps(data))
 
+def show_manual_entry_fixture(page):
+    # Production deliberately hides this entry. Expose it only to test the
+    # retained manual-dialog mechanism, not a default user-visible action.
+    page.locator('#workspace-version').evaluate('element=>{element.hidden=false;}')
+    page.get_by_role('button',name='查看本次更新',exact=True).wait_for(state='visible')
+
 class HighlightsUiTests(unittest.TestCase):
-    def test_manual_dialog_returns_to_its_version_entry_instead_of_a_previous_page_control(self):
+    def test_visible_fixture_manual_reopen_returns_focus_and_acknowledges_each_close(self):
         with tempfile.TemporaryDirectory() as temporary,sync_playwright() as runtime:
             resources=prepare(Path(temporary));browser=runtime.chromium.launch(channel='msedge' if sys.platform=='win32' else None,headless=True)
             try:
                 page=browser.new_page();page.add_init_script(bootstrap());page.goto((resources/'ui/index.html').as_uri())
-                page.locator('#release-highlights').wait_for(state='visible');page.get_by_role('button',name='知道了',exact=True).click()
+                dialog=page.locator('#release-highlights');dialog.wait_for(state='visible')
+                page.get_by_role('button',name='知道了',exact=True).click();page.wait_for_function('window.acknowledged===1')
+                show_manual_entry_fixture(page)
                 page.locator('input').first.focus()
                 page.evaluate("document.getElementById('workspace-version').click()")
-                page.locator('#release-highlights').wait_for(state='visible');page.get_by_role('button',name='知道了',exact=True).click()
+                dialog.wait_for(state='visible');self.assertEqual(page.evaluate('document.activeElement.id'),'release-done')
+                page.get_by_role('button',name='完整更新说明 ↗').click();self.assertEqual(page.evaluate('window.fullNotesOpened'),1)
+                page.get_by_role('button',name='关闭更新说明').click();page.wait_for_function('window.acknowledged===2')
                 page.wait_for_function("document.activeElement.id==='workspace-version'")
                 self.assertEqual(page.evaluate('document.activeElement.id'),'workspace-version')
+                page.get_by_role('button',name='查看本次更新',exact=True).click();dialog.wait_for(state='visible')
+                page.get_by_role('button',name='知道了',exact=True).click();page.wait_for_function('window.acknowledged===3')
+                page.wait_for_function("document.activeElement.id==='workspace-version'");self.assertFalse(dialog.is_visible())
             finally:browser.close()
 
-    def test_automatic_once_manual_reopen_all_close_methods_and_keyboard_focus(self):
+    def test_default_hidden_entry_automatic_once_all_close_methods_and_visible_focus(self):
         with tempfile.TemporaryDirectory() as temporary,sync_playwright() as runtime:
             resources=prepare(Path(temporary));browser=runtime.chromium.launch(channel='msedge' if sys.platform=='win32' else None,headless=True)
             try:
-                page=browser.new_page(viewport={'width':1200,'height':820});page.add_init_script(bootstrap())
-                page.goto((resources/'ui/index.html').as_uri());dialog=page.locator('#release-highlights')
-                dialog.wait_for(state='visible');self.assertEqual(page.evaluate('document.activeElement.id'),'release-done')
-                page.keyboard.press('Tab');self.assertEqual(page.evaluate('document.activeElement.id'),'release-close')
-                page.keyboard.press('Escape');page.wait_for_function('window.acknowledged===1')
-                self.assertEqual(page.evaluate('document.activeElement.id'),'workspace-version')
-                page.reload();page.wait_for_function('window.newsReads>0');page.wait_for_timeout(900);self.assertFalse(dialog.is_visible())
-                page.get_by_role('button',name='查看本次更新').click();dialog.wait_for(state='visible')
-                page.get_by_role('button',name='完整更新说明 ↗').click();self.assertEqual(page.evaluate('window.fullNotesOpened'),1)
-                page.get_by_role('button',name='关闭更新说明').click();page.wait_for_function('window.acknowledged===1')
-                page.get_by_role('button',name='查看本次更新').click();page.get_by_role('button',name='知道了',exact=True).click()
-                page.wait_for_function('window.acknowledged===2');self.assertFalse(dialog.is_visible())
+                for close in ('Escape','关闭更新说明','知道了'):
+                    with self.subTest(close=close):
+                        page=browser.new_page(viewport={'width':1200,'height':820});page.add_init_script(bootstrap())
+                        page.goto((resources/'ui/index.html').as_uri());dialog=page.locator('#release-highlights')
+                        dialog.wait_for(state='visible');self.assertEqual(page.evaluate('document.activeElement.id'),'release-done')
+                        self.assertTrue(page.locator('#workspace-version').evaluate('element=>element.hidden'))
+                        self.assertFalse(page.locator('#workspace-version').is_visible())
+                        page.keyboard.press('Tab');self.assertEqual(page.evaluate('document.activeElement.id'),'release-close')
+                        page.keyboard.press('Shift+Tab');self.assertEqual(page.evaluate('document.activeElement.id'),'release-done')
+                        if close=='Escape':page.keyboard.press('Escape')
+                        else:page.get_by_role('button',name=close,exact=True).click()
+                        page.wait_for_function('window.acknowledged===1')
+                        page.wait_for_function("document.activeElement.id==='workspace-mover'")
+                        self.assertEqual(page.evaluate('document.activeElement.id'),'workspace-mover')
+                        self.assertTrue(page.locator('#workspace-mover').is_visible())
+                        self.assertFalse(dialog.is_visible())
+                        page.reload();page.wait_for_function('window.newsReads>0');page.wait_for_timeout(900)
+                        self.assertFalse(dialog.is_visible());self.assertFalse(page.locator('#workspace-version').is_visible());page.close()
             finally:browser.close()
 
     def test_user_activity_or_an_open_migration_sheet_prevents_a_delayed_popup(self):
@@ -70,11 +89,13 @@ class HighlightsUiTests(unittest.TestCase):
                 for width,height in ((1200,820),(375,640)):
                     page=browser.new_page(viewport={'width':width,'height':height},reduced_motion='reduce');page.add_init_script(bootstrap())
                     page.goto((resources/'ui/index.html').as_uri());page.locator('#release-highlights').wait_for(state='visible')
-                    page.evaluate("window.__notes.items=[{label:'修复',title:'较长内容也能完整阅读',text:'<script>window.danger=true</script> '+ '合成说明'.repeat(24)},...window.__notes.items]")
-                    page.get_by_role('button',name='知道了',exact=True).click();page.get_by_role('button',name='查看本次更新').click()
+                    page.evaluate("window.__notes.items.unshift({label:'修复',title:'较长内容也能完整阅读',text:'<script>window.danger=true</script> '+ '合成说明'.repeat(24)})")
+                    page.get_by_role('button',name='知道了',exact=True).click();show_manual_entry_fixture(page)
+                    page.get_by_role('button',name='查看本次更新',exact=True).click();page.locator('#release-highlights').wait_for(state='visible')
                     box=page.locator('#release-highlights').bounding_box();button=page.locator('#release-done').bounding_box()
                     self.assertGreaterEqual(box['x'],0);self.assertLessEqual(box['x']+box['width'],width+1);self.assertLessEqual(box['height'],height-38)
                     self.assertLessEqual(button['y']+button['height'],height);self.assertEqual(page.locator('#release-items script').count(),0)
+                    self.assertIn('<script>window.danger=true</script>',page.locator('#release-items').inner_text())
                     self.assertIsNone(page.evaluate('window.danger'))
                     output=ROOT/'artifacts/whats-new-2026-10-28';output.mkdir(parents=True,exist_ok=True)
                     page.screenshot(path=str(output/f'web-{width}.png'));page.close()

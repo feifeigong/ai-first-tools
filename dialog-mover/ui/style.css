@@ -9,9 +9,10 @@
   --line-2: #eef0f3;
   --ink: #16171a;
   --ink-2: #4c4e54;
-  --muted: #7d7f85;
+  --muted: #6a6c72;
   --faint: #9b9da3;
   --accent: #7c3aed;
+  --accent-fill: var(--accent);
   --accent-hover: #6d28d9;
   --accent-soft: #f2ecfe;
   --accent-ink: #ffffff;
@@ -38,10 +39,11 @@ html[data-theme="dark"] {
   --line-2: #24252a;
   --ink: #ececee;
   --ink-2: #b0b1b6;
-  --muted: #8b8c92;
+  --muted: #919298;
   --faint: #6b6c72;
-  --accent: #8b5cf6;
-  --accent-hover: #9d74f8;
+  --accent: #9d74f8;
+  --accent-fill: #8755f0;
+  --accent-hover: #7c3aed;
   --accent-soft: #262038;
   --accent-ink: #ffffff;
   --danger: #f87171;
@@ -207,8 +209,8 @@ h1 { margin: 0; font-size: 17px; line-height: 1.35; font-weight: 600; letter-spa
   display: grid; place-items: center; color: transparent; transition: all .12s ease;
 }
 .check svg { width: 10px; height: 10px; }
-.row.selected .check, .check.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.check.part { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.row.selected .check, .check.on { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-ink); }
+.check.part { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-ink); }
 .row-main { min-width: 0; flex: 1; }
 .row-title { font-size: 13.2px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
 .row-note { font-size: 11.2px; color: var(--faint); margin-top: 3px; }
@@ -270,7 +272,7 @@ h1 { margin: 0; font-size: 17px; line-height: 1.35; font-weight: 600; letter-spa
   display: inline-flex; align-items: center; gap: 6px; font-weight: 500; font-size: 12px;
   transition: background .14s ease;
 }
-.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn.primary { background: var(--accent-fill); color: var(--accent-ink); }
 .btn.primary:hover { background: var(--accent-hover); }
 .btn.primary:disabled { opacity: .45; cursor: not-allowed; }
 .btn.ghost { background: transparent; color: var(--ink-2); border-color: var(--line); }
@@ -304,7 +306,7 @@ h1 { margin: 0; font-size: 17px; line-height: 1.35; font-weight: 600; letter-spa
   font-style: normal; font-size: 10px; font-weight: 600; background: var(--surface-2); color: var(--muted);
 }
 .steps li.on { color: var(--ink); font-weight: 500; }
-.steps li.on i, .steps li.done i { background: var(--accent); color: var(--accent-ink); }
+.steps li.on i, .steps li.done i { background: var(--accent-fill); color: var(--accent-ink); }
 .steps li + li::before { content: ""; width: 14px; height: 1px; background: var(--line); margin-right: 1px; }
 .close {
   width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center;

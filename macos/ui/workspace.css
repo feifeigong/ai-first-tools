@@ -6,7 +6,7 @@
 .workspace-version { color: var(--muted); font-size: 12px; }
 .workspace-button { border: 0; border-radius: 8px; background: transparent; padding: 10px 12px; min-height: 40px; color: var(--ink-2); }
 .workspace-button:hover { background: var(--accent-soft); color: var(--accent); }
-.workspace-primary { background: var(--accent); color: white; font-weight: 600; padding-inline: 14px; border-radius: 999px; }
+.workspace-primary { background: var(--accent-fill); color: white; font-weight: 600; padding-inline: 14px; border-radius: 999px; }
 .workspace-primary:hover { background: var(--accent-hover, #9d74f8); color: white; }
 .workspace-primary:disabled { opacity: .65; cursor: default; }
 .workspace-button:focus { outline: none; }
