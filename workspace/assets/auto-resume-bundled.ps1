@@ -234,9 +234,29 @@ function Get-BundleStatus {
 function Disable-LegacyStartup {
     if ($script:hasLegacy) { Set-ResumeAutostart $false }
 }
+function Move-LegacyWatcherToBundle {
+    if (!$script:hasLegacy) { return $false }
+    $legacyState = Get-ResumeStatus $true
+    $wasRunning = @(Get-Watchers).Count -gt 0
+    $savedAutomatic = Get-BundledPreference
+    if (!$wasRunning -and !$legacyState.autostart -and $savedAutomatic -ne $true) { return $false }
+    $automatic = [bool]$legacyState.autostart -or ($savedAutomatic -eq $true) -or ((Test-BundledRunValue ([string](Get-BundledRunValue))) -and ($savedAutomatic -ne $false))
+    # Keep the original choice before disabling the old startup source. A
+    # failed stop can then be retried without silently losing that choice.
+    Save-BundledPreference $automatic
+    # Stop only the positively identified old monitor. Its detached Codex work
+    # is left running. No new watcher may start until that monitor has exited.
+    Disable-LegacyStartup
+    if ($wasRunning) { $null = Invoke-ResumeAction 'stop' }
+    if (@(Get-Watchers).Count -gt 0) { throw '后台程序尚未停止，请刷新后重试。' }
+    Set-BundledRunValue $automatic
+    return $wasRunning
+}
 function Start-BundledWatcher {
+    if (!(Test-Path -LiteralPath $script:bundledExecutable -PathType Leaf)) { throw '内置续跑组件缺失，请重新安装完整工具箱。' }
+    $null = Move-LegacyWatcherToBundle
     $existing = @(Get-BundledWatchers)
-    if (($existing.Count -eq 1 -and $existing[0].Ready -ne $false) -or ($script:hasLegacy -and @(Get-Watchers).Count -gt 0)) { return }
+    if ($existing.Count -eq 1 -and $existing[0].Ready -ne $false) { return }
     $process = $null
     if ($existing.Count -eq 0) {
         $previous = [Environment]::GetEnvironmentVariable('AI_FIRST_MANUAL_WATCH','Process')
@@ -273,6 +293,9 @@ function Invoke-BundledAction([string]$Operation) {
     if ($Operation -eq 'status') { return Get-BundleStatus }
     if ($Operation -in @('resume-on','resume-off','credit-on','credit-off','timer-on','timer-off')) {
         $before = Get-BundleStatus
+        $restoreStartup = [bool]$before.autostart -or ((Get-BundledPreference) -eq $true)
+        # Preserve this choice before legacy stop disables its startup sources.
+        if ($script:hasLegacy) { Save-BundledPreference $restoreStartup }
         # A verified older watcher may not reload policy. Stop only its monitor,
         # never its detached Codex tasks, before applying the explicit UI choice.
         if ($before.running) {
@@ -285,7 +308,7 @@ function Invoke-BundledAction([string]$Operation) {
         if ($Operation -in @('resume-on','timer-on')) { $keepRunning = $true }
         if ($keepRunning) {
             Start-BundledWatcher
-            if ($before.autostart) { Disable-LegacyStartup; Save-BundledPreference $true; Set-BundledRunValue $true }
+            if ($restoreStartup) { Disable-LegacyStartup; Save-BundledPreference $true; Set-BundledRunValue $true }
         } elseif ($Operation -in @('resume-off','timer-off')) {
             Disable-LegacyStartup
             Save-BundledPreference $false
@@ -315,22 +338,18 @@ function Invoke-BundledAction([string]$Operation) {
         }
         'finish-update' {
             Restore-OwnedResetMonitor
+            $restart = Move-LegacyWatcherToBundle
+            $ownedReceipt = $false
             if (Test-Path -LiteralPath $updateReceipt) {
                 $receipt = Get-Content -LiteralPath $updateReceipt -Raw -Encoding UTF8 | ConvertFrom-Json
-                if ($receipt.restart -eq $true -and $receipt.program -eq $script:bundledExecutable) { Start-BundledWatcher }
-                Remove-Item -LiteralPath $updateReceipt -Force
-            } elseif ($script:hasLegacy) {
-                $legacyState=Get-ResumeStatus $true
-                $wasRunning=@(Get-Watchers).Count -gt 0
-                if ($wasRunning -or $legacyState.autostart) {
-                    $wasAutomatic=[bool]$legacyState.autostart
-                    Disable-LegacyStartup
-                    if ($wasRunning) { $null=Invoke-ResumeAction 'stop' }
-                    Save-BundledPreference $wasAutomatic
-                    Set-BundledRunValue $wasAutomatic
-                    if ($wasRunning) { Start-BundledWatcher }
+                if ($receipt.program -eq $script:bundledExecutable) {
+                    if ($receipt.restart -isnot [bool]) { throw '自动续跑更新状态暂时无法确认，请稍后重试。' }
+                    $ownedReceipt = $true
+                    $restart = $restart -or $receipt.restart
                 }
             }
+            if ($restart) { Start-BundledWatcher }
+            if ($ownedReceipt) { Remove-Item -LiteralPath $updateReceipt -Force }
         }
         'uninstall' {
             Stop-OwnedResetMonitor 'uninstall'

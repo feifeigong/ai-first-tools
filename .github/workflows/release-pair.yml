@@ -1,0 +1,101 @@
+name: Verified Windows and Mac release
+on:
+  push:
+    branches: [master]
+    paths: ['.github/release-pair.json']
+permissions:
+  contents: read
+concurrency:
+  group: verified-release-pair
+  cancel-in-progress: false
+jobs:
+  request:
+    if: github.repository == 'feifeigong/ai-first-tools'
+    runs-on: ubuntu-latest
+    outputs:
+      source: ${{ steps.request.outputs.source }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the explicit request and immutable source
+        id: request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release_pair.py request --commit "$GITHUB_SHA" --output "$GITHUB_OUTPUT"
+      - name: Check release orchestration failure guards without external writes
+        run: python3 -m unittest discover -s scripts -p test_release_pair.py -v
+  checks:
+    needs: request
+    uses: ./.github/workflows/check.yml
+    permissions:
+      contents: read
+  windows:
+    needs: [request, checks]
+    uses: ./.github/workflows/windows-release.yml
+    with:
+      paired_release: true
+    permissions:
+      contents: read
+  macos:
+    needs: [request, checks]
+    uses: ./.github/workflows/macos.yml
+    with:
+      paired_release: true
+    permissions:
+      contents: read
+  verify:
+    needs: [request, checks, windows, macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.request.outputs.source }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-release
+          path: artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*
+          path: artifacts/release-stage
+      - name: Validate both native builds, stage drafts and independently compare downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ needs.request.outputs.source }}
+        run: python3 scripts/release_pair.py prepare --commit "$SOURCE" --output artifacts/paired/receipt.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-pair-verified
+          path: artifacts/paired/*.json
+          if-no-files-found: error
+          overwrite: true
+  publish:
+    needs: [request, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.request.outputs.source }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-pair-verified
+          path: artifacts/paired
+      - name: Recheck both verified asset sets and publish the pair
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ needs.request.outputs.source }}
+        run: python3 scripts/release_pair.py publish --commit "$SOURCE" --receipt artifacts/paired/receipt.json --output artifacts/paired/publication.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-pair-publication
+          path: artifacts/paired/publication.json
+          if-no-files-found: warn
+          overwrite: true

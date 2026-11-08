@@ -1,8 +1,16 @@
 # 支持范围与验证边界
 
-Windows0.3.25 / Mac preview.29 已发布：补全两次发卡简写识别；完整搬入 Copilot 放进所选目录对应的项目；Windows 修复任务栏身份。详见[修复与验收说明](RESET-PROJECT-LOGO-QA.md)。
+## 2026-11-08：0.4.4 续跑身份筛选（待发布）
 
-当前公开版本为 [Windows v0.3.25](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.3.25) 与 [Mac preview.29](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.0-macos-preview.29)。下面列出已实现的范围，不表示所有软件版本与账号场景都已完成原生验收。
+两平台共享续跑核心拟仅自动继续身份明确的主任务；子代理、审批守护线程及缺失、未知或冲突身份的会话跳过，提交前复核。无法识别的旧日志可能需要用户在 Codex 中手动继续。含分叉、回退或复制历史且无法证明限额属于自身新历史的日志也暂不自动继续；首条元数据用于识别线程，文件名编号不作为身份依据。修复须随完整新版运行包交付；仍运行旧独立后台时不在本次修复覆盖范围。
+
+Windows 本次接管策略待验证：将可核实的旧独立监控转到内置后台，保留自启选择；旧监控未成功停止就不启动新版，不停止已有 Codex 子进程。缺少完整内置组件时不再允许开启旧引擎。其他安装仍在运行的旧内置后台不能仅凭窗口版本视为已修复，需核对实际后台来源。
+
+本次仅验证 Linux 隔离回归与平台模拟；未读取用户会话，未请求真实 Codex、额度或重置卡。Windows/Mac 原生运行包及真实续跑尚未验收，以下已发布版本与历史结果不表示包含本次补丁。
+
+Windows0.3.25 / Mac preview.29 历史发布补全两次发卡简写识别、完整搬入 Copilot 的项目归属及 Windows 任务栏身份；该轮验收范围见[修复与验收说明](RESET-PROJECT-LOGO-QA.md)。
+
+当前公开版本为 [Windows v0.4.3](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.3) 与 [Mac 0.4.2-preview.31](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.2-macos-preview.31)。Windows v0.4.4 / Mac 0.4.4-preview.32 尚待发布；下面列出既有支持范围，不表示所有软件版本与账号场景都已完成原生验收。
 
 ## 两种搬家方式
 

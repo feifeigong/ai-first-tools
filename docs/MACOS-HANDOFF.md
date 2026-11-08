@@ -1,5 +1,11 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+## 2026-11-08：0.4.4-preview.32 续跑身份筛选（待发布）
+
+Mac 的 `macos/auto_resume.py` 进入与 Windows 相同的 `codex_auto_resume.cli`；冻结配置包含 `auto-resume/src`。共享补丁只接受身份明确的主任务，跳过子代理、审批守护及缺失、未知或冲突身份，并在提交前复核。目标版本为 `0.4.4-macos-preview.32`、build `0.4.32`，与 Windows `0.4.4` 同步交付；无需另写 Mac 会话筛选器。
+
+本次仅完成 Linux 隔离合成回归与平台模拟，未调用真实 Codex/app-server、额度或重置卡接口。Apple/Intel 冻结包、Cocoa/launchd、旧后台交接及真实续跑尚未验收；下方历史已发布版本和原生结果保持原有范围，不代表本次补丁已发布或通过原生验收。
+
 ## 2026-11-02：发卡识别、项目归属与 Windows 图标（已发布）
 
 已发布 Windows0.3.25 / Mac preview.29，固定源码 `2810525e8d382c35e888d90fff8a8beb3cfb02c6`。Windows完整构建[41379844281](https://github.com/feifeigong/ai-first-tools/actions/runs/41379844281)与Mac完整构建[41379791000](https://github.com/feifeigong/ai-first-tools/actions/runs/41379791000)均成功；Apple/Intel分别160/160项原生检查通过。发卡、项目归属与原生安装检查通过，两端独立下载的资产与原始构建逐项摘要一致。

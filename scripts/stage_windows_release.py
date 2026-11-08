@@ -42,6 +42,10 @@ def main() -> None:
         if not any(check.get('name') == 'Native Codex supports the isolated ephemeral request flags without model requests'
                 and check.get('passed') is True for check in resume.get('results', [])):
             raise ValueError('Native ephemeral request capability did not pass')
+    if tuple(map(int,version.split('.'))) >= (0,4,4):
+        if not any(check.get('name') == 'Frozen main-session identity and final submission safety'
+                and check.get('passed') is True for check in resume.get('results', [])):
+            raise ValueError('Packaged main-session identity and submission checks did not pass')
     release = root / "artifacts/release"
     if tuple(map(int, version.split('.'))) >= (0,3,24):
         memory = json.loads((root/'artifacts/windows/memory-package-test.json').read_text(encoding='utf-8-sig'))

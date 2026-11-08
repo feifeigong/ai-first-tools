@@ -44,6 +44,10 @@ def validated_assets(root: Path, version: str) -> list[Path]:
             raise ValueError('Bundled auto-resume reports did not pass') from error
         if runtime.get('failed') != 0 or runtime.get('passed',0) < 4 or background.get('passed') is not True or len(background.get('checks',{})) < 5 or not all(value is True for value in background['checks'].values()):
             raise ValueError('Bundled auto-resume reports did not pass')
+        if tuple(map(int, version.split('.'))) >= (0,4,4) and not any(
+                check.get('name') == 'Frozen main-session identity and final submission safety'
+                and check.get('passed') is True for check in runtime.get('results', [])):
+            raise ValueError('Packaged main-session identity and submission checks did not pass')
     assets = [root / "release" / f"AI-First-Tools-Setup-{version}.exe",
               root / "release" / f"AI-First-Tools-Portable-{version}-win-x64.zip"]
     if tuple(map(int, version.split('.'))) >= (0,3,24):

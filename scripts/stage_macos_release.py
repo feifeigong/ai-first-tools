@@ -67,6 +67,8 @@ def validated_assets(directory: Path, release: str, *, local_preview: bool = Fal
                 raise ValueError('Packaged weekly credit boundary check is required')
             if number >= 25 and kind == 'self' and not {'independentAutomationPolicy','ephemeralTimerWriteAhead','ephemeralRequestSafety','nativeEphemeralSupport'} <= set(result['checks']):
                 raise ValueError('Packaged independent automation and ephemeral timer checks are required')
+            if number >= 32 and kind == 'self' and not {'mainSessionIdentityFiltering','unknownSessionIdentityRejected','continuedSessionBlockedAtSubmission'} <= set(result['checks']):
+                raise ValueError('Packaged main-session identity and submission checks are required')
             if number >= 25 and kind == 'smoke' and result['checks'].get('independentAutomationBridge') is not True:
                 raise ValueError('Native independent automation switches are required')
             if number >= 26 and (kind == 'resume' and result['checks'].get('finderLocaleWatcherIdentity') is not True

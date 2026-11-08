@@ -122,26 +122,7 @@ function Set-ResumeAutostart([bool]$Enabled) {
         Stop-Supervisor
         return
     }
-    Save-StartupPreference $true
-    if ($task -and $task.Settings.Enabled) { return }
-    if ($task) {
-        try { Enable-ScheduledTask -InputObject $task | Out-Null; return }
-        catch { }
-    }
-    try {
-        $taskAction = New-ScheduledTaskAction -Execute $script:python -Argument ('"' + $script:runner + '" watch --quiet') -WorkingDirectory $script:root
-        $trigger = New-ScheduledTaskTrigger -AtLogOn -User ([Security.Principal.WindowsIdentity]::GetCurrent().Name)
-        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
-        $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-        Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $trigger -Settings $settings -Principal $principal | Out-Null
-    } catch {
-        # Same fallback as the original tool; no admin access is required.
-        $pythonVbs = $script:python.Replace('"', '""')
-        $runnerVbs = $script:runner.Replace('"', '""')
-        $rootVbs = $script:root.Replace('"', '""')
-        $vbs = "Set sh = CreateObject(""WScript.Shell"")`r`nsh.CurrentDirectory = ""$rootVbs""`r`nDo`r`n  sh.Run """"""$pythonVbs"""" """"$runnerVbs"""" watch --quiet"", 0, True`r`n  WScript.Sleep 5000`r`nLoop`r`n"
-        [IO.File]::WriteAllText($startupFile, $vbs, [Text.Encoding]::Unicode)
-    }
+    throw '内置续跑组件缺失，请重新安装完整工具箱。'
 }
 
 function Get-ResumeStatus([bool]$Installed) {
@@ -156,6 +137,9 @@ function Get-ResumeStatus([bool]$Installed) {
 function Invoke-ResumeAction([string]$RequestedAction) {
     $installed = Connect-Resume
     if ($RequestedAction -eq 'status') { return Get-ResumeStatus $installed }
+    # The retired adapter may inspect or stop its verified owner, never restart
+    # an external engine whose session filtering cannot be established.
+    if ($RequestedAction -notin @('stop','autostart-off')) { throw '内置续跑组件缺失，请重新安装完整工具箱。' }
     if (!$installed) { throw '没有找到已有的自动续跑安装，请先安装后刷新。' }
     New-Item -ItemType Directory -Path $settingsDirectory -Force | Out-Null
     # Save connection metadata only, never copy Codex credentials, configuration or conversations.
@@ -165,17 +149,6 @@ function Invoke-ResumeAction([string]$RequestedAction) {
         Move-Item -LiteralPath $temporary -Destination $connectionFile -Force
     } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force } }
     switch ($RequestedAction) {
-        'start' {
-            if (@(Get-Watchers).Count -eq 0) {
-                $previousManual = [Environment]::GetEnvironmentVariable('AI_FIRST_MANUAL_WATCH', 'Process')
-                try {
-                    [Environment]::SetEnvironmentVariable('AI_FIRST_MANUAL_WATCH', '1', 'Process')
-                    $process = Start-Process -FilePath $script:python -ArgumentList @(('"' + $script:runner + '"'), 'watch', '--quiet') -WorkingDirectory $script:root -WindowStyle Hidden -PassThru
-                } finally { [Environment]::SetEnvironmentVariable('AI_FIRST_MANUAL_WATCH', $previousManual, 'Process') }
-                Start-Sleep -Milliseconds 900
-                if ($process.HasExited -or @(Get-Watchers).Count -eq 0) { throw '后台程序没有保持运行，请检查原自动续跑工具后重试。' }
-            }
-        }
         'stop' {
             Set-ResumeAutostart $false
             foreach ($watcher in @(Get-Watchers)) {
@@ -186,7 +159,6 @@ function Invoke-ResumeAction([string]$RequestedAction) {
             }
             if (@(Get-Watchers).Count -ne 0) { throw '后台程序尚未停止，请刷新后重试。' }
         }
-        'autostart-on' { Set-ResumeAutostart $true }
         'autostart-off' { Set-ResumeAutostart $false }
     }
     return Get-ResumeStatus $true
@@ -208,7 +180,7 @@ if (!$FunctionsOnly) {
     } catch {
         # Return only curated messages; system exception details may contain personal paths.
         $message = $_.Exception.Message
-        if ($message -notmatch '^(已有同名|检测到不同|续跑程序的位置|没有找到|自动续跑正在|后台程序)') { $message = '操作没有完成，请检查开机任务权限或原工具安装后重试。' }
+        if ($message -notmatch '^(内置|已有同名|检测到不同|续跑程序的位置|没有找到|自动续跑正在|后台程序)') { $message = '操作没有完成，请检查开机任务权限或原工具安装后重试。' }
         @{ installed = $false; running = $false; autostart = $false; watcherCount = 0; error = $message } | ConvertTo-Json -Compress
         exit 1
     } finally {

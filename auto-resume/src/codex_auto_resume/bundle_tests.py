@@ -50,6 +50,11 @@ def run(report: Path) -> int:
             from .automation_checks import run as audit
             require(all(audit().values()))
         check("Frozen independent automation preserves timer deduplication and spending permissions", automation_policy)
+        def session_safety():
+            from .session_safety_checks import run as audit
+            require(audit() == dict.fromkeys(("mainSessionIdentityFiltering", "unknownSessionIdentityRejected",
+                                              "continuedSessionBlockedAtSubmission"), True))
+        check("Frozen main-session identity and final submission safety", session_safety)
         def native_version():
             process = hidden_popen([str(bundled_codex()), "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
             output, _ = process.communicate(timeout=20)

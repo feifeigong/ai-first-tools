@@ -42,6 +42,51 @@ class MacParityReleaseTests(unittest.TestCase):
     def test_both_native_architectures_require_the_complete_feature_reports(self):
         self.assertEqual(len(validated_assets(self.root,self.release)),23)
 
+    def test_session_identity_and_final_submission_checks_are_required_on_both_chips(self):
+        previous = self.release
+        self.release = '0.4.4-macos-preview.32'
+        safety = ('mainSessionIdentityFiltering', 'unknownSessionIdentityRejected', 'continuedSessionBlockedAtSubmission')
+        additions = {
+            'self': (*safety, 'localizedProductName', 'finderDisplayName', 'nativeProcessName',
+                     'bundledReleaseHighlights', 'weeklyCreditRequiresExhaustion', 'independentAutomationPolicy',
+                     'ephemeralTimerWriteAhead', 'ephemeralRequestSafety', 'nativeEphemeralSupport'),
+            'smoke': ('independentAutomationBridge', 'nativeReleaseHighlightsDialog', 'releaseHighlightsAcknowledgement'),
+            'resume': ('finderLocaleWatcherIdentity',),
+            'reset': ('finderLocaleNotifierIdentity', 'bundledHistoryImmediatelyAvailable'),
+            'update': ('preflightBeforeParentExit', 'incomingUpdaterHelper', 'published25FailureReproduced',
+                       'published25BackgroundRecovered', 'normalUpdatedWindowStaysReady'),
+            'memory': ('current_full_chat_registration_without_worktree', 'unknown_full_chat_trigger_still_denied',
+                       'full_history_uses_selected_folder_project', 'full_history_reuses_project_without_worktree'),
+        }
+        for architecture in ('arm64', 'x86_64'):
+            directory = self.root / ('macos-' + architecture)
+            name = f'AI-First-Tools-{self.release}-macos-{architecture}.dmg'
+            (directory / f'AI-First-Tools-{previous}-macos-{architecture}.dmg').rename(directory / name)
+            (directory / f'SHA256SUMS-{architecture}.txt').write_text(hashlib.sha256(b'synthetic').hexdigest() + '  ' + name + '\n')
+            for path in directory.glob('*-test.json'):
+                value = json.loads(path.read_text())
+                value['version']['release'] = self.release
+                value['checks'].update(dict.fromkeys(additions.get(path.name.removesuffix('-test.json'), ()), True))
+                if path.name == 'self-test.json':
+                    value['finderScope'] = 'product'
+                path.write_text(json.dumps(value))
+        self.assertEqual(len(validated_assets(self.root, self.release)), 23)
+        for architecture in ('arm64', 'x86_64'):
+            path = self.root / ('macos-' + architecture) / 'self-test.json'
+            original = path.read_bytes()
+            for name in safety:
+                for missing in (True, False):
+                    with self.subTest(architecture=architecture, check=name, missing=missing):
+                        value = json.loads(original)
+                        if missing:
+                            del value['checks'][name]
+                        else:
+                            value['checks'][name] = False
+                        path.write_text(json.dumps(value))
+                        with self.assertRaises(ValueError):
+                            validated_assets(self.root, self.release)
+                        path.write_bytes(original)
+
     def test_credit_boundary_is_required_in_both_new_packaged_architectures(self):
         previous=self.release
         self.release='0.4.0-macos-preview.24'

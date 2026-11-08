@@ -380,6 +380,8 @@ def self_check(report: Path) -> bool:
     checks['bundledAutoResumeRuntime'] = bundled_codex().is_file()
     from codex_auto_resume.automation_checks import run as automation_checks
     checks.update(automation_checks())
+    from codex_auto_resume.session_safety_checks import run as session_safety_checks
+    checks.update(session_safety_checks())
     native_help = subprocess.run([str(bundled_codex()), 'exec', '--help'], capture_output=True, timeout=20)
     checks['nativeEphemeralSupport'] = native_help.returncode == 0 and all(flag in native_help.stdout for flag in (b'--ephemeral', b'--ignore-user-config', b'--sandbox', b'--json'))
     from codex_auto_resume.quota import QuotaSnapshot, QuotaWindow, should_redeem_weekly_reset

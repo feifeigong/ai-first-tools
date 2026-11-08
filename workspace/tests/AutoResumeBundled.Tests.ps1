@@ -16,6 +16,8 @@ $script:calls=[Collections.Generic.List[string]]::new()
 $script:monitorMutexes=[Collections.Generic.List[Threading.Mutex]]::new()
 function Reset-Fixture {
     $script:policy=$null
+    $script:legacyStopFails=$false
+    $script:legacyStopIgnored=$false
     foreach($monitorMutex in $script:monitorMutexes){$monitorMutex.ReleaseMutex();$monitorMutex.Dispose()}
     $script:monitorMutexes.Clear()
     $script:fakeRunning=$false; $script:fakeLegacy=$false; $script:legacyRunning=$false; $script:legacyAuto=$false; $script:fakeRun=$null; $script:owner=$bundledExecutable; $script:readyAfter=0; $script:readyChecks=0; $script:monitorResponds=$false; $script:monitorLaunchFails=$false; $script:calls.Clear()
@@ -46,7 +48,7 @@ function Get-BundledAutomation {
 function Get-Watchers { if($script:legacyRunning){[pscustomobject]@{ProcessId=501}} }
 function Get-ResumeStatus { param($Installed) @{autostart=$script:legacyAuto} }
 function Set-ResumeAutostart { param($Enabled) $script:legacyAuto=$Enabled; $script:calls.Add('legacy-startup-off') }
-function Invoke-ResumeAction { param($RequestedAction) if($RequestedAction -eq 'stop'){$script:legacyRunning=$false;$script:calls.Add('legacy-stop')} }
+function Invoke-ResumeAction { param($RequestedAction) if($RequestedAction -eq 'stop'){Set-ResumeAutostart $false;if($script:legacyStopFails){throw 'Synthetic old monitor still running'};if(!$script:legacyStopIgnored){$script:legacyRunning=$false};$script:calls.Add('legacy-stop')} }
 function Get-BundledWatchers { if($script:fakeRunning){$script:readyChecks++;[pscustomobject]@{ProcessId=9001;ExecutablePath=$script:owner;Ready=($script:readyChecks -gt $script:readyAfter)}} }
 function Get-BundledRunValue { $script:fakeRun }
 function New-ItemProperty { param($LiteralPath,$Name,$Value,$PropertyType,[switch]$Force) $script:fakeRun=$Value; $script:calls.Add('run-on') }
@@ -134,10 +136,78 @@ Check 'Uninstall stops background and removes only owned startup' {
     $null=Invoke-BundledAction 'start'; $null=Invoke-BundledAction 'autostart-on'; $value=Invoke-BundledAction 'uninstall'
     Require(!$value.running -and !$value.autostart -and $null -eq $script:fakeRun)
 }
-Check 'Legacy process is adopted and startup moves to the packaged entry' {
+Check 'Legacy monitor is replaced before the fixed bundled entry starts' {
     $script:fakeLegacy=$true; $script:legacyRunning=$true; $script:legacyAuto=$true
-    $value=Invoke-BundledAction 'start'; Require($value.watcherCount -eq 1 -and !$script:calls.Contains('start'))
-    $value=Invoke-BundledAction 'autostart-on'; Require($value.autostart -and !$script:legacyAuto -and $script:calls.Contains('legacy-startup-off'))
+    $value=Invoke-BundledAction 'start'
+    Require($value.watcherCount -eq 1 -and $script:fakeRunning -and !$script:legacyRunning -and !$script:legacyAuto -and $value.autostart)
+    Require($script:calls.IndexOf('legacy-startup-off') -lt $script:calls.IndexOf('legacy-stop'))
+    Require($script:calls.IndexOf('legacy-stop') -lt $script:calls.IndexOf('start'))
+}
+Check 'A failed legacy stop blocks the new watcher' {
+    $script:fakeLegacy=$true; $script:legacyRunning=$true; $script:legacyStopFails=$true
+    $rejected=$false
+    try { $null=Invoke-BundledAction 'start' } catch { $rejected=$true }
+    Require($rejected -and $script:legacyRunning -and !$script:fakeRunning -and !$script:calls.Contains('start'))
+}
+Check 'Retrying a failed handoff preserves the original startup choice' {
+    $script:fakeLegacy=$true; $script:legacyRunning=$true; $script:legacyAuto=$true; $script:legacyStopFails=$true
+    try { $null=Invoke-BundledAction 'start' } catch { }
+    Require(!$script:calls.Contains('start') -and (Get-BundledPreference) -eq $true)
+    $script:legacyStopFails=$false
+    $value=Invoke-BundledAction 'start'
+    Require($value.running -and $value.autostart -and !$script:legacyRunning -and !$script:legacyAuto)
+}
+Check 'Automation switch retries also preserve legacy startup after stop failure' {
+    foreach($operation in @('resume-on','timer-on')) {
+        Reset-Fixture
+        $script:fakeLegacy=$true; $script:legacyRunning=$true; $script:legacyAuto=$true; $script:legacyStopFails=$true
+        try { $null=Invoke-BundledAction $operation } catch { }
+        Require(!$script:legacyAuto -and !$script:calls.Contains('start') -and (Get-BundledPreference) -eq $true)
+        $script:legacyStopFails=$false
+        $value=Invoke-BundledAction $operation
+        Require($value.running -and $value.autostart -and !$script:legacyRunning -and !$script:legacyAuto)
+    }
+}
+Check 'A legacy monitor that exits after a failed handoff retains startup on retry' {
+    $script:fakeLegacy=$true; $script:legacyRunning=$true; $script:legacyAuto=$true; $script:legacyStopFails=$true
+    try { $null=Invoke-BundledAction 'start' } catch { }
+    $script:legacyStopFails=$false; $script:legacyRunning=$false
+    $value=Invoke-BundledAction 'start'
+    Require($value.running -and $value.autostart -and !$script:legacyAuto)
+}
+Check 'A stop that returns while the legacy monitor remains cannot start the bundle' {
+    $script:fakeLegacy=$true; $script:legacyRunning=$true; $script:legacyStopIgnored=$true
+    $rejected=$false
+    try { $null=Invoke-BundledAction 'start' } catch { $rejected=$true }
+    Require($rejected -and $script:legacyRunning -and !$script:fakeRunning -and !$script:calls.Contains('start'))
+}
+Check 'An update receipt cannot hide a running legacy monitor' {
+    $script:fakeLegacy=$true; $script:legacyRunning=$true; $script:legacyAuto=$true
+    @{program=$bundledExecutable;restart=$true}|ConvertTo-Json|Set-Content -LiteralPath $updateReceipt -Encoding UTF8
+    $value=Invoke-BundledAction 'finish-update'
+    Require($value.watcherCount -eq 1 -and $value.autostart -and !$script:legacyRunning -and !$script:legacyAuto)
+    Require($script:calls.IndexOf('legacy-stop') -lt $script:calls.IndexOf('start'))
+    Require(!(Test-Path -LiteralPath $updateReceipt))
+}
+Check 'Legacy startup without running work is migrated without starting it' {
+    $script:fakeLegacy=$true; $script:legacyAuto=$true
+    $value=Invoke-BundledAction 'finish-update'
+    Require(!$value.running -and $value.autostart -and !$script:legacyAuto -and !$script:calls.Contains('start'))
+}
+Check 'Missing bundled runtime never starts or changes the retired adapter' {
+    $script:fakeLegacy=$true; $script:legacyRunning=$true
+    Remove-Item -LiteralPath $bundledExecutable -Force
+    try {
+        $rejected=$false
+        try { $null=Invoke-BundledAction 'start' } catch { $rejected=$_.Exception.Message -like '内置续跑组件缺失*' }
+        Require($rejected -and $script:legacyRunning -and $script:calls.Count -eq 0)
+    } finally { [IO.File]::WriteAllText($bundledExecutable,'synthetic fixture, never executed') }
+}
+Check 'A different installation update receipt is preserved' {
+    @{program=(Join-Path $testRoot 'other\tools\auto-resume\AI一手续跑后台.exe');restart=$true}|ConvertTo-Json|Set-Content -LiteralPath $updateReceipt -Encoding UTF8
+    $before=[IO.File]::ReadAllText($updateReceipt)
+    $null=Invoke-BundledAction 'finish-update'
+    Require([IO.File]::ReadAllText($updateReceipt) -eq $before -and !$script:calls.Contains('start'))
 }
 Check 'Another installation startup registration is preserved' {
     $script:fakeRun='unrelated registration';$rejected=$false

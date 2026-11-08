@@ -1,17 +1,22 @@
 name: Windows release packages
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      paired_release:
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
-  group: windows-release-packages
+  group: windows-release-packages-${{ inputs.paired_release && 'paired' || 'standalone' }}
   cancel-in-progress: false
 jobs:
   package:
     runs-on: windows-latest
     timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -203,7 +208,3 @@ jobs:
             artifacts/windows/*test.json
             artifacts/windows/release-highlights-ui/report.json
             artifacts/windows/release-highlights-ui/*.png
-      - name: Stage verified packages in existing draft only
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python scripts/stage_windows_release.py --commit "$env:GITHUB_SHA"

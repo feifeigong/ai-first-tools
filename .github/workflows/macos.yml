@@ -1,5 +1,10 @@
 name: macOS preview
 on:
+  workflow_call:
+    inputs:
+      paired_release:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       local_preview:
@@ -30,10 +35,25 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: macos-preview-${{ github.ref }}-${{ inputs.local_preview && 'local' || 'release' }}
+  group: macos-${{ inputs.paired_release && 'paired' || 'preview' }}-${{ github.ref }}-${{ inputs.local_preview && 'local' || 'release' }}
   cancel-in-progress: true
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.scope.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Avoid a second native build for an explicit paired release
+        id: scope
+        env:
+          PAIRED_RELEASE: ${{ inputs.paired_release }}
+        run: python3 scripts/release_pair.py macos-gate --output "$GITHUB_OUTPUT"
   build:
+    needs: scope
+    if: needs.scope.outputs.build == 'true'
     env:
       MACOSX_DEPLOYMENT_TARGET: '13.0'
     strategy:
@@ -113,21 +133,3 @@ jobs:
             ~/.cargo/git
             txcript/target
           key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
-  stage-release:
-    needs: build
-    if: github.repository == 'feifeigong/ai-first-tools' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && inputs.local_preview != true
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      actions: read
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: macos-*
-          path: artifacts/release-stage
-      - name: Stage only verified packages into the existing release draft
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 scripts/stage_macos_release.py --artifacts artifacts/release-stage --commit "$GITHUB_SHA"

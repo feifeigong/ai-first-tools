@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "attempt": 1,
+  "publish": true,
+  "windows_version": "0.4.4",
+  "macos_release": "0.4.4-macos-preview.32",
+  "notes": "docs/releases/v0.4.4.md"
+}

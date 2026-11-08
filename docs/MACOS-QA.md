@@ -1,5 +1,11 @@
 # Mac 移植验证记录
 
+## 2026-11-08：0.4.4-preview.32 续跑身份筛选（待发布）
+
+Mac `0.4.4-macos-preview.32` 与 Windows `0.4.4` 共用 `auto-resume/src` 的主任务识别及提交前复核：明确子代理、审批守护、缺失或未知身份、冲突元数据均不得自动续跑。共享合成回归覆盖多个子代理同时等待、主任务恢复及身份无法确认；本轮验证环境为 Linux，平台差异仅作模拟检查。
+
+未读取用户会话，未运行真实 Codex/app-server 或额度、重置卡请求。尚未构建及验收本次 Apple/Intel 原生冻结包、launchd/Cocoa、旧后台交接或真实续跑；下方已发布版本的原生检查不替代本轮验收。
+
 ## 2026-11-02：发卡识别、项目归属与 Windows 图标（已发布）
 
 已发布 Windows0.3.25 / Mac preview.29，固定源码 `2810525e8d382c35e888d90fff8a8beb3cfb02c6`。Windows完整构建[41379844281](https://github.com/feifeigong/ai-first-tools/actions/runs/41379844281)与Mac完整构建[41379791000](https://github.com/feifeigong/ai-first-tools/actions/runs/41379791000)均成功；Apple/Intel分别160/160项原生检查通过。发卡、项目归属与原生安装检查通过，两端独立下载的资产与原始构建逐项摘要一致。

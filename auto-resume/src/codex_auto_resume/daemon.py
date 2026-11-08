@@ -13,7 +13,7 @@ from .quota import QuotaSnapshot, hint_reset_at, parse_quota_payload, quota_avai
 from .redeem import try_redeem_weekly_reset
 from .procutil import claim_watch_pid, process_running, release_watch_pid
 from .resume import spawn_resume
-from .sessions import WaitingSession, scan_waiting_sessions
+from .sessions import WaitingSession, scan_waiting_sessions, validate_waiting_session
 from .state import AppState, load_state, save_state, upsert_thread
 
 
@@ -305,6 +305,11 @@ def _resume_one(
     if should_stop is not None and should_stop():
         state.last_status = "stopping"
         return
+    # A cached/manual thread id is not evidence of an eligible main task.
+    if waiting is None or waiting.thread_id != task.thread_id:
+        task.status = "session-unverified"
+        task.last_error = "无法核对原会话身份，已跳过自动续跑"
+        return
     if waiting:
         task.mark = waiting.mark
         task.cwd = waiting.cwd or task.cwd
@@ -318,6 +323,25 @@ def _resume_one(
     try:
         # The write-ahead record is not a submitted turn. If the user stopped us
         # during that save, restore it rather than leaving a false pending turn.
+        if should_stop is not None and should_stop():
+            task.phase, task.status, task.last_resume_at = previous
+            state.last_status = "stopping"
+            save_state(cfg.resolved_state_dir(), state)
+            return
+        # Re-read after the write-ahead record: the user may have continued, or
+        # the rollout may have changed/disappeared since discovery. The same
+        # main-session policy must protect exec resume and its queue fallback.
+        valid = validate_waiting_session(
+            waiting, sessions_dir(cfg.resolved_codex_home()),
+            since=now - cfg.lookback_hours * 3600,
+            ready_used_percent=cfg.ready_used_percent,
+        )
+        if not valid:
+            task.phase, task.status, task.last_resume_at = previous
+            task.status = "session-unverified"
+            task.last_error = "会话身份或等待状态已变化，已跳过自动续跑"
+            save_state(cfg.resolved_state_dir(), state)
+            return
         if should_stop is not None and should_stop():
             task.phase, task.status, task.last_resume_at = previous
             state.last_status = "stopping"

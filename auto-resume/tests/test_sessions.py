@@ -24,7 +24,7 @@ class SessionTests(unittest.TestCase):
                     {
                         "timestamp": "2026-09-09T01:00:00Z",
                         "type": "session_meta",
-                        "payload": {"id": THREAD, "cwd": "/tmp/demo"},
+                        "payload": {"id": THREAD, "cwd": "/tmp/demo", "source": "cli"},
                     },
                     {
                         "timestamp": "2026-09-09T01:10:00Z",
@@ -57,7 +57,7 @@ class SessionTests(unittest.TestCase):
                     {
                         "timestamp": "2026-09-09T01:00:00Z",
                         "type": "session_meta",
-                        "payload": {"id": THREAD, "cwd": "/tmp/demo"},
+                        "payload": {"id": THREAD, "cwd": "/tmp/demo", "source": "cli"},
                     },
                     {
                         "timestamp": "2026-09-09T01:10:00Z",
@@ -85,7 +85,7 @@ class SessionTests(unittest.TestCase):
             _write(
                 old,
                 [
-                    {"timestamp": "2026-09-09T01:00:00Z", "type": "session_meta", "payload": {"id": THREAD}},
+                    {"timestamp": "2026-09-09T01:00:00Z", "type": "session_meta", "payload": {"id": THREAD, "source": "cli"}},
                     {
                         "timestamp": "2026-09-09T01:10:00Z",
                         "type": "event_msg",
@@ -99,7 +99,7 @@ class SessionTests(unittest.TestCase):
             _write(
                 new,
                 [
-                    {"timestamp": "2026-09-09T03:00:00Z", "type": "session_meta", "payload": {"id": THREAD}},
+                    {"timestamp": "2026-09-09T03:00:00Z", "type": "session_meta", "payload": {"id": THREAD, "source": "cli"}},
                     {
                         "timestamp": "2026-09-09T03:10:00Z",
                         "type": "event_msg",

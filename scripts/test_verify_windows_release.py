@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from verify_windows_release import digest, validated_assets
 
@@ -66,7 +67,10 @@ class WindowsVerificationTests(unittest.TestCase):
         self.report_path.write_text(json.dumps(self.report))
         self.assets = [path.rename(path.with_name(path.name.replace('0.3.10', version))) for path in self.assets]
         (self.root / 'release/SHA256SUMS.txt').write_text('\n'.join(f'{digest(path)}  {path.name}' for path in self.assets) + '\n')
-        (self.root / 'windows/resume-runtime-test.json').write_text(json.dumps({'passed': 4, 'failed': 0}))
+        runtime = {'passed': 4, 'failed': 0}
+        if tuple(map(int, version.split('.'))) >= (0, 4, 4):
+            runtime['results'] = [{'name': 'Frozen main-session identity and final submission safety', 'passed': True}]
+        (self.root / 'windows/resume-runtime-test.json').write_text(json.dumps(runtime))
         (self.root / 'windows/resume-control-test.json').write_text(json.dumps({'passed': True, 'checks': dict.fromkeys(('a','b','c','d','e'), True)}))
         with self.assertRaisesRegex(ValueError, 'Full update'):
             validated_assets(self.root, version)
@@ -95,6 +99,54 @@ class WindowsVerificationTests(unittest.TestCase):
         self.report_path.write_text(json.dumps(value))
         with self.assertRaisesRegex(ValueError, 'installation'):
             validated_assets(self.root, '0.3.25')
+
+    def test_current_release_requires_frozen_session_identity_before_remote_verification(self):
+        self.report['checks']['taskbarIdentity'] = True
+        self._copilot_evidence('0.4.4', project=True)
+        memory = self.root / 'windows/memory-package-test.json'
+        value = json.loads(memory.read_text())
+        value['model_requests'] = 0
+        memory.write_text(json.dumps(value))
+        self.assertEqual(len(validated_assets(self.root, '0.4.4')), 3)
+        runtime = self.root / 'windows/resume-runtime-test.json'
+        original = json.loads(runtime.read_text())
+        for results in ([], [{'name': 'Frozen main-session identity and final submission safety', 'passed': False}]):
+            with self.subTest(results=results):
+                runtime.write_text(json.dumps({**original, 'results': results}))
+                with self.assertRaisesRegex(ValueError, 'main-session'):
+                    validated_assets(self.root, '0.4.4')
+
+    def test_current_release_cannot_stage_without_frozen_session_identity(self):
+        import stage_windows_release as stage
+        import sys
+
+        stage_root = self.root / 'stage-source'
+        (stage_root / 'workspace').mkdir(parents=True)
+        reports = stage_root / 'artifacts/windows'
+        reports.mkdir(parents=True)
+        (stage_root / 'workspace/AIFirst.Workspace.csproj').write_text(
+            '<Project><PropertyGroup><Version>0.4.4</Version></PropertyGroup></Project>')
+        (reports / 'installer-test.json').write_text(json.dumps({
+            'passed': True, 'version': '0.4.4', 'checks': {'taskbarIdentity': True}}))
+        (reports / 'installed-self-test.json').write_text(json.dumps({'failed': 0, 'passed': 67}))
+        ui = reports / 'release-highlights-ui'
+        ui.mkdir()
+        ui_checks = {mode + name: True for mode in ('done', 'close', 'escape')
+                     for name in ('Layout', 'Focus', 'Acknowledged')}
+        (ui / 'report.json').write_text(json.dumps({'passed': True, 'checks': ui_checks}))
+        prior = [{'name': name, 'passed': True} for name in (
+            'Frozen credit policy never spends before full weekly exhaustion',
+            'Frozen independent automation preserves timer deduplication and spending permissions',
+            'Native Codex supports the isolated ephemeral request flags without model requests')]
+        for extra in ([], [{'name': 'Frozen main-session identity and final submission safety', 'passed': False}]):
+            with self.subTest(extra=extra):
+                (reports / 'resume-runtime-test.json').write_text(json.dumps({'failed': 0, 'results': prior + extra}))
+                with patch.object(stage, '__file__', str(stage_root / 'scripts/stage_windows_release.py')), \
+                        patch.object(sys, 'argv', ['stage', '--commit', 'a' * 40]), \
+                        patch.object(stage.subprocess, 'run', side_effect=AssertionError('No GitHub access allowed')) as remote:
+                    with self.assertRaisesRegex(ValueError, 'main-session'):
+                        stage.main()
+                    remote.assert_not_called()
 
     def _copilot_evidence(self, version, project=False):
         path = self.root / 'windows/memory-package-test.json'

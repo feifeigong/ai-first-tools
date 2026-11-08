@@ -25,7 +25,8 @@ function Reset-Fixture {
         [pscustomobject]@{ ProcessId = 1001; Name = 'pythonw.exe'; CommandLine = ('"' + $fixturePython + '" "' + $fixtureRunner + '" watch --quiet') },
         [pscustomobject]@{ ProcessId = 1002; Name = 'python.exe'; CommandLine = 'python.exe unrelated-job.py' },
         [pscustomobject]@{ ProcessId = 1003; Name = 'wscript.exe'; CommandLine = ('wscript.exe //B "' + $startupFile + '"') },
-        [pscustomobject]@{ ProcessId = 1004; Name = 'wscript.exe'; CommandLine = 'wscript.exe unrelated-job.vbs' }
+        [pscustomobject]@{ ProcessId = 1004; Name = 'wscript.exe'; CommandLine = 'wscript.exe unrelated-job.vbs' },
+        [pscustomobject]@{ ProcessId = 1006; ParentProcessId = 1001; Name = 'codex.exe'; CommandLine = 'codex exec resume synthetic-test-only' }
     )
     $script:mutations.Clear()
     $script:runner = $null
@@ -68,31 +69,32 @@ Check 'Stop disables restart sources before stopping only the exact watcher' {
     Require (!$value.running -and !$value.autostart -and $value.watcherCount -eq 0)
     Require ($script:mutations[0] -eq 'disable-task' -and $script:mutations.Contains('stop-1003') -and $script:mutations.Contains('stop-1001'))
     Require (@($script:processFixtures | Where-Object { $_.ProcessId -in @(1002, 1004) }).Count -eq 2)
+    Require (@($script:processFixtures | Where-Object { $_.ProcessId -eq 1006 -and $_.ParentProcessId -eq 1001 }).Count -eq 1)
     Require ((Test-Path -LiteralPath $disabledStartup) -and !(Test-Path -LiteralPath $startupFile))
 }
-Check 'Repeated start never creates a duplicate watcher or changes autostart' {
-    $value = Invoke-ResumeAction 'start'
-    Require ($value.running -and $value.watcherCount -eq 1 -and $script:mutations.Count -eq 0)
+Check 'Retired adapter refuses start and startup enable before any mutation' {
+    foreach($operation in @('start','autostart-on','resume-on','credit-on','timer-on')) {
+        $rejected=$false
+        try { $null=Invoke-ResumeAction $operation } catch { $rejected=$_.Exception.Message -like '内置续跑组件缺失*' }
+        Require($rejected -and $script:mutations.Count -eq 0)
+    }
 }
-Check 'Start after stop creates one hidden watcher while autostart stays off' {
-    $null = Invoke-ResumeAction 'stop'
-    $value = Invoke-ResumeAction 'start'
-    Require ($value.running -and !$value.autostart -and $value.watcherCount -eq 1)
-    Require (@($script:mutations | Where-Object { $_ -eq 'start' }).Count -eq 1)
+Check 'Start after stop requires the fixed bundled component' {
+    $null=Invoke-ResumeAction 'stop'
+    $rejected=$false
+    try { $null=Invoke-ResumeAction 'start' } catch { $rejected=$true }
+    Require($rejected -and !$script:mutations.Contains('start'))
+    Require(@(Get-Watchers).Count -eq 0)
 }
-Check 'Changing autostart does not stop or start the current watcher' {
-    $value = Invoke-ResumeAction 'autostart-off'
-    Require ($value.running -and !$value.autostart -and !$script:mutations.Contains('stop-1001'))
-    $value = Invoke-ResumeAction 'autostart-on'
-    Require ($value.running -and $value.autostart -and !$script:mutations.Contains('start'))
+Check 'Disabling legacy startup preserves the current watcher' {
+    $value=Invoke-ResumeAction 'autostart-off'
+    Require($value.running -and !$value.autostart -and !$script:mutations.Contains('stop-1001'))
 }
-Check 'Protected original task is controlled by the installed startup gate without elevation' {
-    $script:denyTaskChanges = $true
-    $value = Invoke-ResumeAction 'autostart-off'
-    Require ($script:taskFixture.Settings.Enabled -and !$value.autostart -and $value.running)
-    Require ((Get-StartupPreference) -eq $false)
-    $value = Invoke-ResumeAction 'autostart-on'
-    Require ($value.autostart -and $value.running -and !$script:mutations.Contains('start'))
+Check 'Protected original task is disabled through its installed gate without elevation' {
+    $script:denyTaskChanges=$true
+    $value=Invoke-ResumeAction 'autostart-off'
+    Require($script:taskFixture.Settings.Enabled -and !$value.autostart -and $value.running)
+    Require((Get-StartupPreference) -eq $false)
 }
 Check 'Same-name task with unrelated arguments is rejected without mutations' {
     $script:taskFixture.Actions[0].Arguments = 'unrelated-job.py'
@@ -112,13 +114,13 @@ Check 'Missing Python fails before changing task or stopping any processes' {
     try { $null = Invoke-ResumeAction 'stop' } catch { $rejected = $true }
     Require ($rejected -and $script:mutations.Count -eq 0)
 }
-Check 'No scheduler permission uses a correctly quoted Unicode startup file without starting it' {
-    $script:taskFixture = $null
-    $null = Invoke-ResumeAction 'autostart-on'
-    $vbs = [IO.File]::ReadAllText($startupFile)
-    Require ($vbs.Contains('sh.Run """' + $fixturePython + '"" ""' + $fixtureRunner + '"" watch --quiet", 0, True'))
-    Require (!$script:mutations.Contains('start'))
+Check 'Missing scheduler never falls back to creating an old startup script' {
+    $script:taskFixture=$null
+    $rejected=$false
+    try { $null=Invoke-ResumeAction 'autostart-on' } catch { $rejected=$true }
+    Require($rejected -and !(Test-Path -LiteralPath $startupFile) -and !$script:mutations.Contains('start'))
 }
+
 
 $script:results | ConvertTo-Json -Depth 5
 if (@($script:results | Where-Object { !$_.passed }).Count -gt 0) { exit 1 }

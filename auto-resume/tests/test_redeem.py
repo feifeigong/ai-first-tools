@@ -11,7 +11,7 @@ from codex_auto_resume.config import AppConfig, DEFAULT_PROMPT, LEGACY_PROMPT, l
 from codex_auto_resume.daemon import LiveQuota, tick
 from codex_auto_resume.quota import QuotaSnapshot, QuotaWindow, parse_quota_payload, should_redeem_weekly_reset
 from codex_auto_resume.redeem import try_redeem_weekly_reset
-from codex_auto_resume.sessions import WaitingSession
+from codex_auto_resume.sessions import WaitingSession, inspect_rollout
 from codex_auto_resume.state import AppState, upsert_thread
 try:
     from fakes import FakeQuotaClient
@@ -52,7 +52,7 @@ def _write_waiting(codex_home: Path) -> None:
         {
             "timestamp": _iso(2),
             "type": "session_meta",
-            "payload": {"id": THREAD, "cwd": str(codex_home)},
+            "payload": {"id": THREAD, "cwd": str(codex_home), "source": "cli"},
         },
         {
             "timestamp": _iso(1),
@@ -392,17 +392,22 @@ class SimulatedDaemonTests(unittest.TestCase):
         self.assertIs(after, snap)
 
 
-def _waiting(mark: str) -> WaitingSession:
-    return WaitingSession(
-        thread_id=THREAD,
-        cwd="C:/tmp",
-        path=Path("dummy.jsonl"),
-        mark=mark,
-        resets_at=9_999_999_999,
-        observed_at=1.0,
-        snapshot=None,
-        reason="usage-limit",
-    )
+def _waiting(root: Path, mark: str) -> WaitingSession:
+    # Keep cycle-policy tests grounded in a real, isolated eligible rollout so
+    # the final submission check does not need to be bypassed or mocked.
+    sessions = root / "codex" / "sessions"
+    sessions.mkdir(parents=True, exist_ok=True)
+    path = sessions / f"rollout-{mark}-{THREAD}.jsonl"
+    rows = [
+        {"timestamp": _iso(2), "type": "session_meta",
+         "payload": {"id": THREAD, "source": "cli", "cwd": str(root)}},
+        {"timestamp": datetime.now(timezone.utc).isoformat(), "type": "event_msg", "payload": {
+            "type": "error", "codex_error_info": "UsageLimitExceeded"}},
+    ]
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    waiting = inspect_rollout(path, since=0, ready_used_percent=99)
+    assert waiting is not None
+    return waiting
 
 
 class ResumeCapTests(unittest.TestCase):
@@ -414,11 +419,11 @@ class ResumeCapTests(unittest.TestCase):
             cfg = _cfg(root)
             client = FakeQuotaClient(primary_used=0, weekly_used=17)
             reader = FakeLiveQuota(cfg, client)
-            scan.return_value = [_waiting("mark-1")]
+            scan.return_value = [_waiting(root, "mark-1")]
             with patch("codex_auto_resume.daemon.spawn_resume", return_value=(100, "queue")) as spawn:
                 state = tick(cfg, quota_reader=reader)
             spawn.assert_called_once()
-            self.assertEqual(state.threads[THREAD].handled_mark, "mark-1")
+            self.assertEqual(state.threads[THREAD].handled_mark, scan.return_value[0].mark)
             self.assertEqual(state.threads[THREAD].resumes, 1)
 
             with patch("codex_auto_resume.daemon.spawn_resume") as spawn2:
@@ -435,12 +440,12 @@ class ResumeCapTests(unittest.TestCase):
             cfg = _cfg(root, max_auto_windows=1)
             client = FakeQuotaClient(primary_used=0, weekly_used=17)
             reader = FakeLiveQuota(cfg, client)
-            scan.return_value = [_waiting("mark-1")]
+            scan.return_value = [_waiting(root, "mark-1")]
             with patch("codex_auto_resume.daemon.spawn_resume", return_value=(100, "queue")):
                 state = tick(cfg, quota_reader=reader)
             self.assertEqual(state.threads[THREAD].resumes, 1)
 
-            scan.return_value = [_waiting("mark-2")]
+            scan.return_value = [_waiting(root, "mark-2")]
             with patch("codex_auto_resume.daemon.spawn_resume") as spawn:
                 state = tick(cfg, state=state, quota_reader=reader)
             spawn.assert_not_called()
@@ -454,11 +459,11 @@ class ResumeCapTests(unittest.TestCase):
             self.assertGreater(state.last_live_blocked_at, state.threads[THREAD].last_resume_at)
 
             client.primary_used = 0
-            scan.return_value = [_waiting("mark-3")]
+            scan.return_value = [_waiting(root, "mark-3")]
             with patch("codex_auto_resume.daemon.spawn_resume", return_value=(101, "queue")) as spawn:
                 state = tick(cfg, state=state, quota_reader=reader)
             spawn.assert_called_once()
-            self.assertEqual(state.threads[THREAD].handled_mark, "mark-3")
+            self.assertEqual(state.threads[THREAD].handled_mark, scan.return_value[0].mark)
             self.assertEqual(state.threads[THREAD].resumes, 2)
             self.assertEqual(state.threads[THREAD].status, "resumed")
 
@@ -479,13 +484,13 @@ class ResumeCapTests(unittest.TestCase):
                 phase="sent",
                 handled_mark="",
             )
-            scan.return_value = [_waiting("mark-2")]
+            scan.return_value = [_waiting(root, "mark-2")]
             client = FakeQuotaClient(primary_used=0, weekly_used=17)
             with patch("codex_auto_resume.daemon.spawn_resume", return_value=(102, "queue")) as spawn:
                 state = tick(cfg, state=state, quota_reader=FakeLiveQuota(cfg, client))
             spawn.assert_called_once()
             self.assertEqual(state.threads[THREAD].status, "resumed")
-            self.assertEqual(state.threads[THREAD].handled_mark, "mark-2")
+            self.assertEqual(state.threads[THREAD].handled_mark, scan.return_value[0].mark)
             self.assertEqual(state.threads[THREAD].resumes, 2)
 
     @patch("codex_auto_resume.daemon.process_running", return_value=False)
@@ -505,19 +510,20 @@ class ResumeCapTests(unittest.TestCase):
                 phase="failed",
                 resumes=0,
             )
-            scan.return_value = [_waiting("mark-1")]
+            scan.return_value = [_waiting(root, "mark-1")]
+            state.threads[THREAD].failed_mark = scan.return_value[0].mark
             client = FakeQuotaClient(primary_used=0, weekly_used=17)
             with patch("codex_auto_resume.daemon.spawn_resume") as spawn:
                 state = tick(cfg, state=state, quota_reader=FakeLiveQuota(cfg, client))
             spawn.assert_not_called()
             self.assertEqual(state.threads[THREAD].status, "resume-failed")
 
-            scan.return_value = [_waiting("mark-2")]
+            scan.return_value = [_waiting(root, "mark-2")]
             with patch("codex_auto_resume.daemon.spawn_resume", return_value=(103, "queue")) as spawn:
                 state = tick(cfg, state=state, quota_reader=FakeLiveQuota(cfg, client))
             spawn.assert_called_once()
             self.assertEqual(state.threads[THREAD].status, "resumed")
-            self.assertEqual(state.threads[THREAD].handled_mark, "mark-2")
+            self.assertEqual(state.threads[THREAD].handled_mark, scan.return_value[0].mark)
 
     @patch("codex_auto_resume.daemon.process_running", return_value=False)
     @patch("codex_auto_resume.daemon.scan_waiting_sessions")
@@ -525,7 +531,7 @@ class ResumeCapTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             cfg = _cfg(root)
-            scan.return_value = [_waiting("mark-stale")]
+            scan.return_value = [_waiting(root, "mark-stale")]
             stale = QuotaSnapshot(
                 primary=QuotaWindow(used_percent=0, resets_at=9_999_999_999, window_minutes=300),
                 secondary=QuotaWindow(used_percent=17, resets_at=9_999_999_999, window_minutes=10080),
@@ -557,7 +563,7 @@ class ResumeCapTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             cfg = _cfg(root)
-            scan.return_value = [_waiting("mark-unknown")]
+            scan.return_value = [_waiting(root, "mark-unknown")]
 
             class _Down:
                 client = None
