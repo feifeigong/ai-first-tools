@@ -1,29 +1,29 @@
 /* AI一手 · 对话搬家 —— 与工具箱同源的深/浅主题 */
 :root {
   color-scheme: light;
-  --bg: #ffffff;
-  --surface: #f7f8fa;
-  --surface-2: #eef0f3;
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #fafbfc;
   --hover: #eff1f4;
-  --line: #e5e7ea;
+  --line: #e7e8eb;
   --line-2: #eef0f3;
-  --ink: #16171a;
-  --ink-2: #4c4e54;
-  --muted: #6a6c72;
-  --faint: #9b9da3;
+  --ink: #17181a;
+  --ink-2: #55575c;
+  --muted: #83858a;
+  --faint: #a0a2a7;
   --accent: #7c3aed;
   --accent-fill: var(--accent);
   --accent-hover: #6d28d9;
-  --accent-soft: #f2ecfe;
+  --accent-soft: #f1ebfe;
   --accent-ink: #ffffff;
   --danger: #c42b1c;
   --warn-bg: #fff7e8;
   --warn-line: #f0dfc0;
   --warn-ink: #7a5a28;
   --check-border: #c4c7cc;
-  --scroll: #d3d5da;
-  --skeleton-a: #eceef2;
-  --skeleton-b: #f5f6f8;
+  --scroll: #c6c9cf;
+  --skeleton-a: #e8eaee;
+  --skeleton-b: #f4f5f7;
   --radius: 12px;
   --gutter: 24px;
   font-family: "Microsoft YaHei", "Microsoft YaHei UI", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", system-ui, sans-serif;
@@ -31,29 +31,29 @@
 
 html[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #151618;
-  --surface: #212226;
-  --surface-2: #292a30;
-  --hover: #26272c;
-  --line: #2a2b30;
-  --line-2: #24252a;
-  --ink: #ececee;
-  --ink-2: #b0b1b6;
-  --muted: #919298;
-  --faint: #6b6c72;
-  --accent: #9d74f8;
-  --accent-fill: #8755f0;
-  --accent-hover: #7c3aed;
-  --accent-soft: #262038;
+  --bg: #0b0b0c;
+  --surface: #151618;
+  --surface-2: #1b1c1f;
+  --hover: #1a1b1e;
+  --line: #232427;
+  --line-2: #2e3034;
+  --ink: #ededee;
+  --ink-2: #a6a7aa;
+  --muted: #7c7d82;
+  --faint: #5c5d62;
+  --accent: #8b5cf6;
+  --accent-fill: #8b5cf6;
+  --accent-hover: #9d74f8;
+  --accent-soft: #241e38;
   --accent-ink: #ffffff;
   --danger: #f87171;
   --warn-bg: #241e12;
   --warn-line: #3d3220;
   --warn-ink: #e0c08a;
   --check-border: #3c3d43;
-  --scroll: #32333a;
-  --skeleton-a: #202126;
-  --skeleton-b: #282930;
+  --scroll: #3a3c42;
+  --skeleton-a: #1b1c1f;
+  --skeleton-b: #282a30;
 }
 
 * { box-sizing: border-box; }
@@ -84,7 +84,7 @@ input, textarea, select { font: inherit; color: inherit; }
   background: transparent;
 }
 .brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 18px; }
-.brand-mark { width: 32px; height: 32px; flex: none; border-radius: 9px; overflow: hidden; background: #ffffff; padding: 2px; box-sizing: border-box; }
+.brand-mark { width: 32px; height: 32px; flex: none; border-radius: 9px; overflow: hidden; background: var(--surface); padding: 2px; box-sizing: border-box; }
 .brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .brand-name { font-size: 13.5px; font-weight: 600; letter-spacing: 0.01em; }
 .brand-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }

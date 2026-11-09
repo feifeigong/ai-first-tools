@@ -89,6 +89,27 @@ internal sealed class UpdateClient : IDisposable
         return SelectRelease(Encoding.UTF8.GetString(bytes), CurrentVersion);
     }
 
+    private async Task<HttpResponseMessage> GetReliableAsync(Uri address, bool asset, CancellationToken cancellation)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            HttpResponseMessage response;
+            try { response = await GetAsync(address, asset, cancellation); }
+            catch (HttpRequestException) when (attempt < 3)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(400 * attempt), cancellation);
+                continue;
+            }
+            if (attempt < 3 && response.StatusCode is System.Net.HttpStatusCode.BadGateway or System.Net.HttpStatusCode.ServiceUnavailable or System.Net.HttpStatusCode.GatewayTimeout)
+            {
+                response.Dispose();
+                await Task.Delay(TimeSpan.FromMilliseconds(400 * attempt), cancellation);
+                continue;
+            }
+            return response;
+        }
+    }
+
     private async Task<HttpResponseMessage> GetAsync(Uri address, bool asset, CancellationToken cancellation)
     {
         for (var redirects = 0; redirects <= 5; redirects++)
@@ -135,7 +156,7 @@ internal sealed class UpdateClient : IDisposable
         if (release.Checksums.Size > 65536) throw new InvalidDataException("校验文件过大。");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         deadline.CancelAfter(TimeSpan.FromMinutes(15));
-        using var checksumResponse = await GetAsync(new Uri(release.Checksums.Url), true, deadline.Token);
+        using var checksumResponse = await GetReliableAsync(new Uri(release.Checksums.Url), true, deadline.Token);
         checksumResponse.EnsureSuccessStatusCode();
         var checksums = await ReadLimitedAsync(checksumResponse, 65536, deadline.Token);
         if (checksums.Length != release.Checksums.Size || !string.Equals(Convert.ToHexString(SHA256.HashData(checksums)), release.Checksums.Digest, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("校验文件下载不完整。");
@@ -143,7 +164,7 @@ internal sealed class UpdateClient : IDisposable
         var partial = destination + ".partial";
         try
         {
-            using var response = await GetAsync(new Uri(asset.Url), true, deadline.Token);
+            using var response = await GetReliableAsync(new Uri(asset.Url), true, deadline.Token);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength is long length && length != asset.Size) throw new InvalidDataException("更新包大小不匹配。");
             using var input = await response.Content.ReadAsStreamAsync(deadline.Token);

@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>对话搬家</title>
   <link rel="stylesheet" href="style.css" />
+  <script>
+    (function () {
+      var theme = new URLSearchParams(location.search).get("theme");
+      if (theme === "dark" || theme === "light") document.documentElement.dataset.theme = theme;
+    })();
+  </script>
 </head>
 <body>
   <div class="app">
@@ -81,6 +87,7 @@
   <script>
     (function () {
       var current = document.documentElement.dataset.theme || "light";
+      var ticket = 0;
       function paint(theme) {
         if (theme !== "dark" && theme !== "light") return;
         if (theme === current) return;
@@ -88,12 +95,16 @@
         document.documentElement.dataset.theme = theme;
       }
       async function sync() {
+        var mine = ++ticket;
         try {
           var api = window.pywebview && window.pywebview.api;
-          if (api && api.ui_theme) paint(await api.ui_theme());
+          if (!api || !api.ui_theme) return;
+          var theme = await api.ui_theme();
+          if (mine !== ticket) return;
+          paint(theme);
         } catch (error) { /* 浏览器预览没有 API，忽略即可 */ }
       }
-      function start() { sync(); setInterval(sync, 50); }
+      function start() { sync(); setInterval(sync, 300); }
       if (window.pywebview && window.pywebview.api) start();
       else window.addEventListener("pywebviewready", start);
       document.addEventListener("visibilitychange", function () { if (!document.hidden) sync(); });

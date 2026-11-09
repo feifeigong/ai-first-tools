@@ -280,6 +280,17 @@ internal static class UpdateSelfTests
             Reject(() => UpdatePackage.Apply(target, staged, backup, count => { if (count == 3) throw new IOException("synthetic interruption"); }));
             require(UpdatePackage.Read(target).Version == "0.3.7" && File.ReadAllText(Path.Combine(target, "tool.txt")) == "original" && !File.Exists(Path.Combine(target, "new.txt")) && File.ReadAllText(Path.Combine(target, "user.txt")) == "untouched");
         });
+        check("Updater replaces an unlisted program file when the new release ships that same path", () =>
+        {
+            var target = Area("adopt"); var staged = Area("adopt-staged"); var backup = Area("adopt-backup");
+            Fixture(target, "0.3.7");
+            Fixture(staged, "0.3.8", ("tools/auto-resume/_internal/libssl-3.dll", "shipped"));
+            var leftover = UpdatePackage.Resolve(target, "tools/auto-resume/_internal/libssl-3.dll");
+            Directory.CreateDirectory(Path.GetDirectoryName(leftover)!);
+            File.WriteAllText(leftover, "leftover runtime");
+            UpdatePackage.Apply(target, staged, backup);
+            require(File.ReadAllText(leftover) == "shipped" && File.ReadAllText(Path.Combine(backup, "tools", "auto-resume", "_internal", "libssl-3.dll")) == "leftover runtime");
+        });
         check("Portable updater refuses to overwrite an added user file with a newly introduced name", () =>
         {
             var target = Area("collision"); var staged = Area("collision-staged");
@@ -414,6 +425,32 @@ internal static class UpdateSelfTests
                 opened = true;
             });
             require(opened && File.Exists(preserved));
+        });
+        check("Updater retries a gateway timeout and keeps the verified package", () =>
+        {
+            var version = "0.3.8";
+            var payload = Encoding.UTF8.GetBytes("package-bytes");
+            var digest = Hash(payload);
+            var sums = Encoding.UTF8.GetBytes(digest + "  AI-First-Tools-Setup-" + version + ".exe\n");
+            var packageUrl = UpdateClient.Repository + "/releases/download/v" + version + "/AI-First-Tools-Setup-" + version + ".exe";
+            var sumsUrl = UpdateClient.Repository + "/releases/download/v" + version + "/SHA256SUMS.txt";
+            var packageAttempts = 0;
+            using var client = new UpdateClient(new FakeHttp(address =>
+            {
+                if (address == sumsUrl) return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(sums) };
+                packageAttempts++;
+                return packageAttempts == 1
+                    ? new HttpResponseMessage(HttpStatusCode.GatewayTimeout)
+                    : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(payload) };
+            }));
+            var release = new UpdateRelease(version,
+                new UpdateAsset("AI-First-Tools-Setup-" + version + ".exe", packageUrl, payload.Length, digest),
+                new UpdateAsset("AI-First-Tools-Portable-" + version + "-win-x64.zip", UpdateClient.Repository + "/releases/download/v" + version + "/AI-First-Tools-Portable-" + version + "-win-x64.zip", 1, digest),
+                new UpdateAsset("SHA256SUMS.txt", sumsUrl, sums.Length, Hash(sums)));
+            var destination = Path.Combine(Area("retry-download"), "setup.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            Wait(client.DownloadAsync(release, release.Installer, destination, null, CancellationToken.None));
+            require(packageAttempts == 2 && File.ReadAllBytes(destination).AsSpan().SequenceEqual(payload));
         });
     }
 

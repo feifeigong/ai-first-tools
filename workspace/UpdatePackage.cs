@@ -119,25 +119,36 @@ internal static class UpdatePackage
         var oldPaths = previous.Files.Select(file => file.Path).Append(ManifestName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (installed) oldPaths.Add("Uninstall.exe");
         var unchanged = new ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        var adopted = new ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         var errors = new ConcurrentQueue<Exception>();
         Parallel.ForEach(next.Files, new ParallelOptions { MaxDegreeOfParallelism = 4 }, file =>
         {
             try
             {
                 Verify(Resolve(staged, file.Path), file.Size, file.Sha256);
-                if (!oldPaths.Contains(file.Path) && File.Exists(Resolve(target, file.Path))) throw new InvalidDataException("新版文件与您额外放入的文件重名，为保护文件已停止更新。");
                 // Compare actual bytes, not just two manifests: repair locally
                 // damaged files and retain rollback for every file we do replace.
                 var current = Resolve(target, file.Path);
-                if (File.Exists(current))
+                if (!File.Exists(current)) return;
+                if (!oldPaths.Contains(file.Path))
                 {
                     try { Verify(current, file.Size, file.Sha256); unchanged.TryAdd(file.Path, true); }
-                    catch (InvalidDataException) { }
+                    catch (InvalidDataException)
+                    {
+                        // 上一版清单漏记的程序文件（许可证、工具运行库）和新版重名时可以替换并备份。
+                        // 安装目录根上用户自己放的文件仍然整次停止，避免被新文件盖掉。
+                        if (!IsPublisherPath(file.Path)) throw new InvalidDataException("新版文件与您额外放入的文件重名，为保护文件已停止更新。");
+                        adopted.TryAdd(file.Path, true);
+                    }
+                    return;
                 }
+                try { Verify(current, file.Size, file.Sha256); unchanged.TryAdd(file.Path, true); }
+                catch (InvalidDataException) { }
             }
             catch (Exception error) { errors.Enqueue(error); }
         });
         if (errors.TryDequeue(out var failure)) ExceptionDispatchInfo.Capture(failure).Throw();
+        foreach (var path in adopted.Keys) oldPaths.Add(path);
         phase?.Invoke("备份当前版本");
         Backup(target, backup, oldPaths.Where(path => !unchanged.ContainsKey(path)));
         var written = new List<string>();
@@ -170,6 +181,12 @@ internal static class UpdatePackage
             throw;
         }
     }
+
+    private static bool IsPublisherPath(string path) =>
+        path.StartsWith("tools/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("THIRD-PARTY-LICENSES/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("assets/", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("docs/", StringComparison.OrdinalIgnoreCase);
 
     internal static void Backup(string target, string backup, IEnumerable<string> paths)
     {

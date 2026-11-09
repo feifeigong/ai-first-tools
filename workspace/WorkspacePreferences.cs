@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace AIFirst.Workspace;
 
@@ -31,10 +32,17 @@ internal sealed class WorkspacePreferences
     {
         if (unreadable) throw new InvalidDataException("侧栏设置文件暂时无法读取，原文件已保留。");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        JsonObject root = new();
+        if (File.Exists(path))
+        {
+            try { root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject ?? throw new JsonException(); }
+            catch (JsonException) { unreadable = true; throw new InvalidDataException("侧栏设置文件暂时无法读取，原文件已保留。"); }
+        }
+        root["sidebarCollapsed"] = collapsed;
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
-            File.WriteAllText(temporary, JsonSerializer.Serialize(new { sidebarCollapsed = collapsed }));
+            File.WriteAllText(temporary, root.ToJsonString());
             File.Move(temporary, path, true);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }

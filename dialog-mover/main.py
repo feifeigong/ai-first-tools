@@ -18,6 +18,22 @@ from core.common import open_external
 from embedded_startup import EmbeddedStartup
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+THEME_BACKGROUND = {"dark": "#0B0B0C", "light": "#F4F5F7"}
+
+
+def current_theme() -> str:
+    """工具箱和本页读同一份设置。文件里的值优先于启动时的环境变量。"""
+    theme = os.environ.get("AI_FIRST_UI_THEME", "light").lower()
+    path = os.environ.get("AI_FIRST_THEME_FILE", "")
+    if path:
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                value = str(json.load(handle).get("theme", "")).lower()
+            if value in ("dark", "light"):
+                theme = value
+        except (OSError, ValueError, AttributeError):
+            pass
+    return "dark" if theme == "dark" else "light"
 
 if getattr(sys, "frozen", False):
     executable_root = Path(sys.executable).resolve().parent
@@ -65,18 +81,15 @@ class Api:
     # ---- appearance
 
     def ui_theme(self) -> str:
-        """工具箱把主题写在设置文件里，这里轮询同一份，切换时立刻跟随。"""
-        theme = os.environ.get("AI_FIRST_UI_THEME", "light")
-        path = os.environ.get("AI_FIRST_THEME_FILE", "")
-        if path:
+        """工具箱把主题写在设置文件里，这里轮询同一份，页面和窗口底色一起换。"""
+        theme = current_theme()
+        window = self._window
+        if window is not None:
             try:
-                with open(path, "r", encoding="utf-8") as handle:
-                    value = str(json.load(handle).get("theme", "")).lower()
-                if value in ("dark", "light"):
-                    theme = value
-            except (OSError, ValueError, AttributeError):
+                window.background_color = THEME_BACKGROUND[theme]
+            except Exception:
                 pass
-        return "dark" if theme == "dark" else "light"
+        return theme
 
     def can_close(self) -> bool:
         if not self._lock.acquire(blocking=False):
@@ -448,14 +461,15 @@ def main() -> None:
         raise SystemExit(run(Path(sys.argv[2]).resolve()))
     api = Api()
     startup = EmbeddedStartup.from_environment() if sys.platform == "win32" else None
+    theme = current_theme()
     window = webview.create_window(
         "对话搬家",
-        url=str(ROOT / "ui" / "index.html"),
+        url=str((ROOT / "ui" / "index.html").as_uri()) + "?theme=" + theme,
         js_api=api,
         width=1180,
         height=780,
         min_size=(940, 640),
-        background_color="#0B0B0C" if os.environ.get("AI_FIRST_UI_THEME") == "dark" else "#F6F8FB",
+        background_color=THEME_BACKGROUND[theme],
         text_select=False,
         hidden=startup is not None,
         focus=startup is None,

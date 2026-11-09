@@ -221,6 +221,12 @@ internal static class SelfTests
             Require(new WorkspacePreferences(preferencesConfig).LoadCollapsed());
             preferences.SaveCollapsed(false);
             Require(!new WorkspacePreferences(preferencesConfig).LoadCollapsed());
+            var preferencesPath = Path.Combine(Path.GetDirectoryName(preferencesConfig)!, "workspace-preferences.json");
+            File.WriteAllText(preferencesPath, "{\"sidebarCollapsed\":false,\"theme\":\"dark\"}");
+            preferences.SaveCollapsed(true);
+            using var saved = JsonDocument.Parse(File.ReadAllText(preferencesPath));
+            Require(saved.RootElement.GetProperty("sidebarCollapsed").GetBoolean());
+            Require(saved.RootElement.GetProperty("theme").GetString() == "dark");
         });
         Check("Sidebar preferences do not write the old tool registry", () =>
         {
