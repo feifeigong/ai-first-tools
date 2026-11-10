@@ -13,7 +13,7 @@ from pathlib import Path
 
 import webview
 
-from core import chatgpt, copilot_import, copilot_refresh, imports, mover, sources, memory_store, memory_deploy, memory_jobs, memory_workspace
+from core import chatgpt, copilot_import, copilot_refresh, cursor_refresh, imports, mover, sources, memory_store, memory_deploy, memory_jobs, memory_workspace
 from core.common import open_external
 from embedded_startup import EmbeddedStartup
 
@@ -409,6 +409,27 @@ class Api:
             return {"error": "无法打开记录位置，请在文件管理器中查看下方路径。"}
         return {"ok": True}
 
+    def _reload_cursor(self, item: dict) -> dict:
+        """Cursor reads its list once per window; ask it to reload instead of a restart."""
+        if item["state"] not in ("ok", "skipped"):
+            return {"error": "这条记录尚未导入成功。"}
+        try:
+            status = cursor_refresh.refresh()
+        except (OSError, ValueError, RuntimeError):
+            mover.log("cursor refresh failed")
+            status = "unavailable"
+        if status == "requested":
+            return {"ok": True, "refreshed": True}
+        if status == "not-running":
+            return {"ok": True, "refreshed": False}
+        if status == "draft":
+            return {"error": "记录已写入。Cursor 里还有没发出去的内容，已保留草稿；处理完后按 Ctrl+Shift+P → Reload Window 回车就能看到。"}
+        if status == "busy":
+            return {"error": "记录已写入。Cursor 正在执行任务，没有打断它；任务结束后按 Ctrl+Shift+P → Reload Window 回车就能看到。"}
+        if status == "unsupported":
+            return {"error": "记录已写入。这个系统上需要你自己让 Cursor 重新加载：按 Ctrl+Shift+P（Mac 是 ⌘+Shift+P）→ Reload Window 回车。"}
+        return {"error": "记录已写入，但没能替你重新加载 Cursor。请在 Cursor 里按 Ctrl+Shift+P → Reload Window 回车，不用退出软件。"}
+
     def open_in_app(self, index: int) -> dict:
         """Open only an allowlisted destination of this batch's saved results."""
         if self._job is None or not isinstance(index, int):
@@ -416,6 +437,8 @@ class Api:
         items = self._job.snapshot()["items"]
         if index < 0 or index >= len(items):
             return {"error": "这条记录尚未导入成功。"}
+        if self._job.target == "cursor_desktop":
+            return self._reload_cursor(items[index])
         url = str(items[index].get("openUrl", ""))
         imported = str(items[index].get("importedId", ""))
         copilot_project = bool(imported and url == copilot_import.project_url(imported))

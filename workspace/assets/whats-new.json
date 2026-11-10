@@ -1,26 +1,26 @@
 {
   "schema": 1,
   "versions": {
-    "windows": "0.4.5",
+    "windows": "0.4.6",
     "macos": "0.4.5-macos-preview.33"
   },
-  "title": "对话可以搬进 DeepSeek",
-  "description": "ZCode 和 Codex 的对话可以复制到官方 DeepSeek 和社区 DSH，原记录保留。",
+  "title": "搬进 Cursor 不用再重启",
+  "description": "对话导入 Cursor 后，工具箱会让 Cursor 自己重新加载；没成功时给出可以照着按的步骤。",
   "items": [
     {
-      "label": "新增",
-      "title": "从 ZCode 搬过去",
-      "text": "可以把 ZCode 里看得到的对话，复制到 DeepSeek 官方桌面端或社区版 DSH。原来的记录保持不动。"
+      "label": "修复",
+      "title": "Cursor 搬完就能看到",
+      "text": "Cursor 只在窗口打开时读一次历史。现在搬完会让它自己重新加载，新记录直接出现在列表里，不用退出软件。"
     },
     {
-      "label": "新增",
-      "title": "Codex 也能搬过去",
-      "text": "Codex 和 ChatGPT 本机工作记录同样可以复制到这两个桌面端。工具过程和附件不会重放。"
+      "label": "修复",
+      "title": "不打断正在写的和正在跑的",
+      "text": "Cursor 里有没发出去的内容、或正在执行任务时不会动它，只提示按 Ctrl+Shift+P → Reload Window，草稿保留。"
     },
     {
       "label": "改进",
-      "title": "开着的窗口会刷新",
-      "text": "Windows 上如果官方或社区版已经打开，搬完后窗口会重新打开并显示新对话。Mac 打开对应软件就能看到。"
+      "title": "结果页写清状态",
+      "text": "每条 Cursor 记录会标注「重新加载后显示」，不再让人以为它已经出现在列表里。"
     }
   ]
 }

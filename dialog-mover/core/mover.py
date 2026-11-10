@@ -319,6 +319,9 @@ def _import_document(path: Path, document: dict, target: str, details: dict | No
             # ChatGPT reads its local list only at start-up; this link makes it open the thread by id
             details["openUrl"] = f"codex://threads/{imported_id}"
     message = "已写入本地记录文件" if TARGETS[target]["mode"] == "trajectory" else "已搬好"
+    if target == "cursor_desktop":
+        # Cursor keeps the session list in memory; it shows this only after a reload.
+        message = "已写入 Cursor 本机历史；重新加载后显示"
     if isinstance(historical_tool_notes, int) and historical_tool_notes > 0:
         message += f"；{historical_tool_notes} 条未能完整配对的工具日志已作为历史说明保留，未补写执行结果。"
         if details is not None:

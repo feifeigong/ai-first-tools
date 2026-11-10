@@ -33,7 +33,7 @@ Copilot完整搬家兼容修复已发布于Windows0.3.25 / Mac preview.29：已�
 
 | 软件或模式 | 状态与限制 |
 | --- | --- |
-| Cursor 桌面版 | 写入本机对话与工作区登记 |
+| Cursor 桌面版 | 写入本机对话与工作区登记；Cursor 只在窗口打开时读一次列表，搬完会让它自己重新加载（未成功时按 Ctrl+Shift+P → Reload Window），不用重启软件 |
 | WorkBuddy / WorkBuddy AI | 国内与海外存储分别适配 |
 | 千问办公 | 写入正文和本机项目、聊天、消息登记；依赖原生存储格式 |
 | ChatGPT 本机 Work / Codex | 写入本机历史，分别标记模式并登记所选目录；不写入云端 Chat / Work |
