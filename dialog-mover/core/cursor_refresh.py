@@ -18,7 +18,8 @@ import time
 
 # The glass window's command palette always lists these actions; a sidebar
 # list of chat titles cannot, so their presence identifies an open palette.
-PALETTE = {"go back", "go forward", "new agent", "select model"}
+PALETTE = {"go back", "go forward", "new agent", "select model",
+           "后退", "前进", "新建 agent", "新建代理", "选择模型"}
 RELOAD = ("reload window", "developer: reload window", "重新加载窗口", "重新加载")
 BUSY = {"stop", "停止", "stop generating", "停止生成"}
 PROMPT = "prompt"
@@ -183,6 +184,15 @@ def _inspect(root) -> str:
     return "ready"
 
 
+def _foreground(hwnd) -> bool:
+    """True while the window we raised is still the one receiving keystrokes."""
+    from ctypes import wintypes as w
+
+    user = ctypes.WinDLL("user32", use_last_error=True)
+    user.GetForegroundWindow.restype = w.HWND
+    return user.GetForegroundWindow() == hwnd
+
+
 def _lift(hwnd) -> bool:
     from ctypes import wintypes as w
 
@@ -310,6 +320,8 @@ def _reload_window() -> str:
     if _inspect(root) != "ready":
         keys.escape()
         return "unavailable"
+    if not _foreground(hwnd):
+        return "unavailable"  # Focus moved away; typed keys would land elsewhere.
     if not keys.type("reload window"):
         keys.escape()
         return "unavailable"
@@ -317,6 +329,8 @@ def _reload_window() -> str:
     while time.monotonic() < deadline:
         listed = _names(root)
         if _reload_entry(listed):
+            if not _foreground(hwnd):
+                return "unavailable"  # Never confirm a command in another window.
             return "requested" if keys.enter() else "unavailable"
         if not _palette_open(listed):
             return "unavailable"  # The palette closed itself; never guess with Enter.

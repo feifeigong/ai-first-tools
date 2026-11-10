@@ -46,6 +46,7 @@ class CursorRefreshTests(unittest.TestCase):
             patch.object(cursor_refresh, "sys", SimpleNamespace(platform="win32")),
             patch.object(cursor_refresh, "_uia", uia),
             patch.object(cursor_refresh, "_Keyboard", Keyboard),
+            patch.object(cursor_refresh, "_foreground", lambda _hwnd: True),
             patch.object(cursor_refresh, "PALETTE_WAIT", 0.05),
             patch.object(cursor_refresh, "LIST_WAIT", 0.05),
         ]
@@ -146,6 +147,25 @@ class CursorRefreshTests(unittest.TestCase):
                 patch.object(cursor_refresh, "_lift", return_value=True):
             self.assertEqual(cursor_refresh.refresh(), "unavailable")
         self.assertEqual(self.keys(), [])
+
+    def test_focus_moving_away_stops_the_command_name(self):
+        with patch.object(cursor_refresh, "_windows", return_value=[(7, "Cursor Agents")]), \
+                patch.object(cursor_refresh, "_inspect", return_value="ready"), \
+                patch.object(cursor_refresh, "_lift", return_value=True), \
+                patch.object(cursor_refresh, "_foreground", lambda _hwnd: False), \
+                patch.object(cursor_refresh, "_names", self.rows(PALETTE_ROWS)):
+            self.assertEqual(cursor_refresh.refresh(), "unavailable")
+        self.assertEqual(self.keys(), ["palette"])
+
+    def test_focus_moving_away_never_confirms_the_command(self):
+        with patch.object(cursor_refresh, "_windows", return_value=[(7, "Cursor Agents")]), \
+                patch.object(cursor_refresh, "_inspect", return_value="ready"), \
+                patch.object(cursor_refresh, "_lift", return_value=True), \
+                patch.object(cursor_refresh, "_names", self.rows(PALETTE_ROWS, PALETTE_ROWS + ["Reload Window"])):
+            states = iter([True, False])  # Foreground when typing, gone before Enter.
+            with patch.object(cursor_refresh, "_foreground", lambda _hwnd: next(states, False)):
+                self.assertEqual(cursor_refresh.refresh(), "unavailable")
+        self.assertEqual(self.keys(), ["palette", ("type", "reload window")])
 
     def test_other_platforms_never_send_input(self):
         with patch.object(cursor_refresh, "sys", SimpleNamespace(platform="darwin")), \
