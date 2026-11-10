@@ -1,5 +1,9 @@
 # Mac 移植验证记录
 
+## 2026-11-10：0.4.5-preview.33 对话搬家（与 Windows 一起发布）
+
+Mac 与 Windows 共用 ZCode 读取和 DeepSeek 官方 / DSH 社区写入。本机不能制作 Mac 安装包；Apple 与 Intel 的原生检查由双平台发布工作流执行，通过后才公开 `0.4.5-macos-preview.33`。窗口自动重开只在 Windows 验证过，Mac 打开对应软件后查看。隔离合成记录覆盖可见正文、工具回合合并和重复搬运时的刷新调用，不读取真实会话，不发送模型请求。历史 0.4.4 的原生计数不能当作本版已经通过。
+
 ## 2026-11-08：0.4.4-preview.32 续跑身份筛选（已发布）
 
 已发布 [Windows v0.4.4](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4) 与 [Mac 0.4.4-preview.32](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4-macos-preview.32)。固定发布源码 `fda7f4e77f18b6d719e17fd1ea7b5ff15b0da937`，[双平台构建与发布 42479501538](https://github.com/feifeigong/ai-first-tools/actions/runs/42479501538) 通过。Windows 3 项、Mac 23 项发布资产已独立下载，与原始构建逐项核对大小和摘要。

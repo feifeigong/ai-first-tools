@@ -1,5 +1,11 @@
 # 支持范围与验证边界
 
+## 2026-11-10：0.4.5 对话搬到 DeepSeek（Windows 与 Mac 同一发布）
+
+Windows v0.4.5 与 Mac 0.4.5-preview.33 使用同一套搬家代码。ZCode 的可见对话，以及 Codex / ChatGPT 本机工作记录，可以复制到 DeepSeek 官方桌面端或 DSH 社区版。两边的会话目录分开。读不了对话的软件不出现在列表里。
+
+Windows 上如果对应窗口已经打开，搬完后会重新打开并显示新记录。Mac 打开对应软件后查看，本版不会在 Mac 上自动重开那个窗口。工具过程、附件和下一轮续聊不在这次验收范围内。隔离合成记录通过写入后回读；不读取真实会话、认证或数据库，不发送模型请求。
+
 ## 2026-11-08：0.4.4 续跑身份筛选（已发布）
 
 两平台共享续跑核心仅自动继续身份明确的主任务；子代理、审批守护及缺失、未知或冲突身份跳过，提交前复核。无法识别的旧日志可在 Codex 中手动继续。含分叉、回退或复制历史且无法证明限额属于自身新历史的日志暂不自动继续；首条元数据用于识别线程，文件名编号不作为身份依据。修复已随完整运行包交付；仍运行旧独立后台时不能视为已修复。
@@ -10,7 +16,7 @@ Windows 已加入旧独立监控接管，相关失败重试、自启选择与子
 
 Windows0.3.25 / Mac preview.29 历史发布补全两次发卡简写识别、完整搬入 Copilot 的项目归属及 Windows 任务栏身份；该轮验收范围见[修复与验收说明](RESET-PROJECT-LOGO-QA.md)。
 
-当前公开版本为 [Windows v0.4.4](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4) 与 [Mac 0.4.4-preview.32](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4-macos-preview.32)。下面列出支持范围，不表示所有软件版本与账号场景均已完成原生续跑验收。
+当前公开版本为 [Windows v0.4.5](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.5) 与 [Mac 0.4.5-preview.33](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.5-macos-preview.33)。下面列出支持范围，不表示所有软件版本与账号场景均已完成原生续跑验收。
 
 ## 两种搬家方式
 
@@ -39,6 +45,10 @@ Copilot完整搬家兼容修复已发布于Windows0.3.25 / Mac preview.29：已�
 | 豆包工作 | 只读来源；本机轨迹文件不等于服务器正式会话，界面不开放搬入 |
 | GitHub Copilot Desktop | 支持本机历史搬出和搬入所选项目；只列桌面端正式登记的记录，VS Code 自身聊天存储不在范围，见 [Copilot 说明](COPILOT.md) |
 | ChatGPT 云端 / Claude 普通聊天 / Hermes | 只读来源，不提供未实现的原生写回 |
+| ZCode | 只读本机会话，正文可复制到 DeepSeek 官方桌面端或 DSH 社区桌面端；工具操作和附件不会重放 |
+| DeepSeek 官方桌面端 | 读取并写入 DeepSeek Harness 的默认本机会话目录，与社区版分开存放。Windows 上窗口已打开时，搬完会重新打开并显示新记录；Mac 打开软件后查看 |
+| DSH 社区桌面端 | 读取并写入 DSH Desktop 自己的会话目录，不与官方版混放。Windows 上窗口已打开时，搬完会重新打开并显示新记录；Mac 打开软件后查看 |
+| 已安装但读不了对话的软件 | 不在侧栏列出 |
 
 迁移记录不自动搬齐外部附件文件、项目文件、工作环境、插件、认证、权限或模型配置。已内嵌在消息中的图片按目标适配能力处理，不等于所有附件都已迁移。不同软件的消息、工具和多模态结构可能不同，导入提示须仔细阅读。
 

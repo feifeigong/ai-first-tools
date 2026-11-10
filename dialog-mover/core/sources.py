@@ -121,6 +121,18 @@ def installed(agent_id: str) -> bool:
         return _qwen_db().is_file()
     if agent_id == "doubao_work":
         return doubao.installed()
+    if agent_id == "zcode":
+        from . import zcode
+
+        return zcode.installed()
+    if agent_id == "dsh":
+        from . import dsh
+
+        return dsh.installed()
+    if agent_id == "dsh_official":
+        from . import dsh
+
+        return dsh.official_installed()
     return False
 
 
@@ -1122,7 +1134,6 @@ UNSUPPORTED = [
     ("marscode", "豆包 MarsCode", "字节跳动", [".marscode"]),
     ("doubao_chat", "豆包（聊天版）", "字节跳动", ["AppData/Local/Doubao"]),
     ("yuanbao", "腾讯元宝", "腾讯", ["AppData/Local/com.tencent.yuanbao"]),
-    ("deepseek", "DeepSeek Harness", "", ["deepseek-harness", "AppData/Roaming/@deepseek-ai"]),
     ("perplexity", "Perplexity", "", ["AppData/Roaming/Perplexity"]),
     ("manus", "Manus", "", ["AppData/Roaming/manus", "AppData/Roaming/openmanus"]),
     ("cline", "Cline", "", [".cline"]),
@@ -1134,18 +1145,8 @@ EMPTY_ONES = {"grokbot"}
 
 
 def unsupported_found() -> list[dict]:
-    found = []
-    for key, name, sub, paths in UNSUPPORTED:
-        if any((home() / p).exists() for p in paths):
-            found.append(
-                {
-                    "id": key,
-                    "name": name,
-                    "sub": sub or "已发现",
-                    "reason": "empty" if key in EMPTY_ONES else "format",
-                }
-            )
-    return found
+    """已安装但读不了对话的软件不进侧栏。UNSUPPORTED 只留作格式调查记录。"""
+    return []
 
 
 # --------------------------------------------------------------------- API
@@ -1182,6 +1183,18 @@ def list_groups(agent_id: str) -> list[dict]:
         return chatgpt_groups()
     if agent_id in ("cursor_cli", "grok", "hermes", "opencode"):
         return small_harness_groups(agent_id)
+    if agent_id == "zcode":
+        from . import zcode
+
+        return zcode.groups()
+    if agent_id == "dsh":
+        from . import dsh
+
+        return dsh.groups(product="dsh")
+    if agent_id == "dsh_official":
+        from . import dsh
+
+        return dsh.groups(product="dsh_official")
     raise ValueError(agent_id)
 
 
@@ -1195,7 +1208,7 @@ def known_folders() -> list[dict]:
 
     for agent in (
         "cursor_desktop", "workbuddy", "workbuddy_ai", "antigravity", "antigravity_cli",
-        "qwen_work", "codex", "claude_code", "cowork", "copilot_desktop",
+        "qwen_work", "codex", "claude_code", "cowork", "copilot_desktop", "zcode", "dsh", "dsh_official",
     ):
         if not installed(agent):
             continue

@@ -39,6 +39,18 @@ TARGETS = {
         "notice": "写入 ChatGPT 的本机 Work 历史，保留 Work 模式标记并登记所选目录；不是云端 Work。不会启动模型或复制附件、运行环境。",
         "resultHint": "已写入本机 Work 历史并登记项目。会请求 ChatGPT 打开最后一条，请在软件中确认是否显示。工作环境与附件需另行准备。",
     },
+    "dsh": {
+        "harness": "dsh", "mode": "local", "targetSub": "DSH 社区桌面端",
+        "notice": "写入 DSH Desktop（社区版）的本机会话文件，不调用模型，也不重新执行原来的工具操作。",
+        "folderHint": "所选文件夹只作为这条会话的工作目录，不会复制项目文件或附件。",
+        "resultHint": "已写入 DSH 社区桌面端。如果软件已经打开，窗口会自动刷新并显示新记录。",
+    },
+    "dsh_official": {
+        "harness": "dsh", "mode": "local", "targetSub": "DeepSeek 官方桌面端",
+        "notice": "写入 DeepSeek Harness（官方桌面端）的本机会话文件，不调用模型，也不重新执行原来的工具操作。",
+        "folderHint": "所选文件夹只作为这条会话的工作目录，不会复制项目文件或附件。",
+        "resultHint": "已写入 DeepSeek 官方桌面端。如果软件已经打开，窗口会自动刷新并显示新记录。",
+    },
 }
 
 READ_ONLY = {
@@ -103,6 +115,16 @@ def preflight(target: str, env: dict) -> None:
         codex_import.validate(Path(env["CODEX_HOME"]) / "state_5.sqlite")
     if target == "qwen_work":
         validate_qwen(qwen_db(env))
+    if target == "dsh":
+        from . import dsh
+
+        if dsh.data_root() is None:
+            raise ValueError("没有找到 DSH 社区桌面端的会话目录。请先打开一次 DSH Desktop。")
+    if target == "dsh_official":
+        from . import dsh
+
+        if dsh.official_root() is None:
+            raise ValueError("没有找到 DeepSeek 官方桌面端的会话目录。请先打开一次 DeepSeek Harness。")
     if target == "cowork":
         root = Path(env.get("COWORK_SESSIONS_DIR", ""))
         initialized = False

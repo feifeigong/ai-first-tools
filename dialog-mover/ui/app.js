@@ -11,7 +11,7 @@
     codex: "chatgpt", codex_cli: "chatgpt", chatgpt: "chatgpt", chatgpt_work: "chatgpt", claude_code: "claude", claude: "claude",
     claude_desktop: "claude", cowork: "claude", grok: "grok", grokbot: "grok-bot", hermes: "hermes", opencode: "opencode",
     codebuddy: "codebuddy", kimi: "kimi", deepseek: "deepseek", perplexity: "perplexity",
-    copilot_desktop: "copilot",
+    copilot_desktop: "copilot", zcode: "zcode", dsh: "dsh", dsh_official: "deepseek",
   };
   const SOFTWARE_ICON = '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="15" rx="3"/><path d="M3 9h18M7 6.5h.01M10 6.5h.01"/></svg>';
 
@@ -145,17 +145,7 @@
         </button>`;
       })
       .join("");
-    const extra = state.unsupported.length
-      ? `<div class="rail-label rail-label-2">还发现这些</div>` +
-        state.unsupported
-          .map(
-            (item) => `<button class="agent dim ${state.current === "x:" + item.id ? "active" : ""}" data-extra="${esc(item.id)}">
-              ${agentLogo(item.id, item.name)}
-              <span class="agent-text"><div class="agent-name">${esc(item.name)}</div><div class="agent-sub">${esc(item.reason === "empty" ? "暂无对话" : "暂时读不了")}</div></span>
-            </button>`
-          )
-          .join("")
-      : "";
+    const extra = "";
     $("#agents").innerHTML = main + extra;
   }
 
@@ -171,7 +161,7 @@
     $("#fold-all").hidden = true;
     $("#list").innerHTML = item.reason === "empty"
       ? `<div class="empty"><b>${esc(item.name)} 已安装，但里面还没有对话</b>有了对话之后再来看看。</div>`
-      : `<div class="empty"><b>已经发现 ${esc(item.name)}</b>它的对话保存格式还没有公开，目前读不了，所以先不能搬。<br>已经安装、但这里不能搬的软件会一直列在左边，不会被漏掉。</div>`;
+      : `<div class="empty"><b>已经发现 ${esc(item.name)}</b>它的对话目前读不了，所以不能搬。</div>`;
   }
 
   /* ----------------------------------------------------------- list */

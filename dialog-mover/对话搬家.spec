@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_submodules
 
-hiddenimports = ['brotli', 'zstd', 'zstandard', 'ccl_simplesnappy']
+hiddenimports = ['brotli', 'zstd', 'zstandard', 'ccl_simplesnappy', 'core.zcode', 'core.dsh']
 hiddenimports += collect_submodules('ccl_chromium_reader')
 
 

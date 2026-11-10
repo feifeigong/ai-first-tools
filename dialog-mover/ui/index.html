@@ -7,7 +7,9 @@
   <link rel="stylesheet" href="style.css" />
   <script>
     (function () {
-      var theme = new URLSearchParams(location.search).get("theme");
+      var query = new URLSearchParams(location.search);
+      var hash = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+      var theme = hash.get("theme") || query.get("theme");
       if (theme === "dark" || theme === "light") document.documentElement.dataset.theme = theme;
     })();
   </script>

@@ -32,7 +32,7 @@ analysis = Analysis(
     datas=[(str(resources / "ui"), "ui"), (str(resources / "version.json"), "."),
            (str(root / "macos/legacy-update.lock.json"), "."),
            (str(root / "licenses"), "licenses"), (str(root / "LICENSE"), "."), (str(root / "NOTICE"), "."), *native_data],
-    hiddenimports=["webview.platforms.cocoa", "brotli", "zstd", "zstandard", "ccl_simplesnappy", "Security", "_scproxy", "truststore._macos"] + collect_submodules("ccl_chromium_reader"),
+    hiddenimports=["webview.platforms.cocoa", "brotli", "zstd", "zstandard", "ccl_simplesnappy", "core.zcode", "core.dsh", "Security", "_scproxy", "truststore._macos"] + collect_submodules("ccl_chromium_reader"),
     excludes=["clr", "pythonnet", "webview.platforms.winforms", "webview.platforms.edgechromium"],
 )
 archive = PYZ(analysis.pure)

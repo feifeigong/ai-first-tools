@@ -1,5 +1,11 @@
 # 完整开发背景、产品决策与架构
 
+## 2026-11-10：0.4.5 对话搬到 DeepSeek（Windows 与 Mac 一起发布）
+
+本版把 ZCode 可见对话，以及 Codex / ChatGPT 本机工作记录，复制到 DeepSeek 官方桌面端或 DSH 社区版。两边目录分开，来源只读。读不了对话的软件不进侧栏。Windows 在写入真实目录后重新打开对应窗口，让已经打开的列表重新读取；Mac 共用 `dialog-mover/core/zcode.py` 与 `dialog-mover/core/dsh.py`，打开对应软件后查看，本版不在 Mac 上自动重开窗口。
+
+发布请求为 Windows `0.4.5` 与 Mac `0.4.5-macos-preview.33`（build `0.4.33`），说明在 `docs/releases/v0.4.5.md`。两端安装包由已核对的双平台工作流在检查通过后公开。搬家回归使用隔离合成记录，不读取真实会话、认证或数据库，不发送模型请求。写入后回读通过不等于附件、工具调用和下一轮续聊已验收。
+
 ## 2026-11-08：0.4.4 续跑身份筛选（已发布）
 
 已发布 [Windows v0.4.4](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4) 与 [Mac 0.4.4-preview.32](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4-macos-preview.32)（Mac build `0.4.32`）。固定发布源码 `fda7f4e77f18b6d719e17fd1ea7b5ff15b0da937`，[双平台构建与发布 42479501538](https://github.com/feifeigong/ai-first-tools/actions/runs/42479501538) 通过。Windows 3 项、Mac 23 项发布资产已独立下载，与原始构建逐项核对大小和摘要。

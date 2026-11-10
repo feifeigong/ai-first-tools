@@ -1,5 +1,9 @@
 # 在 Mac 的 ChatGPT 中继续开发
 
+## 2026-11-10：0.4.5-preview.33 对话搬家与 Windows 同一发布
+
+Mac `0.4.5-macos-preview.33`（build `0.4.33`）与 Windows v0.4.5 共用 `dialog-mover/core/zcode.py`、`dialog-mover/core/dsh.py`。ZCode 可见对话和 Codex / ChatGPT 本机工作记录可以复制到 DeepSeek 官方桌面端或 DSH 社区版，两边目录分开。Mac 打开对应软件后查看复制结果；窗口自动重开只在 Windows。打包入口已包含这两个模块。隔离合成记录做写入回读，不读取真实会话、认证或数据库，不发送模型请求。两端安装包在双平台检查通过后一起公开。
+
 ## 2026-11-08：0.4.4-preview.32 续跑身份筛选（已发布）
 
 已发布 [Windows v0.4.4](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4) 与 [Mac 0.4.4-preview.32](https://github.com/feifeigong/ai-first-tools/releases/tag/v0.4.4-macos-preview.32)，Mac build `0.4.32`。固定发布源码 `fda7f4e77f18b6d719e17fd1ea7b5ff15b0da937`，[双平台构建与发布 42479501538](https://github.com/feifeigong/ai-first-tools/actions/runs/42479501538) 通过。Windows 3 项、Mac 23 项发布资产已独立下载，与原始构建逐项核对大小和摘要。

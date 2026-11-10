@@ -41,6 +41,9 @@ SOURCES = {
     "opencode": "opencode",
     "chatgpt": "chatgpt",
     "claude_desktop": "claude_desktop",
+    "zcode": "zcode",
+    "dsh": "dsh",
+    "dsh_official": "dsh",
 }
 
 
@@ -194,6 +197,19 @@ def _friendly(detail: str) -> str:
     return "这条对话暂时不能搬。"
 
 
+def native_document(source: str, sid: str) -> dict | None:
+    """Sources read directly from their local files. None means use the shared exporter."""
+    if source == "zcode":
+        from . import zcode
+
+        return zcode.document(sid)
+    if source in ("dsh", "dsh_official"):
+        from . import dsh
+
+        return dsh.document(sid, product=source)
+    return None
+
+
 def destination_env(target: str) -> dict:
     from . import sources
 
@@ -215,6 +231,20 @@ def _import_document(path: Path, document: dict, target: str, details: dict | No
         return "failed", "这条会话没有可搬运的对话正文（为空或仅有工具日志），未写入目标软件。"
     environment = destination_env(target)
     imports.preflight(target, environment)
+    if target in ("dsh", "dsh_official"):
+        from . import dsh
+
+        report = dsh.import_document(document, document.get("cwd") or "", product=target)
+        label = "DeepSeek 官方桌面端" if target == "dsh_official" else "DSH 社区桌面端"
+        if details is not None:
+            details.update({
+                "importedId": report["id"],
+                "location": report["location"],
+                "resumeCommand": "",
+                "notice": TARGETS[target]["notice"],
+                "mode": "local",
+            })
+        return "ok", f"已复制到{label}。" + ("正在打开的窗口会自动刷新。" if report.get("refreshed") else "打开对应软件后就能看到。")
     if target == "copilot_desktop":
         report = copilot_import.import_document(document, Path(environment["COPILOT_HOME"]), project=True)
         if details is not None:
@@ -355,6 +385,14 @@ def move_one(source: str, session: dict, target: str, directory: str, details: d
             details.update({"openUrl": copilot_import.project_url(imported) or copilot_import.LIST_URL,
                             "importedId": imported, "mode": "local"})
             return "skipped", "之前已复制到 Copilot，打开原对话查看；不重复搬运。"
+        if target in ("dsh", "dsh_official"):
+            from . import dsh
+
+            root = dsh.official_root() if target == "dsh_official" else dsh.data_root()
+            refreshed = bool(root and dsh._refresh_app(target, root))
+            if refreshed:
+                return "skipped", "这条已经复制过。正在打开的窗口已刷新，可以直接查看。"
+            return "skipped", "这条已经复制过。打开对应的 DSH 就能在这个文件夹里看到。"
         return "skipped", "之前已经搬到这个文件夹了，不重复搬。"
     if source == "claude_desktop":
         return _move_cached_claude(session, target, directory, details)
@@ -377,6 +415,8 @@ def move_one(source: str, session: dict, target: str, directory: str, details: d
             src_env["TXCRIPT_CHATGPT_ACTIVE_ONLY"] = "1"
         if source == "copilot_desktop":
             document = copilot_local.document(sid)
+        elif (native := native_document(source, sid)) is not None:
+            document = native
         else:
             exported = _export(source, sid, path, src_env)
             if exported.returncode != 0:
@@ -413,6 +453,9 @@ def export_document(source: str, session: dict) -> dict:
     sid = str(session.get("id", ""))
     if source not in SOURCES or not SAFE_ID.fullmatch(sid):
         raise ValueError("来源或会话编号不正确。")
+    native = native_document(source, sid)
+    if native is not None:
+        return native
     if source == "claude_desktop":
         from . import sources
         turns = sources.claude_body(sid)

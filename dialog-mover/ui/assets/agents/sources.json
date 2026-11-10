@@ -134,10 +134,32 @@
     "sha256": "01fe0d76a9fbca476ecf45f093194d9e6a65f9c384126b00822ff8b3ff1e1a88",
     "origin": "installed application resource; no redraw or recolor"
   },
+  "zcode": {
+    "source": "C:\\Program Files\\ZCode\\resources\\icon_windows.png",
+    "size": [
+      1024,
+      1024
+    ],
+    "sha256": "ae8cc4ca59180441ce3ba60a572ee9a5ee802f9ab9e7de1177ae5e0027c36a7a",
+    "origin": "installed application resource; no redraw or recolor"
+  },
+  "dsh": {
+    "source": "C:\\Program Files\\DSH Desktop\\resources\\icon.png",
+    "size": [
+      1024,
+      1024
+    ],
+    "sha256": "4fa81f05eef51cf6b4388539de436085939f26b88f4f2a0095896bc48a172424",
+    "origin": "installed application resource; no redraw or recolor"
+  },
   "hermes": {
-    "source": "https://raw.githubusercontent.com/NousResearch/hermes-agent/main/apps/bootstrap-installer/src-tauri/icons/icon.ico",
-    "status": "unavailable",
-    "origin": "generic software fallback; never a fabricated brand mark"
+    "source": "%LOCALAPPDATA%\\hermes\\hermes-agent\\apps\\desktop\\assets\\icon.png",
+    "size": [
+      1024,
+      1024
+    ],
+    "sha256": "d60d164e24fdcf6532133b8ea43c77a201e4b9e9dbc396187b58d51d8590ef52",
+    "origin": "official Hermes desktop application icon; no redraw or recolor"
   },
   "copilot": {
     "source": "%LOCALAPPDATA%/Programs/GitHub Copilot/github.exe",

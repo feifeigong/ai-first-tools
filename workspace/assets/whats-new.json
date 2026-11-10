@@ -1,26 +1,26 @@
 {
   "schema": 1,
   "versions": {
-    "windows": "0.4.4",
-    "macos": "0.4.4-macos-preview.32"
+    "windows": "0.4.5",
+    "macos": "0.4.5-macos-preview.33"
   },
-  "title": "续跑更稳，减少额度浪费",
-  "description": "Windows 和 Mac 同步改进自动续跑，只继续能确认的主任务，提交前再检查一次。",
+  "title": "对话可以搬进 DeepSeek",
+  "description": "ZCode 和 Codex 的对话可以复制到官方 DeepSeek 和社区 DSH，原记录保留。",
   "items": [
     {
-      "label": "修复",
-      "title": "只继续主任务",
-      "text": "额度恢复后，只自动继续能确认的主任务，避免把子代理和审批守护任务一起启动。"
+      "label": "新增",
+      "title": "从 ZCode 搬过去",
+      "text": "可以把 ZCode 里看得到的对话，复制到 DeepSeek 官方桌面端或社区版 DSH。原来的记录保持不动。"
     },
     {
-      "label": "修复",
-      "title": "开始前再检查",
-      "text": "准备继续时，再确认任务仍在等待额度；已经恢复、结束或不再适合自动继续的任务会跳过。"
+      "label": "新增",
+      "title": "Codex 也能搬过去",
+      "text": "Codex 和 ChatGPT 本机工作记录同样可以复制到这两个桌面端。工具过程和附件不会重放。"
     },
     {
       "label": "改进",
-      "title": "不确定就不自动启动",
-      "text": "记录不完整或无法确认任务身份时，先跳过自动续跑。需要继续时，可以回到 Codex 手动操作。"
+      "title": "开着的窗口会刷新",
+      "text": "Windows 上如果官方或社区版已经打开，搬完后窗口会重新打开并显示新对话。Mac 打开对应软件就能看到。"
     }
   ]
 }

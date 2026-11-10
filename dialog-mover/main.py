@@ -59,6 +59,9 @@ AGENTS = [
     {"id": "hermes", "name": "Hermes", "sub": "Agent", "color": "#a61e4d"},
     {"id": "opencode", "name": "OpenCode", "sub": "桌面与命令行", "color": "#364fc7"},
     {"id": "copilot_desktop", "name": "GitHub Copilot", "sub": "桌面端 · 本机历史", "color": "#24292f"},
+    {"id": "zcode", "name": "ZCode", "sub": "本机会话", "color": "#5f3dc4", "sourceOnly": True},
+    {"id": "dsh_official", "name": "DeepSeek", "sub": "官方桌面端", "color": "#4d6bfe"},
+    {"id": "dsh", "name": "DSH", "sub": "社区桌面端", "color": "#1c7ed6"},
 ]
 
 
@@ -464,7 +467,7 @@ def main() -> None:
     theme = current_theme()
     window = webview.create_window(
         "对话搬家",
-        url=str((ROOT / "ui" / "index.html").as_uri()) + "?theme=" + theme,
+        url=str((ROOT / "ui" / "index.html").as_uri()) + "#theme=" + theme,
         js_api=api,
         width=1180,
         height=780,
