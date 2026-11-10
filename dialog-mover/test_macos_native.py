@@ -32,6 +32,9 @@ class NativeMacImportTests(unittest.TestCase):
             with closing(sqlite3.connect(database)) as connection:
                 connection.executescript(schema)
         (Path(self.env["COWORK_SESSIONS_DIR"]) / str(uuid.uuid4()) / str(uuid.uuid4())).mkdir(parents=True)
+        for root in (Path(self.env["APPDATA"]) / "dsh-desktop" / "harness", Path(self.env["HOME"]) / ".dsh"):
+            (root / "sessions").mkdir(parents=True)
+            (root / "storages").mkdir()
         self.addCleanup(patch.stopall)
         patch.dict(os.environ, self.env, clear=True).start()
         patch.object(mover, "TEST_ENV", self.env).start()
