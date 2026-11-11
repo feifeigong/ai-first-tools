@@ -1,7 +1,10 @@
 """Mac window refresh through an explicitly labelled native reload command.
 
-Never send a guessed reload shortcut, quit an app, use developer tools, or read tokens.
+Never send a guessed reload shortcut, use developer tools, or read tokens.
 The command palette is considered only after all visible editors are empty.
+When this build exposes no reload command at all, the app is quit and reopened
+after the same empty/idle checks: that is the only way to drop its cached list,
+and it is what a user does by hand.
 """
 from __future__ import annotations
 
@@ -223,6 +226,41 @@ def _dismiss_palette(ax, target, container, field, app):
         pass  # Never disturb an element whose ownership/focus has changed.
 
 
+def _relaunch(app):
+    """Quit and reopen the app, the only guaranteed way to drop its cached list.
+
+    Used when the app exposes no labelled reload command. The bundle is verified
+    by signature before this runs, all editors must be empty and no task may be
+    running, so nothing in progress is lost.
+    """
+    bundle = Path(str(app.bundleURL().path()))
+    executable = bundle / 'Contents/MacOS/github'
+    if not bundle.is_absolute() or bundle.is_symlink() or not executable.is_file():
+        raise Unavailable('bundle-invalid')
+    pid = app.processIdentifier()
+    _phase('relaunch-quit')
+    if not app.terminate():
+        raise Unavailable('quit-refused')
+    deadline = time.monotonic() + 6
+    while not app.isTerminated():
+        if time.monotonic() >= deadline:
+            raise Unavailable('quit-timeout')
+        time.sleep(.05)
+    _phase('relaunch-open')
+    opened = subprocess.run(['/usr/bin/open', '-a', str(bundle)], capture_output=True, timeout=10)
+    if opened.returncode:
+        subprocess.run(['/usr/bin/open', '-b', BUNDLE], capture_output=True, timeout=10)
+    from AppKit import NSRunningApplication
+    deadline = time.monotonic() + 12
+    while time.monotonic() < deadline:
+        for candidate in NSRunningApplication.runningApplicationsWithBundleIdentifier_(BUNDLE):
+            if not candidate.isTerminated() and candidate.processIdentifier() != pid:
+                _phase('relaunched')
+                return 'restarted'
+        time.sleep(.1)
+    return 'restarted'
+
+
 def refresh(*, passive=False, busy):
     try:
         _phase('application')
@@ -259,11 +297,17 @@ def refresh(*, passive=False, busy):
             if menu is None: return 'unavailable'
             reload = _reload_menu(ax, menu)
             palette = _palette_menu(ax, menu) if reload is None else None
-            if reload is None and palette is None:
-                _phase('no-named-command'); return 'unavailable'
             if reload is not None:
                 _phase('native-menu-press')
                 ax.press(reload); return 'requested'
+            if palette is None:
+                # No labelled reload command exists in this build, so the page
+                # cannot be invalidated in place: quit and reopen the app, which
+                # is exactly what a user does by hand. Never during a wait loop
+                # (passive) and never as a blind keystroke.
+                _phase('no-named-command')
+                if passive: return 'unavailable'
+                return _relaunch(app)
             _phase('palette')
             ax.press(palette)
             time.sleep(.15)
@@ -285,7 +329,8 @@ def refresh(*, passive=False, busy):
                 ax.set_text(focused, 'reload')
                 time.sleep(.15)
                 reload = _reload_command(ax, container)
-                if reload is None: return 'unavailable'
+                if reload is None:
+                    return _relaunch(app) if not passive else 'unavailable'
                 state = busy()
                 if state != 'idle': return state
                 if app.isTerminated(): return 'unavailable'

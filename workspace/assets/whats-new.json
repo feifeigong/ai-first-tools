@@ -1,26 +1,26 @@
 {
   "schema": 1,
   "versions": {
-    "windows": "0.4.6",
+    "windows": "0.4.7",
     "macos": "0.4.5-macos-preview.33"
   },
-  "title": "搬进 Cursor 不用再重启",
-  "description": "对话导入 Cursor 后，工具箱会让 Cursor 自己重新加载；没成功时给出可以照着按的步骤。",
+  "title": "搬进 Copilot 也不用再重启",
+  "description": "对话导入 Copilot 桌面端后自己重新读取列表；不再弹「could not start safely」。",
   "items": [
     {
       "label": "修复",
-      "title": "Cursor 搬完就能看到",
-      "text": "Cursor 只在窗口打开时读一次历史。现在搬完会让它自己重新加载，新记录直接出现在列表里，不用退出软件。"
+      "title": "Copilot 搬完就能看到",
+      "text": "Copilot 也只在窗口打开时读一次列表。现在搬完会自己重新读取，新对话出现在左侧对应项目下，不用退出软件。"
     },
     {
       "label": "修复",
-      "title": "不打断正在写的和正在跑的",
-      "text": "Cursor 里有没发出去的内容、或正在执行任务时不会动它，只提示按 Ctrl+Shift+P → Reload Window，草稿保留。"
+      "title": "不再弹「could not start safely」",
+      "text": "以前用 ghapp:// 链接触发打开，软件开着时会拉起第二个实例抢数据目录失败，弹出 os error 5。现在运行中的 Copilot 只重载，不发链接。"
     },
     {
       "label": "改进",
-      "title": "结果页写清状态",
-      "text": "每条 Cursor 记录会标注「重新加载后显示」，不再让人以为它已经出现在列表里。"
+      "title": "最小化、收进托盘也认得出来",
+      "text": "改为按进程判断 Copilot 是否开着：收进托盘时提示打开窗口即可看，不误判成没运行，也不会去抢数据目录。"
     }
   ]
 }

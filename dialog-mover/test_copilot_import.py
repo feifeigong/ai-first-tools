@@ -251,22 +251,31 @@ class CopilotDestinationTests(unittest.TestCase):
             api = Api()
             api._job = SimpleNamespace(target="copilot_desktop", snapshot=lambda: {"items": [
                 {"state": state, "openUrl": copilot_import.LIST_URL}]})
-            with patch("main.open_external") as opened, patch("main.time.sleep"), patch("main.copilot_refresh.refresh", return_value="requested") as refresh:
+            with patch("main.open_external") as opened, patch("main.copilot_refresh.refresh", return_value="requested") as refresh:
+                # A running app holds its data directory: launching the link would
+                # start a second instance that fails, so the list is reloaded only.
                 self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": True})
-                self.assertEqual(opened.call_args_list, [call("ghapp://recent")])
+                opened.assert_not_called()
                 refresh.assert_called_once_with()
+                refresh.return_value = "not-running"
+                self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": False})
+                self.assertEqual(opened.call_args_list, [call("ghapp://recent")])
+                opened.reset_mock()
                 opened.side_effect = OSError("synthetic missing handler")
                 self.assertIn("Manage sessions", api.open_in_app(0)["error"])
                 opened.side_effect = None
-                self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": True})
+                self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": False})
 
     def test_project_handoff_opens_only_the_saved_uuid_and_preserves_busy_or_draft_guards(self):
         sid = '12345678-1234-4321-9876-123456789abc'
         api = Api()
         item = {'state':'ok','importedId':sid,'openUrl':'ghapp://sessions/'+sid}
         api._job = SimpleNamespace(target='copilot_desktop',snapshot=lambda:{'items':[item]})
-        with patch('main.open_external') as opened, patch('main.time.sleep'), patch('main.copilot_refresh.refresh',return_value='requested'):
+        with patch('main.open_external') as opened, patch('main.copilot_refresh.refresh',return_value='requested'):
             self.assertEqual(api.open_in_app(0),{'ok':True,'refreshed':True})
+            opened.assert_not_called()
+            with patch('main.copilot_refresh.refresh',return_value='not-running'):
+                self.assertEqual(api.open_in_app(0),{'ok':True,'refreshed':False})
             opened.assert_called_once_with(item['openUrl'])
         for state in ('busy','draft'):
             with patch('main.open_external') as opened, patch('main.copilot_refresh.refresh',return_value=state):
@@ -284,10 +293,15 @@ class CopilotDestinationTests(unittest.TestCase):
             with patch("main.copilot_refresh.refresh", return_value=status), patch("main.open_external") as opened:
                 self.assertIn("error", api.open_in_app(0))
                 opened.assert_not_called()
-        for status in ("not-running", "unsupported"):
-            with patch("main.copilot_refresh.refresh", return_value=status), patch("main.open_external") as opened:
-                self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": False})
-                opened.assert_called_once_with("ghapp://recent")
+        with patch("main.copilot_refresh.refresh", return_value="not-running"), patch("main.open_external") as opened:
+            self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": False})
+            opened.assert_called_once_with("ghapp://recent")
+        with patch("main.copilot_refresh.refresh", return_value="unsupported"), patch("main.open_external") as opened:
+            self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": False})
+            opened.assert_not_called()
+        with patch("main.copilot_refresh.refresh", return_value="restarted"), patch("main.open_external") as opened:
+            self.assertEqual(api.open_in_app(0), {"ok": True, "refreshed": True})
+            opened.assert_not_called()
 
     def test_handoff_rejects_other_protocols_wrong_batch_and_unsaved_results(self):
         for target, state, url in (("copilot_desktop", "failed", copilot_import.LIST_URL),

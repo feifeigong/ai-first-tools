@@ -15,9 +15,9 @@ from .common import norm
 
 TARGETS = {
     "copilot_desktop": {"harness": "copilot_local", "mode": "local", "targetSub": "桌面端 · 项目对话",
-        "notice": "完整旧消息保留，图片作为附件，操作过程折叠保存，不重新执行原工具。旧版留在 Chats 的副本保留，再搬一次可归入所选项目。",
+        "notice": "完整旧消息保留，图片作为附件，操作过程折叠保存，不重新执行原工具。旧版留在 Chats 的副本保留，再搬一次可归入所选项目。搬完会让 Copilot 自己重新读取一次列表，不用退出软件。",
         "folderHint": "对话会放进所选文件夹对应的 Copilot 项目。已有项目会复用；尚未添加到 Copilot 的文件夹会新建为文件夹项目，不复制项目文件或创建 Git worktree。",
-        "resultHint": "记录在所选文件夹对应的 Copilot 项目下。完成后请求打开对应对话；有任务或未发送草稿时先保留，处理完后可点下方按钮查看。旧副本不会被覆盖。"},
+        "resultHint": "记录在所选文件夹对应的 Copilot 项目下，搬完会自动让 Copilot 重新读取列表，新对话出现在左侧对应项目下。有任务或未发送草稿时先不打断，处理完点下方按钮即可。旧副本不会被覆盖。"},
     "cursor_desktop": {"harness": "cursor_desktop", "mode": "history",
         "notice": "Cursor 只在窗口打开时读一次历史，已经在运行时不会自己发现新记录：导入后会替你让它重新加载一次。没成功时按 Ctrl+Shift+P（Mac 是 ⌘+Shift+P），输入 Reload Window 回车即可，不用退出软件。",
         "resultHint": "已写入 Cursor 的本机历史。Cursor 不会自己发现外部写入：点下方按钮让它重新加载就能看到（也可按 Ctrl+Shift+P → Reload Window 回车），不需要退出软件。"},

@@ -809,11 +809,13 @@
     const copilot = sheet.target === "copilot_desktop";
     const cursor = sheet.target === "cursor_desktop";
     const openName = copilot ? "Copilot" : cursor ? "Cursor" : "ChatGPT";
-    const openPending = copilot ? "在 Copilot 项目下查看搬入的对话" : cursor ? "Cursor 需要重新加载才会显示这条记录" : "可请求 ChatGPT 打开这条本机记录";
-    const openRequested = copilot ? (sheet.openRequest?.refreshed ? "已刷新 Copilot，已请求打开这条对话" : "已请求打开 Copilot 对话")
+    const openPending = copilot ? "对话已写入；点按钮让 Copilot 重新读取列表" : cursor ? "Cursor 需要重新加载才会显示这条记录" : "可请求 ChatGPT 打开这条本机记录";
+    const openRequested = copilot ? (sheet.openRequest?.refreshed ? "已让 Copilot 重新读取列表，新对话在左侧对应项目下" : "打开 Copilot 就能看到这条记录（每次打开都会重新读取）")
       : cursor ? (sheet.openRequest?.refreshed ? "已让 Cursor 重新加载，新记录已出现在列表里" : "Cursor 现在没在运行，打开它就能看到这条记录")
       : "已请求打开这条记录；请在 ChatGPT 中确认";
-    const openFailed = cursor ? "没能替你重新加载，按 Ctrl+Shift+P → Reload Window 回车即可" : "记录已复制，打开软件失败；可以重试";
+    const openFailed = cursor ? "没能替你重新加载，按 Ctrl+Shift+P → Reload Window 回车即可"
+      : copilot ? "这次没刷新成功；再点一次按钮即可，不用退出 Copilot"
+      : "记录已复制，打开软件失败；可以重试";
     const hint = target.resultHint || "已写入目标软件的本机记录。";
     body.innerHTML = `<div class="done-mark ${bad ? "warn" : ""}">${bad ? ICON.dash.replace(/13/g, "26") : ICON.tick.replace(/13/g, "26")}</div>
       <h2>${bad ? (status.ok ? "部分记录未复制成功" : "这次没有复制成功") : (!status.ok && status.skipped ? "这些记录之前已复制" : "记录已复制")}</h2>
@@ -822,7 +824,7 @@
       ${status.items.length ? `<div class="results">${status.items.map((item, index) => `<div class="result ${item.state}"><div class="result-heading"><span class="t">${esc(item.title)}</span><span class="m">${esc(item.message)}</span></div>
         ${item.projectName ? `<p class="hint">Copilot 项目 · ${esc(item.projectName)}</p>` : ""}
         ${item.resumeCommand ? `<label class="resume-label">打开记录命令（在所选文件夹执行）<input readonly value="${esc(item.resumeCommand)}" aria-label="续聊命令" /></label>` : ""}
-        ${canOpenResult(item, sheet) ? `<div class="result-location"><span>${sheet.openRequest?.index === index ? (sheet.openRequest.error ? openFailed : openRequested) : openPending}</span><button class="btn plain small" data-open-app="${index}">${cursor ? "让 Cursor 重新加载" : `在 ${openName} 中${copilot ? "查看" : "打开"}`}</button></div>` : ""}
+        ${canOpenResult(item, sheet) ? `<div class="result-location"><span>${sheet.openRequest?.index === index ? (sheet.openRequest.error ? openFailed : openRequested) : openPending}</span><button class="btn plain small" data-open-app="${index}">${cursor ? "让 Cursor 重新加载" : copilot ? "让 Copilot 显示记录" : `在 ${openName} 中打开`}</button></div>` : ""}
         ${item.location && item.state === "ok" ? `<div class="result-location"><span>${esc(item.location)}</span><button class="btn plain small" data-import-folder="${index}">查看位置</button></div>` : ""}</div>`).join("")}</div>` : ""}
       <div class="foot"><span class="hint">${esc(sheet.directory)}</span><button id="finish" class="btn primary">完成</button></div>`;
     body.querySelector("#finish").onclick = () => {

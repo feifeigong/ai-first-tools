@@ -43,6 +43,19 @@ class CopilotRefreshTests(unittest.TestCase):
                 self.assertEqual(copilot_refresh.refresh(), state)
                 native.assert_not_called()
 
+    def test_a_reload_is_only_reported_after_the_page_tree_really_changed(self):
+        # No fingerprint means the page tree could not be read: never claim success.
+        with patch('core.copilot_refresh._fingerprint', return_value=''), patch('core.copilot_refresh.time.sleep'):
+            self.assertFalse(copilot_refresh._reloaded(1, ''))
+        with patch('core.copilot_refresh._fingerprint', side_effect=['doc-1|tree-1', 'doc-2|tree-2']), \
+                patch('core.copilot_refresh.time.sleep'):
+            self.assertTrue(copilot_refresh._reloaded(1, 'doc-1|tree-1'))
+        # A repaint that keeps the same ids is not a reload, and waiting is bounded.
+        with patch('core.copilot_refresh._fingerprint', return_value='doc-1|tree-1'), \
+                patch('core.copilot_refresh.time.sleep'), \
+                patch('core.copilot_refresh.time.monotonic', side_effect=[0, 0, 99]):
+            self.assertFalse(copilot_refresh._reloaded(1, 'doc-1|tree-1', timeout=6))
+
 
 if __name__ == "__main__":
     unittest.main()

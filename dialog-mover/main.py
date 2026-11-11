@@ -323,16 +323,19 @@ class Api:
             try:
                 url = memory_deploy.desktop_link(memory_jobs.library(), self._memory_deployment["id"])
                 refreshed = copilot_refresh.refresh(passive=True)
+                mover.log(f"open_memory_desktop refresh: {refreshed}")
                 if refreshed in {"busy", "draft"}:
                     return {"ok": True, "pending": True, "refresh_status": refreshed}
                 if refreshed == 'permission-required':
                     return {"error": "旧对话已保存。请在 macOS 系统设置中允许工具箱的辅助功能权限，再重试打开 Copilot。"}
-                if refreshed not in {"requested", "not-running"}:
-                    return {"error": "旧对话已保存，暂时无法安全更新 Copilot 左侧列表。请稍后重试，原记录仍保留。"}
-                if refreshed == "requested":
-                    time.sleep(1)
-                open_external(url)
-                return {"ok": True, "refreshed": refreshed == "requested", "refresh_status": refreshed}
+                if refreshed not in {"requested", "not-running", "restarted", "no-window"}:
+                    return {"error": "旧对话已保存，暂时无法安全更新 Copilot 左侧列表。请在 Copilot 左侧展开对应项目，或再点一次重试。"}
+                # A running app keeps a lock on its data directory: launching the
+                # ghapp:// link would start a second instance that fails and pops
+                # "could not start safely". Only a closed app is opened by link.
+                if refreshed == "not-running":
+                    open_external(url)
+                return {"ok": True, "refreshed": refreshed in {"requested", "restarted"}, "refresh_status": refreshed}
             except (OSError, ValueError, sqlite3.Error):
                 return {"error": "暂时无法自动打开。请在 Copilot 左侧展开对应项目，找到原名称后带“智能搬家”标识的对话。"}
 
@@ -451,23 +454,27 @@ class Api:
         try:
             if copilot:
                 refreshed = copilot_refresh.refresh()
+                mover.log(f"open_in_app copilot refresh: {refreshed}")
                 if refreshed == "busy":
-                    return {"error": "记录已复制。Copilot 正在执行任务，未打断它；任务结束后点「在 Copilot 中查看」即可刷新。"}
+                    return {"error": "记录已复制。Copilot 正在执行任务，没有打断它；任务结束后点「让 Copilot 显示记录」就会刷出来。"}
                 if refreshed == "draft":
-                    return {"error": "记录已复制。Copilot 中还有未发送的内容，已保留草稿；处理完草稿后点「在 Copilot 中查看」即可刷新。"}
+                    return {"error": "记录已复制。Copilot 里还有未发送的文字，已按原样保留；处理完再点「让 Copilot 显示记录」就会刷出来。"}
                 if refreshed == "unavailable":
-                    return {"error": "记录已复制，但没有完成 Copilot 窗口刷新。请松开快捷键并打开 Copilot，再点「在 Copilot 中查看」重试。"}
+                    return {"error": "记录已复制，但这次没能让 Copilot 刷新列表。请点一下「让 Copilot 显示记录」再试，不用退出 Copilot。"}
                 if refreshed == 'permission-required':
-                    return {"error": "记录已复制。请在 macOS 系统设置中允许工具箱的辅助功能权限，再点「在 Copilot 中查看」。"}
-                if refreshed == "requested":
-                    # Let the reload initialize before dispatching navigation.
-                    # Reload invalidates both the sidebar and Recent caches.
-                    time.sleep(1)
-            open_external(url)
+                    return {"error": "记录已复制。请在 macOS 系统设置中允许工具箱的辅助功能权限，再点「让 Copilot 显示记录」。"}
+                # A running app holds a lock on its data directory. Launching the
+                # ghapp:// link then starts a second instance that fails with
+                # "could not start safely (os error 5)"; only a closed app is
+                # opened by link, a running one is refreshed in place instead.
+                if refreshed == "not-running":
+                    open_external(url)
+            else:
+                open_external(url)
         except (OSError, subprocess.SubprocessError) as error:
             mover.log(f"open_in_app {url}: {error!r}")
             return {"error": ("无法打开 Copilot 中的这条对话，请在对应项目下查看。" if copilot_project else "无法打开 Copilot 的会话列表，请在 Copilot 用户菜单选择 Manage sessions（管理会话）。") if copilot else "没有找到可以打开它的软件，请先安装并启动 ChatGPT。"}
-        return {"ok": True, "refreshed": refreshed == "requested"} if copilot else {"ok": True}
+        return {"ok": True, "refreshed": refreshed in {"requested", "restarted"}} if copilot else {"ok": True}
 
     def move_status(self) -> dict:
         if self._job is None:

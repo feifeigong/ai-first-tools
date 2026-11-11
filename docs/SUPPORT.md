@@ -43,7 +43,7 @@ Copilot完整搬家兼容修复已发布于Windows0.3.25 / Mac preview.29：已�
 | Antigravity CLI / Cursor CLI / Grok CLI | 写入对应本机历史，按结果页说明打开或恢复 |
 | OpenCode | 调用本机 OpenCode 官方导入入口，需已安装该软件 |
 | 豆包工作 | 只读来源；本机轨迹文件不等于服务器正式会话，界面不开放搬入 |
-| GitHub Copilot Desktop | 支持本机历史搬出和搬入所选项目；只列桌面端正式登记的记录，VS Code 自身聊天存储不在范围，见 [Copilot 说明](COPILOT.md) |
+| GitHub Copilot Desktop | 支持本机历史搬出和搬入所选项目；只列桌面端正式登记的记录，VS Code 自身聊天存储不在范围，见 [Copilot 说明](COPILOT.md)。Copilot 也只在窗口打开时读一次列表：搬完会让它自己重新读（Windows 用内置重载键并确认页面真的重建；Mac 找不到重载命令时改为退出再打开），有任务或未发送文字时先不动它。 |
 | ChatGPT 云端 / Claude 普通聊天 / Hermes | 只读来源，不提供未实现的原生写回 |
 | ZCode | 只读本机会话，正文可复制到 DeepSeek 官方桌面端或 DSH 社区桌面端；工具操作和附件不会重放 |
 | DeepSeek 官方桌面端 | 读取并写入 DeepSeek Harness 的默认本机会话目录，与社区版分开存放。Windows 上窗口已打开时，搬完会重新打开并显示新记录；Mac 打开软件后查看 |

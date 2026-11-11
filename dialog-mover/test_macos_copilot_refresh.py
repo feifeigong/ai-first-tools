@@ -1,6 +1,7 @@
 import unittest
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -95,6 +96,63 @@ class MacCopilotRefreshTests(unittest.TestCase):
                 patch.dict('sys.modules',{'AppKit':kit}):
             self.assertEqual(native.refresh(busy=lambda:'idle'),'requested')
         ax.press.assert_called_once_with(9);ax.set_text.assert_not_called()
+
+    def test_a_build_without_any_reload_command_is_restarted_instead_of_left_stale(self):
+        ax,app,kit=self.fake()
+        with patch.object(native,'Accessibility',return_value=ax),patch.object(native,'_application',return_value=app), \
+                patch.object(native,'_draft',return_value=False),patch.object(native,'_reload_menu',return_value=None), \
+                patch.object(native,'_palette_menu',return_value=None),patch.object(native,'_relaunch',return_value='restarted') as relaunch, \
+                patch.dict('sys.modules',{'AppKit':kit}):
+            self.assertEqual(native.refresh(busy=lambda:'idle'),'restarted')
+        relaunch.assert_called_once_with(app);ax.press.assert_not_called()
+
+    def test_a_wait_loop_never_restarts_the_app(self):
+        ax,app,kit=self.fake()
+        with patch.object(native,'Accessibility',return_value=ax),patch.object(native,'_application',return_value=app), \
+                patch.object(native,'_draft',return_value=False),patch.object(native,'_reload_menu',return_value=None), \
+                patch.object(native,'_palette_menu',return_value=None),patch.object(native,'_relaunch') as relaunch, \
+                patch.dict('sys.modules',{'AppKit':kit}):
+            self.assertEqual(native.refresh(passive=True,busy=lambda:'idle'),'unavailable')
+        relaunch.assert_not_called();ax.press.assert_not_called()
+
+    def relaunchable(self,root):
+        bundle=root/'GitHub Copilot.app';executable=bundle/'Contents/MacOS/github'
+        executable.parent.mkdir(parents=True,exist_ok=True);executable.write_text('',encoding='utf-8')
+        app=Mock();app.bundleURL.return_value=SimpleNamespace(path=lambda:str(bundle));app.processIdentifier.return_value=123
+        return app
+
+    def test_relaunch_refuses_an_unverified_bundle_or_a_refused_quit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app=Mock();app.bundleURL.return_value=SimpleNamespace(path=lambda:str(Path(directory)/'missing.app'))
+            with self.assertRaises(native.Unavailable):native._relaunch(app)
+            app=self.relaunchable(Path(directory));app.terminate.return_value=False
+            with self.assertRaises(native.Unavailable):native._relaunch(app)
+            self.assertEqual(app.terminate.call_count,1)
+            app=self.relaunchable(Path(directory));app.terminate.return_value=True;app.isTerminated.return_value=False
+            with patch.object(native.time,'monotonic',side_effect=[0,99]),patch.object(native.time,'sleep'):
+                with self.assertRaises(native.Unavailable):native._relaunch(app)
+
+    def test_relaunch_reopens_the_verified_app_and_reports_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app=self.relaunchable(Path(directory));app.terminate.return_value=True
+            app.isTerminated.side_effect=[False,True]
+            fresh=SimpleNamespace(isTerminated=lambda:False,processIdentifier=lambda:456)
+            kit=SimpleNamespace(NSRunningApplication=SimpleNamespace(runningApplicationsWithBundleIdentifier_=lambda _:[fresh]))
+            opened=Mock(returncode=0)
+            with patch.object(native.subprocess,'run',return_value=opened) as run,patch.object(native.time,'sleep'), \
+                    patch.dict('sys.modules',{'AppKit':kit}):
+                self.assertEqual(native._relaunch(app),'restarted')
+            self.assertEqual(run.call_args_list[0].args[0][:2],['/usr/bin/open','-a'])
+
+    def test_relaunch_falls_back_to_the_bundle_identifier_when_open_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            app=self.relaunchable(Path(directory));app.isTerminated.return_value=True
+            fresh=SimpleNamespace(isTerminated=lambda:False,processIdentifier=lambda:456)
+            kit=SimpleNamespace(NSRunningApplication=SimpleNamespace(runningApplicationsWithBundleIdentifier_=lambda _:[fresh]))
+            with patch.object(native.subprocess,'run',side_effect=[Mock(returncode=1),Mock(returncode=0)]) as run, \
+                    patch.object(native.time,'sleep'),patch.dict('sys.modules',{'AppKit':kit}):
+                self.assertEqual(native._relaunch(app),'restarted')
+            self.assertEqual(run.call_args_list[1].args[0][:2],['/usr/bin/open','-b'])
 
 
 if __name__=='__main__':unittest.main()
