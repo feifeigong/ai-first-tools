@@ -89,7 +89,8 @@ internal static class ResetCalendarTests
             var old = Item("2112432076767289678", "announced", "Codex quota has reset.", "2026-10-20T06:33:48Z");
             var older = old with { Id = "2112432076767289677", PublishedAt = old.PublishedAt.AddDays(-7) };
             view.SetItems(new[] { Preview(), old, older });
-            require(view.SelectedDate == new DateTime(2026, 10, 20));
+            // Opening the panel shows today, not the newest completion.
+            require(view.SelectedDate == new DateTime(2026, 10, 23));
             var days = (UniformGrid)view.FindName("DaysGrid");
             var day = days.Children.Cast<Button>().Single(button => (DateTime)button.Tag == new DateTime(2026, 10, 13));
             require(day.Focusable && day.FocusVisualStyle is not null && day.MinHeight >= 44);
@@ -108,6 +109,25 @@ internal static class ResetCalendarTests
             now = now.AddMinutes(2);
             view.RefreshTime();
             require(view.SelectedDate == new DateTime(2026, 10, 23) && view.VisibleEvents.Count == 0);
+        });
+        check("Calendar opens on the current month even when the newest record is an older completion", () =>
+        {
+            // 2026-11-13 12:00 Beijing. The only completion is 10-28 and the 11-13 card
+            // message is neither a preview nor a completion, so this used to open on
+            // October and describe the wrong day.
+            var now = DateTimeOffset.Parse("2026-11-13T04:00:00Z");
+            var view = new ResetCalendarView { Clock = () => now };
+            var october = Item("2112432076767289678", "announced", "Codex quota has reset.", "2026-10-28T06:33:48Z");
+            var pending = Item("2120999993079451919", "banked_pending", "The banked reset has been activated.", "2026-11-12T21:59:39Z");
+            view.SetItems(new[] { october, pending });
+            require(view.SelectedDate == new DateTime(2026, 11, 13));
+            require(((TextBlock)view.FindName("MonthHeading")).Text == "2026 年 11 月");
+            require(((StackPanel)view.FindName("SelectedEvents")).Children.Count > 0);
+            // A user choice still wins over later data, including the month they navigated to.
+            view.SelectDate(new DateTime(2026, 10, 28));
+            view.SetItems(new[] { october, pending, october with { Id = "2112432076767289680", PublishedAt = now } });
+            require(view.SelectedDate == new DateTime(2026, 10, 28));
+            require(((TextBlock)view.FindName("MonthHeading")).Text == "2026 年 10 月");
         });
     }
 }

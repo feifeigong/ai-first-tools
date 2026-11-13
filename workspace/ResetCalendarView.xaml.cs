@@ -48,10 +48,12 @@ public partial class ResetCalendarView : UserControl
         lastSignature = signature;
         if (!selectedByUser)
         {
-            selected = events.Where(item => item.State == "upcoming").OrderBy(item => item.Date).FirstOrDefault()?.Date
-                ?? events.FirstOrDefault(item => item.State == "undated" && item.Date == today)?.Date
-                ?? events.FirstOrDefault(item => item.Completed)?.Date ?? events.FirstOrDefault()?.Date ?? today;
-            month = new DateTime(selected.Year, selected.Month, 1);
+            // The panel opens on today. Preferring a live preview and then the newest
+            // completion left the calendar on an older month whenever a card week had no
+            // future preview: in November it still opened on 10-28 and the detail pane
+            // described a reset that was already two weeks old.
+            selected = today;
+            month = new DateTime(today.Year, today.Month, 1);
         }
         initialized = true;
         Paint();
