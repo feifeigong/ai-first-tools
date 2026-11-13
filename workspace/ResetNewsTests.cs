@@ -42,6 +42,7 @@ internal static partial class ResetNewsTests
         internal List<Post> HistoryPosts = new();
         internal List<Post> EventPosts = new();
         internal Dictionary<string, string> Quotes = new();
+        internal readonly HashSet<string> ForeignAuthors = new();
         internal Dictionary<string, string> Parents = new();
         internal int HistoryPageSize = 100;
         private readonly bool includeHistory;
@@ -87,7 +88,7 @@ internal static partial class ResetNewsTests
                 object? Context(string id)
                 {
                     var context = Posts.Concat(HistoryPosts).Single(value => value.Id == id);
-                    return new { id_str = id, text = NormalizeBody(context.Text), created_at = context.At.ToString("O"), user = new { screen_name = "thsottiaux" } };
+                    return new { id_str = id, text = NormalizeBody(context.Text), created_at = context.At.ToString("O"), user = new { screen_name = ForeignAuthors.Contains(id) ? "ChatGPT" : "thsottiaux" } };
                 }
                 return Task.FromResult(Response(JsonSerializer.Serialize(new { id_str = post.Id, text = NormalizeBody(post.Text), created_at = post.At.ToString("O"),
                     user = new { screen_name = "thsottiaux" }, quoted_tweet = Quotes.TryGetValue(post.Id, out var quote) ? Context(quote) : null,
@@ -200,14 +201,16 @@ internal static partial class ResetNewsTests
             require(!fixture.Service.TryTakeAlert(out _));
             require(fixture.Handler.Count == 4);
         });
-        check("Reply without official matching parent cannot notify", () =>
+        check("Reply whose parent cannot be verified is never turned into a reset notice", () =>
         {
             using var fixture = new Fixture();
             var parent = fixture.Add("Day 17/ It is reset day today.", 2);
             fixture.Add("Lands tomorrow before 10am PST.", 1, parent.Id);
             fixture.EmbedOverrides[parent.Id] = Embed(parent, author: "https://x.com/another_author");
             fixture.Refresh();
-            require(!fixture.Service.Snapshot.Fresh && !fixture.Service.TryTakeAlert(out _));
+            // The unreadable parent costs only the association: the post itself is dropped,
+            // and the rest of the scan stays fresh so real announcements can still alert.
+            require(!fixture.Service.TryTakeAlert(out _) && fixture.Service.Snapshot.Items.Count == 0);
         });
         check("Unrelated reset request does not fetch another author's parent or block a verified announcement", () =>
         {
@@ -255,6 +258,34 @@ internal static partial class ResetNewsTests
             require(ResetNewsService.Classify("What would you like with your side of reset? It's done.") == "announced");
             require(ResetNewsService.Classify("Day 15/ Nevermind, we're still cooking... and reset. Enjoy.") == "announced");
             require(ResetNewsService.Classify("Day 17/ Bet you thought we forgot, but no, it’s reset day today.") == "upcoming");
+        });
+        check("Banked reset wording is read as a card in two stages, never as a quota reset", () =>
+        {
+            // The exact sentence Tibo used on 2026-11-12 (Beijing 11-13 05:59).
+            require(ResetNewsService.Classify("We shipped some good updates to dots today and the banked reset has been activated and should land in everyones accounts sometime soon!") == "banked_pending");
+            require(ResetNewsService.Classify("The banked reset has been activated.") == "banked");
+            require(ResetNewsService.Classify("Your banked reset is now in your account. Go use it.") == "banked");
+            require(ResetNewsService.Classify("Banked 1/2") == "banked");
+            require(ResetNewsService.Classify("I demand a banked reset") == null);
+            require(ResetNewsService.Classify("Perhaps also a good time for a banked reset.") == null);
+            require(ResetNewsService.Classify("Banked reset is not activated yet.") == null);
+            require(ResetNewsPresentation.From(new ResetNewsItem("2116692529970311254", "Synthetic",
+                "The banked reset has been activated and should land soon.", "banked_pending",
+                DateTimeOffset.Parse("2026-11-12T21:59:39Z"), Url("2116692529970311254"))).Summary.Contains("不是重置", StringComparison.Ordinal));
+        });
+        check("A post quoting another account is read on its own instead of failing the whole check", () =>
+        {
+            using var fixture = new Fixture();
+            var quoted = fixture.Add("Your dot now comes with faster replies and better follow-ups.", 7);
+            fixture.ForeignAuthors.Add(quoted.Id);
+            var post = fixture.Add("We shipped some good updates to dots today and the banked reset has been activated and should land in everyones accounts sometime soon!", 4);
+            fixture.Quotes[post.Id] = quoted.Id;
+            fixture.Refresh();
+            require(fixture.Service.Snapshot.Fresh && !fixture.Service.Snapshot.Partial);
+            require(fixture.Service.Snapshot.Items.Count == 1 && fixture.Service.Snapshot.Items[0].Kind == "banked_pending");
+            require(fixture.Service.TryTakeAlert(out var alert) && alert?.Id == post.Id);
+            var record = ResetCalendarModel.Events(fixture.Service.Snapshot.Items, fixture.Now).Single();
+            require(record.State == "banked-pending" && record.Badge == "重置卡待发放" && record.Original.Contains("banked reset", StringComparison.Ordinal));
         });
         check("Stale, old, failed, and expired feeds preserve cache but never produce new alerts", () =>
         {

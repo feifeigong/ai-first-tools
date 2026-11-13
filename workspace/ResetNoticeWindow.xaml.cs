@@ -29,10 +29,12 @@ public partial class ResetNoticeWindow : Window
         NoticeTime.Text = chinese.TimeText;
         NoticeTime.Visibility = chinese.TimeText.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         if (item.Kind == "announced") NoticeGuidance.Text = "公告不代表你的额度已经到账。关闭自动用卡可以保留卡；自动续跑可以继续开启，等额度恢复后接着做。";
-        if (item.Kind == "banked")
+        if (item.Kind is "banked" or "banked_pending")
         {
             NoticeHeading.Text = "Codex 有重置卡消息";
-            NoticeGuidance.Text = "发卡不会直接恢复当前额度。你可以在 Codex 中查看是否收到，按需要再使用。";
+            NoticeGuidance.Text = item.Kind == "banked_pending"
+                ? "卡已经启用、还在陆续到账，现在不用做什么；它不是当天的额度重置，到账后可在 Codex 里看到。"
+                : "发卡不会直接恢复当前额度。你可以在 Codex 中查看是否收到，按需要再使用。";
             PauseButton.Visibility = Visibility.Collapsed;
         }
         NoticeExcerpt.Text = chinese.Description + (chinese.TimeNote.Length > 0 ? "\n" + chinese.TimeNote : "");

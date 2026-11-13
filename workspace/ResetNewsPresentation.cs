@@ -21,8 +21,10 @@ internal sealed record ResetNewsPresentation(string Summary, string Description,
         {
             var part = Regex.Match(item.Text, @"\bbanked\s+(?<part>\d{1,2})\s*/\s*(?<total>\d{1,2})\b", RegexOptions.IgnoreCase);
             var series = part.Success ? "原帖标记为「重置卡 " + part.Groups["part"].Value + "/" + part.Groups["total"].Value + "」。" : "";
-            return new("Tibo 已确认发放重置卡", series + "重置卡可留着以后使用，不等于当前额度已经恢复。实际到账和数量以你的 Codex 显示为准。", "", "");
+            return new("Tibo 发放了重置卡（不是重置）", series + "重置卡可以留着以后自己用，不等于当前额度已经恢复。到账张数以你的 Codex 显示为准。", "", "");
         }
+        if (item.Kind == "banked_pending")
+            return new("重置卡已启用，正在到账（不是重置）", "原帖说重置卡已经打开、会在稍后发到每个账号，现在还没到账。它是能留到以后用的一张卡，不是今天多一次额度重置；到账后 Codex 里会显示可用张数。", "", "");
         if (item.Kind == "uncertain") return ResetNewsService.IncompleteOriginal(item.Text)
             ? new("原帖内容尚未取完整", "平台返回的原文不完整，程序正在补查。先保留这条历史，不把截断内容当作完成公告，也不需要你手动确认。", "", "")
             : new("这条历史消息还待核实", "原帖与上下文暂不足以确定它对应哪次重置，程序会继续补查。暂不计为已完成，也不会据此提醒。", "", "");

@@ -6,7 +6,7 @@ using System.Linq;
 namespace AIFirst.Workspace;
 
 internal sealed record ResetCalendarEvent(string Id, DateTime Date, DateTimeOffset PublishedAt, string State,
-    string Badge, string Heading, string Detail, string TimeText, string Note, string Url)
+    string Badge, string Heading, string Detail, string TimeText, string Note, string Url, string Original = "")
 {
     internal bool Completed => State == "completed";
 }
@@ -36,23 +36,26 @@ internal static class ResetCalendarModel
         var view = ResetNewsPresentation.From(item, now);
         if (item.Kind == "banked")
             return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "banked", "发放重置卡", view.Summary,
-                view.Description, "公告发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url);
+                view.Description, "公告发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url, item.Text);
+        if (item.Kind == "banked_pending")
+            return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "banked-pending", "重置卡待发放", view.Summary,
+                view.Description, "公告发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url, item.Text);
         if (item.Kind == "uncertain")
             return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "uncertain", ResetNewsService.IncompleteOriginal(item.Text) ? "原文待补全" : "待核实", view.Summary,
-                view.Description, "原帖发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url);
+                view.Description, "原帖发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url, item.Text);
         if (item.Kind == "announced")
             return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "completed", "重置确认", "Tibo 已确认重置完成",
-                "按 Tibo 的确认帖记录。这是发帖时间，具体到账以你的 Codex 用量为准。", "确认帖发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url);
+                "按 Tibo 的确认帖记录。这是发帖时间，具体到账以你的 Codex 用量为准。", "确认帖发布于 " + ResetNewsPresentation.BeijingStamp(item.PublishedAt), "", item.Url, item.Text);
         var hasDate = view.ExpectedAt is { } target && (view.AlternativeAt is null || BeijingDate(target) == BeijingDate(view.AlternativeAt.Value));
         if (!hasDate)
             return new(item.Id, BeijingDate(item.PublishedAt), item.PublishedAt, "undated", "等待重置", "Tibo 已发布重置预告",
-                "日期按预告的北京时间记录，具体生效时间仍待后续消息。", view.ExpectedAt is null ? "具体时间尚未公布" : view.TimeText, view.TimeNote, item.Url);
+                "日期按预告的北京时间记录，具体生效时间仍待后续消息。", view.ExpectedAt is null ? "具体时间尚未公布" : view.TimeText, view.TimeNote, item.Url, item.Text);
         var passed = view.ExpectedAt <= now && (view.AlternativeAt is null || view.AlternativeAt <= now);
         var note = view.TimeNote.Replace(" 原计划时间已过，实际额度以 Codex 显示为准。", "", StringComparison.Ordinal);
         return new(item.Id, BeijingDate(view.ExpectedAt!.Value), item.PublishedAt, passed ? "past-preview" : "upcoming",
             passed ? "预计已生效" : "等待重置", passed ? "已到原定重置时间" : "Tibo 发布了重置预告",
             passed ? "仅按原预告时间推算；程序还未取得对应的确认帖，实际额度以 Codex 显示为准。" : "这是预计安排，收到确认消息后会继续更新。",
-            (passed ? "原计划 · " : "预计 · ") + view.TimeText.Replace("北京时间 ", "", StringComparison.Ordinal), note, item.Url);
+            (passed ? "原计划 · " : "预计 · ") + view.TimeText.Replace("北京时间 ", "", StringComparison.Ordinal), note, item.Url, item.Text);
     }
 
     internal static IReadOnlyList<DateTime> MonthDays(DateTime month)

@@ -66,7 +66,7 @@ public partial class ResetCalendarView : UserControl
         lastSignature = "";
         Paint();
     }
-    private static Brush Color(ResetCalendarEvent item) => Ink(item.Completed ? "#207A58" : item.State == "banked" ? "#7252A3" : item.State is "upcoming" or "undated" ? "#0068D9" : "#5B6B7E");
+    private static Brush Color(ResetCalendarEvent item) => Ink(item.Completed ? "#207A58" : item.State == "banked" ? "#7252A3" : item.State == "banked-pending" ? "#7A5A28" : item.State is "upcoming" or "undated" ? "#0068D9" : "#5B6B7E");
     private static TextBlock Text(string value, double size = 13, string color = "#202D3A") => new()
     { Text = value, FontSize = size, Foreground = Ink(color), TextWrapping = TextWrapping.Wrap, LineHeight = size + 8 };
 
@@ -87,7 +87,7 @@ public partial class ResetCalendarView : UserControl
             if (day.Month != month.Month) number.Foreground = Ink("#64748B");
             else if (day == today || day == selected) number.Foreground = Ink("#0068D9");
             content.Children.Add(number);
-            var marker = Text(record is null ? day == today ? "今天" : "" : record.Completed ? "重置确认" : record.State == "banked" ? "发重置卡" : record.State == "uncertain" ? "待核实" : record.State is "upcoming" or "undated" ? "等待重置" : "预计生效", 11);
+            var marker = Text(record is null ? day == today ? "今天" : "" : record.Completed ? "重置确认" : record.State == "banked" ? "发重置卡" : record.State == "banked-pending" ? "发卡中" : record.State == "uncertain" ? "待核实" : record.State is "upcoming" or "undated" ? "等待重置" : "预计生效", 11);
             marker.TextAlignment = TextAlignment.Center;
             marker.Foreground = record is null ? Ink("#0068D9") : Color(record);
             marker.MinHeight = 16;
@@ -116,7 +116,7 @@ public partial class ResetCalendarView : UserControl
             var stack = new StackPanel { Margin = new Thickness(0, 0, 0, onDay.Length > 1 ? 18 : 0) };
             var badge = Text(hasOtherCompletion ? "同日预告" : record.Badge, 11);
             badge.Foreground = Color(record);
-            stack.Children.Add(new Border { Background = Ink(record.Completed ? "#EAF5EF" : record.State == "banked" ? "#F1ECF8" : record.State is "upcoming" or "undated" ? "#EAF3FF" : "#EFF2F6"), CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 3, 8, 3), HorizontalAlignment = HorizontalAlignment.Left, Child = badge });
+            stack.Children.Add(new Border { Background = Ink(record.Completed ? "#EAF5EF" : record.State == "banked" ? "#F1ECF8" : record.State == "banked-pending" ? "#FBF0DC" : record.State is "upcoming" or "undated" ? "#EAF3FF" : "#EFF2F6"), CornerRadius = new CornerRadius(5), Padding = new Thickness(8, 3, 8, 3), HorizontalAlignment = HorizontalAlignment.Left, Child = badge });
             var heading = Text(hasOtherCompletion ? "同日发布过的预告" : record.Heading, 15);
             heading.FontWeight = FontWeights.SemiBold;
             heading.Margin = new Thickness(0, 12, 0, 6);
@@ -126,6 +126,18 @@ public partial class ResetCalendarView : UserControl
             time.Margin = new Thickness(0, 0, 0, 8);
             stack.Children.Add(time);
             stack.Children.Add(Text(hasOtherCompletion ? "这一天另有重置确认，可在上方查看；尚未核实是否为同一次重置。" : record.Detail, 12, "#5B6B7E"));
+            if (record.Original.Length > 0)
+            {
+                var originalLabel = Text("Tibo 原帖（英文原文）", 11, "#7C8795");
+                originalLabel.Margin = new Thickness(0, 12, 0, 4);
+                stack.Children.Add(originalLabel);
+                var body = record.Original.Length > 700 ? record.Original[..700].TrimEnd() + "…" : record.Original;
+                stack.Children.Add(new Border
+                {
+                    Background = Ink("#EFF2F6"), CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 8, 10, 8),
+                    Child = Text(body, 12.5, "#202D3A")
+                });
+            }
             if (record.Note.Length > 0)
             {
                 var note = Text(record.Note, 11, "#5B6B7E");

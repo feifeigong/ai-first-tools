@@ -54,6 +54,20 @@ Var StageDirectory
   ${EndIf}
 !macroend
 
+; The mover keeps its own files open while its window is up. Without this check the
+; copy fails and users see a misleading "disk space or permissions" message.
+!macro CheckMoverClosed
+  nsExec::ExecToStack '"$SYSDIR\tasklist.exe" /FI "IMAGENAME eq 对话搬家.exe" /NH /FO CSV'
+  Pop $0
+  Pop $1
+  StrCpy $2 $1 1
+  ${If} $2 == '"'
+    MessageBox MB_OK|MB_ICONINFORMATION "请先关闭「对话搬家」再安装：它开着时会占用程序文件。正在搬运对话时，请等任务完成后再关闭。" /SD IDOK
+    SetErrorLevel 1603
+    Abort
+  ${EndIf}
+!macroend
+
 Function .onInit
   SetShellVarContext current
   ${GetOptions} $CMDLINE "/AI-FIRST-STAGE" $0
@@ -85,6 +99,7 @@ Function .onInit
   ${EndIf}
   StrCpy $INSTDIR "$LOCALAPPDATA\Programs\AI First Tools"
   !insertmacro CheckRunning
+  !insertmacro CheckMoverClosed
 FunctionEnd
 
 Function WebViewExists

@@ -50,6 +50,7 @@
           <StackPanel Orientation="Horizontal" Margin="0,0,14,0"><Ellipse Width="5" Height="5" Fill="{DynamicResource SuccessInk}" Margin="0,0,5,0" /><TextBlock Text="重置确认" FontSize="10.5" Foreground="{DynamicResource InkMuted}" /></StackPanel>
           <StackPanel Orientation="Horizontal" Margin="0,0,14,0"><Ellipse Width="5" Height="5" Fill="{DynamicResource Accent}" Margin="0,0,5,0" /><TextBlock Text="等待重置" FontSize="10.5" Foreground="{DynamicResource InkMuted}" /></StackPanel>
           <StackPanel Orientation="Horizontal" Margin="0,0,14,0"><Ellipse Width="5" Height="5" Fill="{DynamicResource InfoInk}" Margin="0,0,5,0" /><TextBlock Text="发放重置卡" FontSize="10.5" Foreground="{DynamicResource InkMuted}" /></StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,0,14,0"><Ellipse Width="5" Height="5" Fill="{DynamicResource WarnInk}" Margin="0,0,5,0" /><TextBlock Text="重置卡待发放" FontSize="10.5" Foreground="{DynamicResource InkMuted}" /></StackPanel>
           <StackPanel Orientation="Horizontal"><Ellipse Width="5" Height="5" Fill="{DynamicResource InkFaint}" Margin="0,0,5,0" /><TextBlock Text="预计生效 / 待核实" FontSize="10.5" Foreground="{DynamicResource InkMuted}" /></StackPanel>
         </WrapPanel>
       </StackPanel>

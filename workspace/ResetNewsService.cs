@@ -415,7 +415,7 @@ internal sealed partial class ResetNewsService : IDisposable
         && uri.Host is "x.com" or "twitter.com" && uri.AbsolutePath.TrimEnd('/') == "/thsottiaux/status/" + id;
     private static bool AuthorAddress(string address) => Uri.TryCreate(address, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.IsDefaultPort && uri.UserInfo.Length == 0
         && uri.Host is "x.com" or "twitter.com" && uri.AbsolutePath.TrimEnd('/') == "/thsottiaux";
-    private static bool ValidItem(ResetNewsItem item) => item is not null && item.Kind is "upcoming" or "announced" or "banked" or "uncertain"
+    private static bool ValidItem(ResetNewsItem item) => item is not null && item.Kind is "upcoming" or "announced" or "banked" or "banked_pending" or "uncertain"
         && item.Id is not null && Regex.IsMatch(item.Id, @"^[1-9][0-9]{14,19}$") && PostAddress(item.Url, item.Id)
         && item.Text is { Length: > 0 and < 30000 } && item.Summary is { Length: > 0 and < 300 }
         && item.SourceUrl == "https://x.com/thsottiaux";
@@ -489,11 +489,19 @@ internal sealed partial class ResetNewsService : IDisposable
         }
         var body = Regex.Replace(paragraph.Value, @"\s+", " ").Trim();
         var complete = !IncompleteOriginal(body);
-        if (body.Length is 0 or > 12000 || (!complete && !allowIncomplete)) throw new InvalidDataException();
+        // A media-only or link-only reply has a valid embed and no text at all. That is
+        // verified but says nothing, so it must not be reported as a broken read.
+        if (body.Length == 0) return new(id, "", complete);
+        if (body.Length > 12000 || (!complete && !allowIncomplete)) throw new InvalidDataException();
         return new(id, body, complete);
     }
 
-    private static string Normalize(string value) => Regex.Replace(Regex.Replace(WebUtility.HtmlDecode(value), @"https?://\S+", "", RegexOptions.IgnoreCase), @"\s+", " ").Trim();
+    // X's oembed body drops the leading @mentions of a reply while the syndication
+    // payload keeps them ("@user Savage, John"). Both are the same post, so the handles
+    // are removed before comparing instead of failing every reply to another account.
+    private static string Normalize(string value) => Regex.Replace(Regex.Replace(Regex.Replace(
+        WebUtility.HtmlDecode(value), @"https?://\S+", "", RegexOptions.IgnoreCase),
+        @"^(?:\s*@[A-Za-z0-9_]{1,15})+\s*", ""), @"\s+", " ").Trim();
     internal static bool IncompleteOriginal(string text) => text.Contains('\uFFFD')
         || text.TrimEnd().EndsWith("…", StringComparison.Ordinal) || text.TrimEnd().EndsWith("...", StringComparison.Ordinal);
     private static bool TimingReply(string value) => Regex.IsMatch(value, @"\b(?:lands?|landing|coming|tomorrow|tonight|before\s+\d|later\s+today|(?:by|before)\s+(?:midnight|noon))\b", RegexOptions.IgnoreCase);
@@ -508,10 +516,22 @@ internal sealed partial class ResetNewsService : IDisposable
         var bankedPart = Regex.Match(value, @"^(?:day\s+\d{1,3}\s*/\s*)?banked\s+(?<part>\d{1,2})\s*/\s*(?<total>\d{1,2})[.!]?$", RegexOptions.CultureInvariant);
         if (bankedPart.Success && int.TryParse(bankedPart.Groups["part"].Value, out var part)
             && int.TryParse(bankedPart.Groups["total"].Value, out var total) && part >= 1 && part <= total && total <= 10) return "banked";
-        // Banked credits are a separate event, even when the post says "see you tomorrow".
+        // Banked credits are a different thing from a reset, and Tibo describes them in
+        // two stages: "activated / switched on" (the cards exist but are still on their
+        // way) and the cards actually showing up in an account. Keep both apart so a card
+        // is never displayed as a quota reset.
         if (Regex.IsMatch(value, @"\bbanked\s+reset\b"))
-            return Regex.IsMatch(value, @"\b(?:loading|loaded|granting|granted|adding|added|giving|give|issuing|issued)\b.{0,100}\bbanked\s+reset\b")
-                && !value.Contains('?') && !Regex.IsMatch(value, @"\b(?:not|no|if|wish|hope|please|should|don't|won't|can't)\b.{0,100}\bbanked\s+reset\b") ? "banked" : null;
+        {
+            if (value.Contains('?') || Regex.IsMatch(value, @"\b(?:not|no|never|if|wish|hope|hopefully|please|should|would|maybe|perhaps|demand)\b[^.!?]{0,60}\bbanked\s+reset\b")
+                || Regex.IsMatch(value, @"\bbanked\s+reset\b[^.!?]{0,40}\b(?:not|never|isn't|aren't|won't|hasn't|haven't)\b")) return null;
+            var landed = Regex.IsMatch(value, @"\b(?:in\s+your\s+account|credited|deposited|you\s+can\s+use|go\s+use|use\s+(?:it|them))\b");
+            var activated = Regex.IsMatch(value, @"\b(?:activ\w*|enabl\w*|turn(?:s|ed)?\s+on|switch(?:es|ed)?\s+on|live|available|ship(?:s|ped)?|grant(?:s|ed|ing)?|issu(?:es|ed|ing)?|load(?:s|ed|ing)?|add(?:s|ed|ing)?|giv(?:e|es|en|ing)?)\b");
+            // "should land sometime soon" means enabled now, in accounts later.
+            var pending = Regex.IsMatch(value, @"\b(?:should|will|going\s+to|gonna|soon|sometime|shortly|rolling|rollout|roll\s+out|propagat\w*|land\w*|arriv\w*|coming|pending)\b");
+            if (landed && !pending) return "banked";
+            if (!activated) return null;
+            return pending ? "banked_pending" : "banked";
+        }
         if (Regex.IsMatch(value, @"\bresets?\s+(?:are\s+|have\s+been\s+)?(?:all\s+)?propagated\b|\bput\s+the\s+reset\s+in\s+the\s+bag[.!]\s*all\s+propagated\b|\breset\s+has\s+been\s+processed\b")
             && !value.Contains('?') && !Regex.IsMatch(value, @"\b(?:not|no|will|going\s+to|if|when|hope|please|wish|should)\b.{0,100}\b(?:propagated|processed)\b")) return "announced";
         if (Regex.IsMatch(value, @"\b(?:please|wish|hope|hopefully|if|should|don't|won't|cannot|can't)\b.{0,90}\breset\b|\b(?:not|no)\s+(?:a\s+|yet\s+)?reset\b|\bnot\s+(?:done|complete)\b")) return null;

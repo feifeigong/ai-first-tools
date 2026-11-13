@@ -58,7 +58,10 @@ internal static class ResetVisualTests
                 new ResetNewsItem("synthetic-history-4", "已宣布完成", "Codex quota has reset. Enjoy.", "announced", new DateTimeOffset(2026, 10, 15, 14, 28, 0, TimeSpan.FromHours(8)), "https://x.com/thsottiaux/status/1000000000000000005"),
                 new ResetNewsItem("synthetic-banked", "发放重置卡", "Loading a banked reset in paid accounts.", "banked", new DateTimeOffset(2026, 10, 8, 3, 19, 0, TimeSpan.FromHours(8)), "https://x.com/thsottiaux/status/1000000000000000006"),
                 new ResetNewsItem("synthetic-incomplete", "待核实", "Codex reset has been…", "uncertain", new DateTimeOffset(2026, 10, 7, 11, 35, 0, TimeSpan.FromHours(8)), "https://x.com/thsottiaux/status/1000000000000000007"),
-                new ResetNewsItem("synthetic-context-needed", "待核实", "Done", "uncertain", new DateTimeOffset(2026, 10, 18, 5, 12, 0, TimeSpan.FromHours(8)), "https://x.com/thsottiaux/status/1000000000000000008")
+                new ResetNewsItem("synthetic-context-needed", "待核实", "Done", "uncertain", new DateTimeOffset(2026, 10, 18, 5, 12, 0, TimeSpan.FromHours(8)), "https://x.com/thsottiaux/status/1000000000000000008"),
+                new ResetNewsItem("synthetic-banked-pending", "Tibo 说重置卡已启用，正在到账",
+                    "We shipped some good updates to dots today and the banked reset has been activated and should land in everyones accounts sometime soon!",
+                    "banked_pending", new DateTimeOffset(2026, 10, 22, 9, 30, 0, TimeSpan.FromHours(8)), "https://x.com/thsottiaux/status/1000000000000000012")
             };
             var snapshot = new ResetNewsSnapshot(true, "正在留意 Tibo 的重置消息", "有新消息时会弹窗提醒，是否自动用卡由你决定。",
                 now, new[] { item }.Concat(older).ToArray(), true, now, now.AddMinutes(5));
@@ -97,6 +100,8 @@ internal static class ResetVisualTests
                 RenderElement(surface, Path.Combine(directory, "calendar-completed.png"), 900, 610);
                 calendar.SelectDate(new DateTime(2026, 10, 8));
                 RenderElement(surface, Path.Combine(directory, "calendar-banked.png"), 900, 610);
+                calendar.SelectDate(new DateTime(2026, 10, 22));
+                RenderElement(surface, Path.Combine(directory, "calendar-banked-pending.png"), 900, 610);
                 calendar.SelectDate(new DateTime(2026, 10, 7));
                 RenderElement(surface, Path.Combine(directory, "calendar-unconfirmed.png"), 900, 610);
                 var future = new ResetNewsItem("synthetic-future", "预告", "Codex reset tomorrow before 10am PT.", "upcoming", now.AddMinutes(-5), "https://x.com/thsottiaux/status/1000000000000000003");
@@ -142,7 +147,7 @@ internal static class ResetVisualTests
                 pauseRequests = pauseCalls,
                 compactCanScroll,
                 horizontalOverflow = false,
-                images = new[] { "page.png", "page-compact.png", "page-offline.png", "calendar.png", "calendar-latest-forecast.png", "calendar-completed.png", "calendar-banked.png", "calendar-unconfirmed.png", "calendar-upcoming.png", "calendar-empty.png", "calendar-weekend-completed.png", "calendar-today-preview.png", "notice.png" },
+                images = new[] { "page.png", "page-compact.png", "page-offline.png", "calendar.png", "calendar-latest-forecast.png", "calendar-completed.png", "calendar-banked.png", "calendar-banked-pending.png", "calendar-unconfirmed.png", "calendar-upcoming.png", "calendar-empty.png", "calendar-weekend-completed.png", "calendar-today-preview.png", "notice.png" },
                 renderDpi = 96
             }, new JsonSerializerOptions { WriteIndented = true }));
             return 0;

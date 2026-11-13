@@ -143,7 +143,9 @@ internal sealed partial class ResetNewsService
             return result;
         }, LazyThreadSafetyMode.ExecutionAndPublication)).Value;
 
-        async Task<string?> OfficialContext(string id, Verified post)
+        // Returns (quotedSomeoneElse, TiboParentId). Quoting another account is an ordinary
+        // thing for Tibo to do; the caller decides whether that leaves the post unreadable.
+        async Task<(bool Foreign, string? Parent)> OfficialContext(string id, Verified post)
         {
             var address = new Uri("https://cdn.syndication.twimg.com/tweet-result?id=" + id + "&lang=en&token=0");
             using var document = JsonDocument.Parse(await ReadJsonAsync(address, cancellation).ConfigureAwait(false));
@@ -152,15 +154,30 @@ internal sealed partial class ResetNewsService
                 || Normalize(String(root, "text")) != Normalize(post.Text)
                 || Math.Abs((Time(String(root, "created_at")) - IdTime(id)).TotalMinutes) > 5) throw new System.IO.InvalidDataException();
             var isQuote = root.TryGetProperty("quoted_tweet", out var quote) && quote.ValueKind != JsonValueKind.Null;
-            if (!isQuote && (!root.TryGetProperty("parent", out quote) || quote.ValueKind == JsonValueKind.Null)) return null;
-            if (String(quote.GetProperty("user"), "screen_name") != "thsottiaux") throw new System.IO.InvalidDataException();
+            if (!isQuote && (!root.TryGetProperty("parent", out quote) || quote.ValueKind == JsonValueKind.Null)) return (false, null);
+            if (String(quote.GetProperty("user"), "screen_name") != "thsottiaux")
+            {
+                // A quoted id that also sits in Tibo's own timeline cannot belong to someone
+                // else: that is a forged identity, not a normal quote of another account.
+                if (candidates.ContainsKey(String(quote, "id_str"))) throw new System.IO.InvalidDataException();
+                return (true, null);
+            }
             var parent = String(quote, "id_str");
             if (IdTime(parent) >= IdTime(id)) throw new System.IO.InvalidDataException();
             if (!isQuote && String(root, "in_reply_to_status_id_str") != parent) throw new System.IO.InvalidDataException();
             if (Math.Abs((Time(String(quote, "created_at")) - IdTime(parent)).TotalMinutes) > 5) throw new System.IO.InvalidDataException();
-            var context = await Verify(parent).ConfigureAwait(false);
-            if (!context.Complete || Normalize(String(quote, "text")) != Normalize(context.Text)) throw new System.IO.InvalidDataException();
-            return parent;
+            // A parent the platform no longer renders in full (or at all) only costs the
+            // association. It must not fail the post itself, and it must never make the
+            // whole refresh look unverified — that would silence real announcements.
+            Verified context;
+            try { context = await Verify(parent).ConfigureAwait(false); }
+            catch (Exception exception) when (VerificationFailure(exception)) { return (false, null); }
+            if (!context.Complete) return (false, null);
+            var quoted = Normalize(String(quote, "text"));
+            var actual = Normalize(context.Text);
+            if (quoted != actual && !quoted.StartsWith(actual.TrimEnd('…', '.', ' '), StringComparison.Ordinal)
+                && !actual.StartsWith(quoted.TrimEnd('…', '.', ' '), StringComparison.Ordinal)) throw new System.IO.InvalidDataException();
+            return (false, parent);
         }
 
         async Task<Resolved?> Resolve(Candidate candidate, int depth = 0)
@@ -176,11 +193,13 @@ internal sealed partial class ResetNewsService
             var text = original.Text;
             var group = candidate.Id;
             var parent = candidate.Parent;
+            var foreignContext = false;
             if (parent is not null || CompletionOnly(text) || kind is null && (TimingReply(text) || candidate.RelatedHint))
             {
-                var officialParent = await OfficialContext(candidate.Id, original).ConfigureAwait(false);
-                if (parent is not null && parent != officialParent) throw new System.IO.InvalidDataException();
-                parent = officialParent;
+                var context = await OfficialContext(candidate.Id, original).ConfigureAwait(false);
+                foreignContext = context.Foreign;
+                if (parent is not null && context.Parent is not null && parent != context.Parent) throw new System.IO.InvalidDataException();
+                parent = context.Parent;
             }
             if (parent is not null)
             {
@@ -188,15 +207,17 @@ internal sealed partial class ResetNewsService
                 var context = await Resolve(candidates.TryGetValue(parent, out var known) ? known : new(parent, "", IdTime(parent), null, candidate.Historical), depth + 1).ConfigureAwait(false);
                 if (context is null || context.Kind == "uncertain") return null;
                 group = context.Group;
-                if (CompletionOnly(text)) kind = context.Kind == "banked" ? "banked" : "announced";
-                else if (kind is null && context.Kind is "upcoming" or "banked" or "announced" && (TimingReply(text)
+                if (CompletionOnly(text)) kind = context.Kind is "banked" or "banked_pending" ? "banked" : "announced";
+                else if (kind is null && context.Kind is "upcoming" or "banked" or "banked_pending" or "announced" && (TimingReply(text)
                     || Regex.IsMatch(text, @"\b(?:global\s+)?reset\s+by\s+EOD\b", RegexOptions.IgnoreCase)))
                     kind = context.Kind == "announced" ? "upcoming" : context.Kind;
                 text = context.Text + "\n\n" + text;
             }
             // An unfamiliar language or phrase remains unresolved even if a feed labels it
             // reset-related. Preserve the verified context without inventing a completion.
-            if (kind is null && candidate.RelatedHint)
+            // A reply to another account is ordinary conversation, not a reset claim: keep it
+            // out of the pending list instead of retrying it forever.
+            if (kind is null && candidate.RelatedHint && !foreignContext)
                 return new("uncertain", text, candidate.Id);
             return kind is null ? null : new(kind, text, group);
         }
@@ -215,7 +236,7 @@ internal sealed partial class ResetNewsService
             {
                 var resolved = await Resolve(candidate).ConfigureAwait(false);
                 if (resolved is not null)
-                    items.Add(new(candidate.Id, resolved.Kind switch { "banked" => "Tibo 发布了重置卡消息", "announced" => "Tibo 宣布已完成重置", "uncertain" => "这条历史消息还待核实", _ => "Tibo 发布了新的重置预告" },
+                    items.Add(new(candidate.Id, resolved.Kind switch { "banked" => "Tibo 发放了重置卡（不是重置）", "banked_pending" => "Tibo 说重置卡已启用，正在到账", "announced" => "Tibo 宣布已完成重置", "uncertain" => "这条历史消息还待核实", _ => "Tibo 发布了新的重置预告" },
                         resolved.Text, resolved.Kind, IdTime(candidate.Id), PostUrl(candidate.Id), GroupId: resolved.Group, Historical: candidate.Historical));
                 completed.Add(candidate.Id);
                 retryAfter.TryRemove(candidate.Id, out _);
