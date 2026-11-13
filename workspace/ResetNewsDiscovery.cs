@@ -266,6 +266,12 @@ internal sealed partial class ResetNewsService
                 && now - liveCandidate.At <= TimeSpan.FromHours(24)) ?? candidate with { Historical = now - candidate.At > TimeSpan.FromHours(24) }))).ConfigureAwait(false); }
             catch (OperationCanceledException) when (!lifetime.IsCancellationRequested) { }
         }
+        // A retry marker only means something while its post can still be re-read. The work
+        // queue forgets posts after 30 days, and a marker left behind by one of them can never
+        // clear itself: nothing ever processes that id again, so the page would keep saying
+        // "部分内容正在重试" until the marker itself aged out.
+        foreach (var id in retryAfter.Keys.Where(id => !candidates.ContainsKey(id)).ToArray())
+            retryAfter.TryRemove(id, out _);
         foreach (var id in completed) checkedAt[id] = now;
         return new(items.ToList(), partial != 0 || sourcePartial || retryAfter.Count > 0, queue.Values.OrderByDescending(item => item.At).Take(300).ToList(),
             checkedAt.OrderByDescending(pair => pair.Value).Take(500).ToDictionary(pair => pair.Key, pair => pair.Value), offset, from, nextPage,

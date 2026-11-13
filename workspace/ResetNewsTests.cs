@@ -287,6 +287,24 @@ internal static partial class ResetNewsTests
             var record = ResetCalendarModel.Events(fixture.Service.Snapshot.Items, fixture.Now).Single();
             require(record.State == "banked-pending" && record.Badge == "重置卡待发放" && record.Original.Contains("banked reset", StringComparison.Ordinal));
         });
+        check("A retry marker left by a post the work queue dropped cannot keep the page retrying", () =>
+        {
+            using var fixture = new Fixture(includeHistory: true);
+            fixture.Add("Codex quota will reset tomorrow.");
+            fixture.Refresh();
+            require(!fixture.Service.Snapshot.Partial);
+            // The live state carried one of these for a post from 2026-10-07: the queue had
+            // forgotten it, so nothing re-read it and the count never returned to zero.
+            var forgotten = (((ulong)(fixture.Now.AddDays(-40).ToUnixTimeMilliseconds() - 1288834974657) << 22) + 7)
+                .ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var state = JsonNode.Parse(File.ReadAllText(fixture.StateFile))!;
+            state["historyRetryAfter"] = new JsonObject { [forgotten] = fixture.Now.AddDays(-7).ToString("O") };
+            File.WriteAllText(fixture.StateFile, state.ToJsonString());
+            fixture.Now = fixture.Now.AddMinutes(6);
+            fixture.Refresh();
+            require(!fixture.Service.Snapshot.Partial);
+            require(!JsonNode.Parse(File.ReadAllText(fixture.StateFile))!["historyRetryAfter"]!.AsObject().ContainsKey(forgotten));
+        });
         check("Stale, old, failed, and expired feeds preserve cache but never produce new alerts", () =>
         {
             foreach (var mode in new[] { "stale", "old", "http", "expired" })
